@@ -1140,6 +1140,15 @@ Definition: `sheet_definitions/torso/waist/buckles.json`
   - Licenses: CC-BY-SA 3.0, GPL 3.0
   - https://opengameart.org/content/female-mage-clothing-set
 
+### Club
+
+Definition: `sheet_definitions/weapons/blunt/weapon_blunt_club.json`
+
+- `weapon/blunt/club`
+  - Authors: bluecarrot16
+  - Licenses: OGA-BY 3.0+, GPL 3.0, CC-BY 4.0
+  - https://opengameart.org/content/lpc-more-weapons
+
 ### Flail
 
 Definition: `sheet_definitions/weapons/blunt/weapon_blunt_flail.json`

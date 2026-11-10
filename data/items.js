@@ -10,7 +10,9 @@
 //  - Weapons that ship in one fixed look cannot be recoloured, so tiers use different weapons:
 //    Rogue dagger, scimitar, rapier, katana, saber. Cleric cane, mace, mace, flail, war axe.
 //    Fighter longsword and longsword_alt keep their own colours.
-//  - Cleric club -> cane: the club has art only while swinging.
+//  - Cleric Common weapon: the club has art only while swinging and the cane only while walking,
+//    so the hero carries the cane and swings the club. The cane art is drawn in the shield hand,
+//    so it is mirrored into the weapon hand at bake time.
 //  - Closed helmets hide the hair layer.
 // A layer ref is { def, color, ... }:
 //   def     LPC sheet definition file name, without .json
@@ -18,6 +20,7 @@
 //   color2  second recolor slot, for the few items that have one
 //   base    name the colour the art actually ships in, where the definition gets it wrong
 //   hideHair  skip the hair layer while this is worn
+//   mirror  flip a walk-only item into the other hand (its other animations are dropped)
 //   bodies  draw another body type's sheet where the item has none, e.g. { muscular: 'male' }
 // After editing, rerun: node tools/sprites.mjs bake
 
@@ -241,7 +244,7 @@ export const GEAR = {
       [L('feet_armour', 'gold')],
     ],
     weapon: [
-      [L('weapon_polearm_cane', 'cane')],
+      [L('weapon_polearm_cane', 'cane', { mirror: true }), L('weapon_blunt_club', 'club')],
       [L('weapon_blunt_mace', 'mace')],
       [L('weapon_blunt_mace', 'mace')],
       [L('weapon_blunt_flail', 'flail')],

@@ -167,7 +167,8 @@ function resolve(ref, defs, mats, tree) {
       if (m) maps.push(m);
     });
   }
-  const suffix = maps.length ? '.' + [ref.color, ref.color2].filter(Boolean).join('+').replaceAll(' ', '_') : '';
+  const suffix = (maps.length ? '.' + [ref.color, ref.color2].filter(Boolean).join('+').replaceAll(' ', '_') : '') + (ref.mirror ? '.mirror' : '');
+  if (ref.mirror) notes.push('mirrored into the weapon hand: the art is drawn in the shield hand. Only the walk art can be mirrored');
 
   const sublayers = [];
   const missingBody = new Set(), fallbackBody = new Set();
@@ -177,6 +178,7 @@ function resolve(ref, defs, mats, tree) {
     const layer = def[k];
     const custom = layer.custom_animation;
     if (custom && !CUSTOM[custom]) continue; // an animation the game does not use
+    if (custom && ref.mirror) continue; // only standard walk sheets can be mirrored
     // some weapons ship two swings for one animation (slash and reverse slash): keep the first
     if (custom) {
       const base = CUSTOM[custom].anim;
@@ -196,11 +198,12 @@ function resolve(ref, defs, mats, tree) {
       sub.files[bt] = {};
       for (const anim of ANIMS) {
         if (custom && CUSTOM[custom].anim !== anim) continue;
+        if (ref.mirror && anim !== 'walk') continue; // attack poses are not symmetric, so only walk is mirrored
         const src = custom
           ? (variant ? `${p}${variant}.png` : `${p.slice(0, -1)}.png`)
           : (variant ? `${p}${anim}/${variant}.png` : `${p}${anim}.png`);
         if (!tree.has(src)) continue;
-        sub.files[bt][anim] = { src, out: suffix ? src.replace(/\.png$/, `${suffix}.png`) : src };
+        sub.files[bt][anim] = { src, out: suffix ? src.replace(/\.png$/, `${suffix}.png`) : src, mirror: !!ref.mirror };
         animSeen.add(anim);
       }
     }
@@ -251,7 +254,7 @@ function report(resolved) {
 function sources(resolved) {
   const map = new Map(); // out -> { src, maps }
   for (const r of resolved) {
-    for (const s of r.sublayers) for (const f of Object.values(s.files)) for (const x of Object.values(f)) map.set(x.out, { src: x.src, maps: r.maps });
+    for (const s of r.sublayers) for (const f of Object.values(s.files)) for (const x of Object.values(f)) map.set(x.out, { src: x.src, maps: r.maps, mirror: x.mirror });
   }
   return map;
 }
@@ -282,6 +285,25 @@ function recolor(img, maps) {
   return hits;
 }
 
+// Move a walk sheet's item into the other hand. Up and down rows are flipped and shifted half a
+// walk cycle (the arms swing opposite each other); the left and right rows are flipped and swapped.
+function mirrorWalk(img) {
+  const { width, height, data } = img, F = 64;
+  const out = Buffer.alloc(data.length);
+  for (let row = 0; row < height / F; row++) {
+    const srcRow = row === 1 ? 3 : row === 3 ? 1 : row;
+    for (let col = 0; col < width / F; col++) {
+      const srcCol = (row === 0 || row === 2) && col > 0 ? ((col + 3) % 8) + 1 : col;
+      for (let y = 0; y < F; y++) for (let x = 0; x < F; x++) {
+        const s = ((srcRow * F + y) * width + srcCol * F + (F - 1 - x)) * 4;
+        const d = ((row * F + y) * width + col * F + x) * 4;
+        out[d] = data[s]; out[d + 1] = data[s + 1]; out[d + 2] = data[s + 2]; out[d + 3] = data[s + 3];
+      }
+    }
+  }
+  img.data = out;
+}
+
 function bake(resolved) {
   const bad = resolved.filter((r) => r.issues.length);
   if (bad.length) {
@@ -292,13 +314,14 @@ function bake(resolved) {
   const hitsBySrcKey = new Map();
   fs.rmSync(OUT, { recursive: true, force: true });
   let bytes = 0;
-  for (const [out, { src, maps }] of want) {
+  for (const [out, { src, maps, mirror }] of want) {
     const from = path.join(LPC, 'spritesheets', src);
     if (!fs.existsSync(from)) { console.error(`missing ${src}: run "fetch" first`); process.exit(1); }
     let buf = fs.readFileSync(from);
-    if (maps.length) {
+    if (maps.length || mirror) {
       const img = decodePng(buf);
-      hitsBySrcKey.set(out, recolor(img, maps));
+      if (maps.length) hitsBySrcKey.set(out, recolor(img, maps));
+      if (mirror) mirrorWalk(img);
       buf = encodePng(img);
     }
     const to = path.join(OUT, out);

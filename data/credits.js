@@ -2538,6 +2538,27 @@ export const CREDITS = [
   ]
  },
  {
+  "name": "Club",
+  "def": "sheet_definitions/weapons/blunt/weapon_blunt_club.json",
+  "credits": [
+   {
+    "file": "weapon/blunt/club",
+    "notes": "",
+    "authors": [
+     "bluecarrot16"
+    ],
+    "licenses": [
+     "OGA-BY 3.0+",
+     "GPL 3.0",
+     "CC-BY 4.0"
+    ],
+    "urls": [
+     "https://opengameart.org/content/lpc-more-weapons"
+    ]
+   }
+  ]
+ },
+ {
   "name": "Flail",
   "def": "sheet_definitions/weapons/blunt/weapon_blunt_flail.json",
   "credits": [
