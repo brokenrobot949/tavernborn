@@ -26,3 +26,45 @@
   .app { display: grid; grid-template-columns: 420px 1fr; gap: 24px; align-items: start; }
   .stage-wrap { top: 12px; border-bottom: 0; }
 }
+
+.topbar .back { margin-left: auto; color: var(--parchment); display: inline-flex; align-items: center; min-height: var(--tap); padding: 0 4px; }
+
+/* ----- The game (index.html). Phone first: one tab at a time above a fixed tab bar. ----- */
+.game { max-width: 520px; margin: 0 auto; }
+.views { padding: 0 12px calc(72px + env(safe-area-inset-bottom)); }
+.view { display: grid; gap: 10px; padding-top: 10px; align-content: start; }
+
+.tabbar {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 5;
+  display: flex;
+  background: var(--ink);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.create { padding: 0 12px 32px; display: grid; gap: 10px; }
+.create-head { padding-top: 12px; text-align: center; }
+.create .stage-wrap { padding: 6px 0; }
+.create-nav { display: flex; gap: 8px; }
+.create-nav .btn { flex: 1; }
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(43, 33, 24, 0.65);
+}
+.card { width: 100%; max-width: 420px; max-height: 90dvh; overflow: auto; display: grid; gap: 10px; }
+
+/* Wide screens: the Hero panel stays pinned on the left; the other tabs share the right. */
+@media (min-width: 860px) {
+  .game { max-width: 1040px; }
+  .views { display: grid; grid-template-columns: 420px 1fr; gap: 24px; align-items: start; }
+  .view-hero { position: sticky; top: 0; max-height: calc(100dvh - 60px); overflow: auto; }
+  .tabbar button[data-tab='hero'] { display: none; }
+  .create { max-width: 520px; margin: 0 auto; }
+}

@@ -55,6 +55,16 @@ python tools/serve.py
 Serves the repo at `http://localhost:8766` with caching off, so a rebake shows up on reload.
 ES modules do not load from `file://`.
 
+## check-sim.mjs: proof that offline progress works
+
+```bash
+node tools/check-sim.mjs
+```
+
+Creates fresh heroes, advances them 9 hours in one call, and checks that they level, that the same
+seed gives the same save, that a month away resolves in under a second, and that the save string
+round-trips. It also prints the median time to each level against the design targets.
+
 ## simulate.html
 
 Placeholder for the Phase 2 pacing simulator.

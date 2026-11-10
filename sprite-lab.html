@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#2b2118">
+  <title>Tavernborn sprite lab</title>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>Sprite lab</h1>
+    <a class="back" href="index.html">Back to the game</a>
+  </header>
+  <main id="app" class="app"></main>
+  <noscript>Tavernborn needs JavaScript.</noscript>
+  <script type="module">
+    // The Phase 0 page for judging looks: every race, class, and gear tier.
+    import { mountSpriteLab } from './js/ui/sprite-lab.js';
+    mountSpriteLab(document.getElementById('app'));
+  </script>
+</body>
+</html>

@@ -29,7 +29,8 @@ Rob is the game designer and does not write code.
   stored in the save. It returns a list of events; the Chronicle and "While you were away" use that list.
 - `js/rules.js`, `tasks.js`, `hero.js`, `skills.js`, `loot.js` the systems `sim.js` calls
 - `js/sprite.js` LPC layer compositing and animation
-- `js/ui/` one module per tab; `data/` all content; `tools/` dev-only
+- `js/ui/` one module per tab, plus `create.js` (creation), `away.js` (the summary card), `dom.js` (helpers);
+  `data/` all content; `tools/` dev-only
 
 ## Sprites
 - Asset list: `data/races.js` and `data/items.js`. A layer is `{ def, color }`, where `def` is an LPC
@@ -51,6 +52,9 @@ Rob is the game designer and does not write code.
 - Robe, mage belt, and buckles are female-only art; the vest is male-only.
 - Staffs have no slash art (Wizards attack with thrust). Round and kite shields have no hurt art.
 - Dagger, rapier, saber, mace, flail, longsword, and longsword_alt each ship in one fixed look.
+- The cane is drawn in the shield hand and only has walk art; the club only has swing art. The Cleric
+  Common weapon uses both: the cane, mirrored into the weapon hand at bake time (`mirror: true`), and
+  the club for the slash. It is not drawn during thrust or hurt.
 
 ## Working rules
 - Build phase by phase. Finish a phase's "done when" before starting the next.
@@ -70,6 +74,19 @@ Rob is the game designer and does not write code.
 | 7. Polish | Writing pass, sound, credits screen, settings | Tone matches the Humor and voice section |
 
 ## Status
-- Current phase: 0, built and waiting on Rob's phone review. `index.html` is the sprite proof page.
-- Not yet built: everything from Phase 1 on. Files for later phases exist as one-line placeholders.
+- Current phase: 1 (Core loop), built and waiting on Rob's phone test. Phase 0 is approved.
+- `index.html` is the game. The Phase 0 sprite proof moved to `sprite-lab.html` (linked from Tavern > Workshop).
+- Built in Phase 1: four-step creation, the task bar, one d20 roll per task, XP and levels 1 to 20, HP,
+  automatic potions, a basic knockout (recover at the tavern, no paid skip yet), the Chronicle (last 200
+  lines), the Bestiary, autosave, offline progress with the "While you were away" card (after 10 minutes),
+  export and import of a save string, Roam in Mugwick Vale with nine monsters.
+- `node tools/check-sim.mjs` proves the sim: every race and class levels in 9 hours away, the same seed gives
+  the same save, one long call equals second-by-second calls, 30 days resolves in about 0.2 s, and the save
+  string round-trips. Run it after any change to `js/sim.js`, `tasks.js`, `rules.js`, `hero.js`, or `state.js`.
+- Pacing lives in `js/rules.js`: `LEVEL_TARGET_HOURS` (the design doc's table) times `XP_PER_SECOND`. Region 1
+  alone currently hits level 2 at 10 min, 3 at 40 min, 5 at 4.8 h, 6 at 9.3 h. Phase 2 tunes it properly.
+- Placeholders shown honestly in the UI: Map lists regions 2 to 8 as locked, Quest and Delve are disabled,
+  Skills only banks points, Gear shows the Common starting kit in every slot (Cloak unlocks at 5, Phase 5).
+- Race quirks: Human, Elf, and Goblin work. Dwarf, Half-Orc, and Dragonborn need Phase 3 (grudges, dungeons, bosses).
+- "Create a new hero" replaces the current hero; the roster of three is Phase 6. No in-game credits screen yet (Phase 7).
 - Not baked yet: level milestone layers (cape clip), the other 18 hair colours.
