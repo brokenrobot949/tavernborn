@@ -1,0 +1,28 @@
+/* Page structure. Phone first; the stage pins to the left on wide screens. */
+.topbar {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--ink);
+  color: var(--parchment);
+}
+.topbar .phase { font-size: 0.85rem; opacity: 0.8; }
+
+.app { max-width: 1040px; margin: 0 auto; padding: 0 12px 32px; }
+
+.stage-wrap {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--parchment);
+  padding: 10px 0 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.controls { display: grid; gap: 12px; padding-top: 12px; }
+
+@media (min-width: 860px) {
+  .app { display: grid; grid-template-columns: 420px 1fr; gap: 24px; align-items: start; }
+  .stage-wrap { top: 12px; border-bottom: 0; }
+}

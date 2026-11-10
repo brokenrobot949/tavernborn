@@ -1,0 +1,5 @@
+# Local clone of the LPC generator used by tools/sprites.mjs. Never shipped.
+.lpc-source/
+.claude/
+.DS_Store
+Thumbs.db

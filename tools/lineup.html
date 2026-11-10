@@ -1,0 +1,38 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tavernborn look line-up</title>
+<style>
+  body { font: 13px system-ui, sans-serif; background: #e2d2b0; margin: 8px; }
+  h2 { margin: 10px 0 2px; font-size: 14px; }
+  .r { display: flex; gap: 2px; align-items: center; }
+  .r span { width: 110px; }
+  canvas { image-rendering: pixelated; background: #cfd9c4; }
+</style>
+<body>
+<p>Every class, body type, and tier. Add <code>?anim=slash&amp;facing=right&amp;step=3&amp;scale=2&amp;race=dwarf</code> to change the view.</p>
+<script type="module">
+  // Dev page: open through a local server, e.g. http://localhost:8000/tools/lineup.html
+  import { RACES } from '../data/races.js';
+  import { CLASSES } from '../data/classes.js';
+  import { SLOTS, TIERS } from '../data/items.js';
+  import { heroLook, drawStill } from '../js/sprite.js';
+  const q = new URLSearchParams(location.search);
+  const opt = { anim: q.get('anim') ?? 'walk', facing: q.get('facing') ?? 'down', step: +(q.get('step') ?? 0), scale: +(q.get('scale') ?? 2), wide: q.has('wide') };
+  const races = q.get('race') ? [q.get('race')] : Object.keys(RACES);
+  const classes = q.get('cls') ? [q.get('cls')] : Object.keys(CLASSES);
+  for (const cls of classes) {
+    document.body.append(Object.assign(document.createElement('h2'), { textContent: CLASSES[cls].name }));
+    for (const race of races) for (const b of RACES[race].builds) {
+      const row = Object.assign(document.createElement('div'), { className: 'r' });
+      row.append(Object.assign(document.createElement('span'), { textContent: `${RACES[race].name} ${b.label}` }));
+      for (let i = 0; i < TIERS.length; i++) {
+        const c = document.createElement('canvas');
+        const tiers = Object.fromEntries(SLOTS.map((s) => [s.id, q.get('nocloak') && s.id === 'cloak' ? null : i]));
+        drawStill(c, heroLook({ race, build: b.id, skin: RACES[race].skins[0], hairStyle: q.get('hair') ?? RACES[race].hair, hairColor: 'chestnut', beard: !!b.beard, cls, tiers }), opt);
+        row.append(c);
+      }
+      document.body.append(row);
+    }
+  }
+</script>
