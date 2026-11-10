@@ -74,7 +74,24 @@ Rob is the game designer and does not write code.
 | 7. Polish | Writing pass, sound, credits screen, settings | Tone matches the Humor and voice section |
 
 ## Status
-- Current phase: 1 (Core loop), built and waiting on Rob's phone test. Phase 0 is approved.
+- Current phase: 2 (Simulator), built and waiting on Rob's phone test. Phase 1 (Core loop) is also still
+  in his phone test. Phase 0 is approved.
+- Built in Phase 2: `tools/simulate.html` (Tavern > Workshop > "Open the pacing simulator") and
+  `node tools/simulate.mjs`. Both run 500 heroes through the real `advance()` and report time to each level
+  against the targets, by class and race, with knockouts and potions. Engine: `tools/simulate-core.js`.
+- Simulator stand-ins: regions 2 to 8 have no monsters yet, so the simulator scales Mugwick Vale's nine
+  monsters up for each (same XP and task length, DC 10 + proficiency, damage scaled with hit points) and
+  moves the hero up the road with no travel time. Real monsters added in Phase 3 replace the stand-ins
+  automatically; rerun the simulator then, because the result will shift.
+- Measured with stand-ins, 500 heroes, median (target): L2 10 min (10 min), L3 59 min (1 h), L4 3.1 h (3 h),
+  L5 6.6 h (6.5 h), L6 11.5 h (11 h), L8 29.9 h (30 h), L10 2.9 days (3), L12 5.9 days (6), L15 12.8 days (13),
+  L18 22.9 days (23), L20 29.8 days (30). Middle 80% of heroes reach level 20 between 28.5 and 31.2 days.
+  Staying in Mugwick Vale alone (the game as built today) gives level 20 at about 25 to 26 days.
+- Danger findings (recommendations for Phase 3, nothing changed): the Vale is harmless (0 knockouts). With
+  stand-ins a hero averages 17 knockouts in the month, but very unevenly: Fighter 0.6, Rogue 5, Cleric 9,
+  Wizard 55. Damage has a cliff: at 1.5x damage a hero averages about 480 knockouts and only half reach level 20 in
+  60 days; at 2x it is about 1,000 and nobody does. Healing between tasks is a flat 15% of max HP, so once
+  damage outruns it everything collapses. Phase 3 should rebalance damage and healing together.
 - `index.html` is the game. The Phase 0 sprite proof moved to `sprite-lab.html` (linked from Tavern > Workshop).
 - Built in Phase 1: four-step creation (race, class, ability scores, then name; the preview wears no hat), the task bar, one d20 roll per task, XP and levels 1 to 20, HP,
   automatic potions, a basic knockout (recover at the tavern, no paid skip yet), the Chronicle (last 200
@@ -83,9 +100,9 @@ Rob is the game designer and does not write code.
 - `node tools/check-sim.mjs` proves the sim: every race and class levels in 9 hours away, the same seed gives
   the same save, one long call equals second-by-second calls, 30 days resolves in about 0.2 s, and the save
   string round-trips. Run it after any change to `js/sim.js`, `tasks.js`, `rules.js`, `hero.js`, or `state.js`.
-- Pacing lives in `js/rules.js`: `LEVEL_TARGET_HOURS` (the design doc's table) times `XP_PER_SECOND`. Region 1
-  alone currently hits level 2 at 10 min, 3 at 1 h, 4 at 2.9 h, 5 at 6.2 h, 6 at 10.3 h. Levels 3 to 6 were moved
-  later than the design doc's table after Rob's play test (they came too fast). Phase 2 tunes it properly.
+- Pacing lives in `js/rules.js`: `LEVEL_TARGET_HOURS` (the design doc's table) times `XP_PER_SECOND` (0.5) up to
+  level 6, and times `XP_PER_SECOND_LATE` (0.48, tuned in Phase 2) for the hours after it. Levels 3 to 6 were
+  moved later than the design doc's table after Rob's play test (they came too fast); do not move them earlier.
 - Placeholders shown honestly in the UI: Map lists regions 2 to 8 as locked, Quest and Delve are disabled,
   Skills only banks points, Gear shows the Common starting kit in every slot (Cloak unlocks at 5, Phase 5).
 - Race quirks: Human, Elf, and Goblin work. Dwarf, Half-Orc, and Dragonborn need Phase 3 (grudges, dungeons, bosses).

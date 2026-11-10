@@ -1,4 +1,315 @@
 <!doctype html>
-<meta charset="utf-8">
-<title>Tavernborn pacing simulator</title>
-<p>Placeholder: the headless pacing simulator is built in Phase 2.</p>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#2b2118">
+  <title>Tavernborn pacing simulator</title>
+  <link rel="stylesheet" href="../css/base.css">
+  <link rel="stylesheet" href="../css/layout.css">
+  <link rel="stylesheet" href="../css/components.css">
+  <style>
+    /* Dev-only page: its few extra styles live here rather than in the game's CSS. */
+    :root { --sim: #8a2f24; --target: #1f72a3; --good: #2f6b3a; }
+    .sim { max-width: 760px; margin: 0 auto; padding: 0 12px 40px; display: block; }
+    .sim .panel { margin-top: 12px; }
+    .sim .row > .label { flex: 0 0 100%; margin-bottom: -2px; }
+    .sim .btn { min-height: var(--tap); min-width: var(--tap); }
+    .progress { height: 10px; border-radius: 5px; background: var(--parchment-deep); overflow: hidden; margin-top: 10px; }
+    .progress > i { display: block; height: 100%; width: 0; background: var(--sim); }
+    .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .tile { background: var(--parchment); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+    .tile b { display: block; font: 700 1.5rem/1.2 var(--display); }
+    .tile span { font-size: 0.8rem; color: var(--ink-soft); }
+    .tile.wide { grid-column: 1 / -1; }
+    .verdict { font-weight: 600; }
+    .verdict.pass { color: var(--good); }
+    .verdict.fail { color: var(--accent); }
+    .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.8rem; color: var(--ink-soft); margin: 6px 0; }
+    .legend i { display: inline-block; width: 18px; height: 0; vertical-align: middle; margin-right: 5px; border-top: 3px solid var(--sim); }
+    .legend i.band { height: 10px; border: 0; background: var(--sim); opacity: 0.2; }
+    .legend i.target { border-top: 3px dashed var(--target); }
+    .chart svg { display: block; width: 100%; height: auto; touch-action: pan-y; }
+    .chart text { font: 11px var(--body); fill: var(--ink-soft); }
+    .readout { min-height: 2.8em; font-size: 0.85rem; margin-top: 4px; }
+    .scroll { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+    th, td { text-align: right; padding: 6px 4px; border-bottom: 1px solid var(--parchment-deep); white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--ink-soft); font-weight: 600; }
+    details summary { min-height: var(--tap); display: flex; align-items: center; cursor: pointer; font-weight: 600; }
+    .standin { border-left: 4px solid var(--target); }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Pacing simulator</h1>
+    <a class="back" href="../index.html">Back to the game</a>
+  </header>
+  <main id="app" class="sim">
+    <section class="panel">
+      <h2>Run heroes through the real game rules</h2>
+      <p class="hint">Each hero is created the normal way and played by the game's own engine at high speed, from level 1 to level 20. Classes and races take turns, so all 24 pairs get an equal share. Nothing here touches your save.</p>
+      <div class="row" id="opt-heroes"><span class="label">Heroes</span></div>
+      <div class="row" id="opt-world"><span class="label">World</span></div>
+      <div class="row" id="opt-damage"><span class="label">What if monsters hit harder?</span></div>
+      <div class="row">
+        <button class="btn primary" id="run" type="button">Run the simulation</button>
+        <button class="btn" id="stop" type="button" hidden>Stop</button>
+      </div>
+      <div class="progress" aria-hidden="true"><i id="bar"></i></div>
+      <p class="hint" id="status" role="status">Not run yet. 500 heroes take about a minute on a phone.</p>
+    </section>
+
+    <section class="panel standin" id="standin"></section>
+
+    <section class="panel" id="results" hidden>
+      <h2>Result</h2>
+      <div class="tiles" id="tiles"></div>
+    </section>
+
+    <section class="panel" id="chart-panel" hidden>
+      <h2>Time to reach each level</h2>
+      <div class="row" id="opt-zoom"></div>
+      <div class="legend">
+        <span><i></i>Median hero</span>
+        <span><i class="band"></i>Middle 80% of heroes</span>
+        <span><i class="target"></i>Target</span>
+      </div>
+      <div class="chart" id="chart"></div>
+      <p class="readout" id="chart-readout">Tap a level to see its numbers.</p>
+      <details>
+        <summary>Show the numbers as a table</summary>
+        <div class="scroll" id="level-table"></div>
+      </details>
+    </section>
+
+    <section class="panel" id="groups-panel" hidden>
+      <h2>By class and race</h2>
+      <p class="hint">Median time to levels 5, 10, and 20, and the average number of knockouts and potions per hero over the whole climb.</p>
+      <div class="scroll" id="class-table"></div>
+      <div class="scroll" id="race-table"></div>
+    </section>
+
+    <section class="panel" id="ko-panel" hidden>
+      <h2>Knockouts at each level</h2>
+      <p class="hint">Average knockouts per hero while at that level. Higher levels last longer, so they have more time to collect them. The spikes are the levels where a hero walks into a new region.</p>
+      <div class="chart" id="ko-chart"></div>
+      <p class="readout" id="ko-readout">Tap a bar to see its numbers.</p>
+    </section>
+  </main>
+  <noscript>The simulator needs JavaScript.</noscript>
+
+  <script type="module">
+    import { prepareWorld, heroPlan, runHero, summarize, formatTime, DAY, MAX_LEVEL, CLASSES, RACES } from './simulate-core.js';
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const options = { heroes: 500, world: 'road', damageTimes: 1, zoom: 'month' };
+    let summary = null;
+    let workers = [];
+    let runId = 0;
+
+    // ----- option buttons -----
+    function choice(rowId, key, items, onChange) {
+      const row = $(rowId);
+      for (const [value, label] of items) {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'btn'; b.textContent = label;
+        b.setAttribute('aria-pressed', String(options[key] === value));
+        b.onclick = () => {
+          options[key] = value;
+          for (const other of row.querySelectorAll('button')) other.setAttribute('aria-pressed', String(other === b));
+          onChange?.();
+        };
+        row.append(b);
+      }
+    }
+    choice('opt-heroes', 'heroes', [[100, '100'], [500, '500'], [1000, '1,000']]);
+    choice('opt-world', 'world', [['road', 'All eight regions'], ['vale', 'Mugwick Vale only']], describeWorld);
+    choice('opt-damage', 'damageTimes', [[1, 'As built'], [1.25, 'x1.25'], [1.5, 'x1.5'], [2, 'x2']], describeWorld);
+    choice('opt-zoom', 'zoom', [['month', 'Whole month'], ['day', 'First day']], () => summary && drawLevels());
+
+    // ----- the stand-in notice -----
+    function describeWorld() {
+      const regions = prepareWorld({ damageTimes: options.damageTimes });
+      const range = (list, f) => { const v = list.map(f); const a = Math.min(...v), b = Math.max(...v); return a === b ? `${a}` : `${a} to ${b}`; };
+      const rows = regions.map((r) => `<tr><td>${esc(r.name)}${r.standIn ? ' *' : ''}</td><td>${r.levels[0]} to ${r.levels[1]}</td><td>${range(r.monsters, (m) => m.dc)}</td><td>d${range(r.monsters, (m) => m.dmg).replace(' to ', ' to d')}</td><td>${range(r.monsters, (m) => m.xp)}</td></tr>`).join('');
+      const standIns = regions.filter((r) => r.standIn).length;
+      const vale = options.world === 'vale';
+      $('standin').innerHTML = `
+        <h2>What is real and what is a stand-in</h2>
+        <p class="hint"><b>Real:</b> every roll, XP award, hit, potion, knockout, and level-up comes from the game's own engine, and Mugwick Vale's nine monsters are the real ones.</p>
+        <p class="hint"><b>Stand-in:</b> ${vale
+          ? 'none in this mode. The hero stays in Mugwick Vale for all 20 levels, which is the game exactly as built today. Past level 5 or so nothing there can hurt them, so this mode runs faster than the finished game will.'
+          : `the ${standIns} regions marked * have no monsters yet (Phase 3). Until they do, the simulator invents nine temporary monsters for each by scaling the Vale's nine: the roll stays about as hard as it is for a new hero, damage grows with hit points, and XP per task stays the same. The hero also moves to the next region the moment their level allows, with no travel time. When Phase 3 adds real monsters, they replace the stand-ins here automatically and this result will shift.`}</p>
+        ${options.damageTimes !== 1 ? `<p class="hint"><b>What if:</b> every monster's damage die is multiplied by ${options.damageTimes} for this run only. The game's files are not changed.</p>` : ''}
+        <details><summary>Show the monsters used</summary><div class="scroll"><table>
+          <tr><th>Region</th><th>Levels</th><th>DC</th><th>Damage</th><th>XP</th></tr>${rows}
+        </table></div></details>`;
+    }
+    describeWorld();
+
+    // ----- running -----
+    function stopWorkers() { for (const w of workers) w.terminate(); workers = []; }
+    function setRunning(on) { $('run').disabled = on; $('stop').hidden = !on; }
+
+    $('stop').onclick = () => { runId += 1; stopWorkers(); setRunning(false); $('status').textContent = 'Stopped.'; };
+    $('run').onclick = () => {
+      const id = ++runId;
+      const opts = { world: options.world, damageTimes: options.damageTimes };
+      const count = options.heroes;
+      const results = new Array(count);
+      let done = 0;
+      const started = performance.now();
+      setRunning(true);
+      const progress = () => {
+        $('bar').style.width = `${(100 * done / count).toFixed(1)}%`;
+        $('status').textContent = `${done} of ${count} heroes have finished their month.`;
+        if (done === count || done % Math.max(10, Math.round(count / 10)) === 0) render(results.filter(Boolean), done === count);
+        if (done === count) {
+          stopWorkers(); setRunning(false);
+          $('status').textContent = `${count} heroes simulated in ${((performance.now() - started) / 1000).toFixed(0)} seconds.`;
+        }
+      };
+      progress();
+
+      // Fallback when background workers are not available: a few heroes at a time on this thread.
+      const runHere = (from) => {
+        prepareWorld(opts);
+        let i = from;
+        const slice = () => {
+          if (id !== runId) return;
+          const until = performance.now() + 60;
+          while (i < count && performance.now() < until) { if (!results[i]) { results[i] = runHero(heroPlan(i), opts); done += 1; } i += 1; }
+          progress();
+          if (i < count) setTimeout(slice, 0);
+        };
+        slice();
+      };
+
+      const n = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 2) - 1, count));
+      try {
+        let failed = false;
+        for (let k = 0; k < n; k++) {
+          const w = new Worker(new URL('./simulate-worker.js', import.meta.url), { type: 'module' });
+          w.onmessage = (e) => {
+            if (id !== runId || e.data.done) return;
+            results[e.data.i] = e.data.result; done += 1; progress();
+          };
+          w.onerror = () => { if (failed || id !== runId) return; failed = true; stopWorkers(); runHere(0); };
+          w.postMessage({ from: k, step: n, count, options: opts });
+          workers.push(w);
+        }
+      } catch { stopWorkers(); runHere(0); }
+    };
+
+    // ----- results -----
+    function render(results, complete) {
+      if (!results.length) return;
+      summary = summarize(results);
+      summary.complete = complete;
+      for (const id of ['results', 'chart-panel', 'groups-panel', 'ko-panel']) $(id).hidden = false;
+      drawTiles(); drawLevels(); drawGroups(); drawKnockouts();
+    }
+
+    function drawTiles() {
+      const s = summary;
+      const l20 = s.levels[s.levels.length - 1];
+      const days = l20.median == null ? null : l20.median / DAY;
+      const pass = days != null && days >= 28 && days <= 32;
+      const judged = options.world === 'road' && options.damageTimes === 1;
+      const verdict = days == null ? '<span class="verdict fail">✗ The median hero did not reach level 20 in 60 days</span>'
+        : pass ? `<span class="verdict pass">✓ Inside the 28 to 32 day target${judged ? '' : ' (not the standard run)'}</span>`
+        : `<span class="verdict fail">✗ Outside the 28 to 32 day target${judged ? '' : ' (not the standard run)'}</span>`;
+      $('tiles').innerHTML = `
+        <div class="tile wide"><b>${days == null ? 'Not reached' : days.toFixed(1) + ' days'}</b><span>Median time to level ${MAX_LEVEL}${s.complete ? '' : ' (so far)'}. Middle 80% of heroes: ${formatTime(l20.p10)} to ${formatTime(l20.p90)}.</span><br>${verdict}</div>
+        <div class="tile"><b>${s.finished} of ${s.heroes}</b><span>heroes reached level ${MAX_LEVEL} within 60 days</span></div>
+        <div class="tile"><b>${s.knockouts.toFixed(1)}</b><span>knockouts per hero (${s.koHours.toFixed(1)} hours recovering)</span></div>
+        <div class="tile"><b>${s.potions.toFixed(1)}</b><span>potions drunk per hero</span></div>
+        <div class="tile"><b>${s.knockoutFree}</b><span>heroes were never knocked out</span></div>`;
+    }
+
+    const niceStep = (max, ticks) => { const raw = max / ticks; const p = 10 ** Math.floor(Math.log10(raw)); return [1, 2, 2.5, 5, 10].map((m) => m * p).find((v) => v >= raw); };
+
+    // A chart frame: y axis with gridlines, one column per item, and a tap or hover target per column.
+    function frame({ items, yMax, unit, label, onPick, host }) {
+      const W = 340, H = 240, L = 34, R = 8, T = 20, B = 26;
+      const step = niceStep(yMax, 4);
+      const top = Math.ceil(yMax / step) * step;
+      const x = (i) => L + ((i + 0.5) * (W - L - R)) / items.length;
+      const y = (v) => T + (1 - v / top) * (H - T - B);
+      const col = (W - L - R) / items.length;
+      let grid = '';
+      for (let v = 0; v <= top + 1e-9; v += step) grid += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="#c7b48c" stroke-width="${v === 0 ? 1 : 0.5}"/><text x="${L - 4}" y="${y(v) + 4}" text-anchor="end">${+v.toFixed(2)}</text>`;
+      const every = items.length > 12 ? 2 : 1;
+      const labels = items.map((it, i) => (i % every === 0 ? `<text x="${x(i)}" y="${H - 10}" text-anchor="middle">${label(it)}</text>` : '')).join('');
+      const hits = items.map((it, i) => `<rect data-i="${i}" x="${x(i) - col / 2}" y="${T}" width="${col}" height="${H - T - B}" fill="transparent"/>`).join('');
+      const build = (marks) => {
+        host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img"><text x="2" y="10">${unit}</text><text x="${L - 4}" y="${H - 10}" text-anchor="end">Lvl</text>${grid}${labels}<line class="guide" y1="${T}" y2="${H - B}" stroke="#2b2118" stroke-width="1" visibility="hidden"/>${marks}${hits}</svg>`;
+        const guide = host.querySelector('.guide');
+        const pick = (e) => {
+          const i = e.target?.dataset?.i;
+          if (i == null) return;
+          guide.setAttribute('x1', x(+i)); guide.setAttribute('x2', x(+i)); guide.setAttribute('visibility', 'visible');
+          onPick(items[+i]);
+        };
+        host.querySelector('svg').addEventListener('pointermove', pick);
+        host.querySelector('svg').addEventListener('pointerdown', pick);
+      };
+      return { x, y, col, build, bottom: H - B };
+    }
+
+    function drawLevels() {
+      const day = options.zoom === 'day';
+      const div = day ? 3600 : DAY;
+      const items = summary.levels.filter((l) => l.median != null && (!day || l.level <= 8));
+      if (!items.length) { $('chart').textContent = 'No hero has leveled yet.'; return; }
+      const yMax = Math.max(...items.map((l) => Math.max(l.p90, l.target))) / div;
+      const f = frame({
+        items, yMax, unit: day ? 'hours' : 'days', label: (l) => l.level, host: $('chart'),
+        onPick: (l) => {
+          const off = Math.round((l.median / l.target - 1) * 100);
+          $('chart-readout').innerHTML = `<b>Level ${l.level}</b>: target ${formatTime(l.target)}, median ${formatTime(l.median)} (${off === 0 ? 'on target' : Math.abs(off) + '% ' + (off > 0 ? 'late' : 'early')}). Middle 80% of heroes: ${formatTime(l.p10)} to ${formatTime(l.p90)}. ${l.count} of ${summary.heroes} heroes got here.`;
+        },
+      });
+      const pts = (key) => items.map((l, i) => `${f.x(i).toFixed(1)},${f.y(l[key] / div).toFixed(1)}`);
+      const band = [...pts('p90'), ...pts('p10').reverse()].join(' ');
+      const marks = `
+        <polygon points="${band}" fill="#8a2f24" opacity="0.2"/>
+        <polyline points="${pts('median').join(' ')}" fill="none" stroke="#8a2f24" stroke-width="2" stroke-linejoin="round"/>
+        ${items.map((l, i) => `<circle cx="${f.x(i)}" cy="${f.y(l.median / div)}" r="2.5" fill="#8a2f24" stroke="#fbf5e6" stroke-width="1"/>`).join('')}
+        <polyline points="${pts('target').join(' ')}" fill="none" stroke="#1f72a3" stroke-width="2" stroke-dasharray="5 4"/>`;
+      f.build(marks);
+      $('chart').querySelector('svg').setAttribute('aria-label', `Line chart of the time to reach each level: median, middle 80 percent, and target. Level ${MAX_LEVEL} median ${formatTime(summary.levels[summary.levels.length - 1].median)}.`);
+
+      $('level-table').innerHTML = `<table><tr><th>Level</th><th>Target</th><th>10th</th><th>Median</th><th>90th</th><th>vs target</th><th>Heroes</th></tr>${summary.levels.map((l) => {
+        const off = l.median == null ? '' : `${l.median >= l.target ? '+' : ''}${Math.round((l.median / l.target - 1) * 100)}%`;
+        return `<tr><td>${l.level}</td><td>${formatTime(l.target)}</td><td>${formatTime(l.p10)}</td><td>${formatTime(l.median)}</td><td>${formatTime(l.p90)}</td><td>${off}</td><td>${l.count}</td></tr>`;
+      }).join('')}</table>`;
+    }
+
+    function drawGroups() {
+      const table = (title, groups, names) => `<table><tr><th>${title}</th><th>Lvl 5</th><th>Lvl 10</th><th>Lvl 20</th><th>KOs</th><th>Potions</th></tr>${groups.map((g) =>
+        `<tr><td>${esc(names[g.id].name)}</td><td>${formatTime(g.l5)}</td><td>${formatTime(g.l10)}</td><td>${formatTime(g.l20)}</td><td>${g.knockouts.toFixed(1)}</td><td>${g.potions.toFixed(1)}</td></tr>`).join('')}</table>`;
+      $('class-table').innerHTML = table('Class', summary.byClass, CLASSES);
+      $('race-table').innerHTML = table('Race', summary.byRace, RACES);
+    }
+
+    function drawKnockouts() {
+      const items = summary.koByLevel;
+      const yMax = Math.max(0.1, ...items.map((k) => k.perHero));
+      const f = frame({
+        items, yMax, unit: 'knockouts per hero', label: (k) => k.level, host: $('ko-chart'),
+        onPick: (k) => { $('ko-readout').innerHTML = `<b>While level ${k.level}</b>: ${k.perHero.toFixed(2)} knockouts per hero on average.`; },
+      });
+      const w = Math.min(24, f.col - 2);
+      f.build(items.map((k, i) => {
+        const yy = f.y(k.perHero), h = f.bottom - yy;
+        return h < 0.5 ? '' : `<path d="M${f.x(i) - w / 2},${f.bottom} v${-Math.max(0, h - 3)} q0,-3 3,-3 h${w - 6} q3,0 3,3 v${Math.max(0, h - 3)} z" fill="#8a2f24"/>`;
+      }).join(''));
+      $('ko-chart').querySelector('svg').setAttribute('aria-label', `Bar chart of average knockouts per hero at each level. ${summary.knockouts.toFixed(1)} in total per hero.`);
+    }
+  </script>
+</body>
+</html>

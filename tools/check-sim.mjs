@@ -72,7 +72,7 @@ let threw = false;
 try { importSave('not a save'); } catch { threw = true; }
 ok(threw, 'a bad save string is refused');
 
-// 6. Pacing across many seeds (Phase 2 will chart this properly).
+// 6. Pacing across many seeds (tools/simulate.html charts all 20 levels).
 const reach = {};
 for (let seed = 1; seed <= 200; seed++) {
   const s = fresh(seed, Object.keys(CLASSES)[seed % 4], Object.keys(RACES)[seed % 6]);

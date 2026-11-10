@@ -34,12 +34,21 @@ export const proficiency = (level) => 2 + Math.floor((level - 1) / 4); // +2 at 
 // Pacing: hours since creation at which each level should land (design doc, "Leveling and
 // pacing"; levels the doc does not list are filled in between). A hero fighting at their own
 // level earns about XP_PER_SECOND, so the XP needed is just the target time times that rate.
-// Phase 2's simulator tunes these two tables.
 // Levels 3 to 6 sit later than the doc's first table (40 min, 2 h, 5 h, 10 h): in Rob's play test
 // they came too fast to feel earned.
+// Tuned with the Phase 2 simulator (tools/simulate.html, or `node tools/simulate.mjs`). Past
+// level 6 a hero earns a little slower, because tougher monsters mean more misses and the odd
+// knockout, so those hours are priced at XP_PER_SECOND_LATE. With both rates the median simulated
+// hero lands within a few percent of every target and reaches level 20 at about 30 days.
 export const LEVEL_TARGET_HOURS = [0, 0, 1 / 6, 1, 3, 6.5, 11, 18, 30, 48, 72, 105, 144, 192, 247, 312, 384, 468, 552, 636, 720];
 export const XP_PER_SECOND = 0.5;
-export const xpForLevel = (level) => Math.round(LEVEL_TARGET_HOURS[Math.min(level, MAX_LEVEL)] * 3600 * XP_PER_SECOND);
+export const XP_PER_SECOND_LATE = 0.48;
+const LATE_FROM_HOURS = LEVEL_TARGET_HOURS[6];
+export function xpForLevel(level) {
+  const hours = LEVEL_TARGET_HOURS[Math.min(level, MAX_LEVEL)];
+  const early = Math.min(hours, LATE_FROM_HOURS);
+  return Math.round(3600 * (early * XP_PER_SECOND + (hours - early) * XP_PER_SECOND_LATE));
+}
 
 // One d20 check. `rerollOne` is the Goblin quirk: a natural 1 is rolled again, once.
 export function check(state, bonus, dc, { rerollOne = false } = {}) {
