@@ -101,7 +101,7 @@ export function mountHero(root) {
     hp.text.textContent = inTavern ? `${hero.hp} / ${max} (recovering)` : `${hero.hp} / ${max}`;
     const next = xpToNext(hero);
     const floor = xpForLevel(hero.level);
-    xp.fill.style.width = next == null ? '100%' : (100 * (hero.xp - floor)) / (next - floor) + '%';
+    xp.fill.style.width = next == null ? '100%' : Math.max(0, (100 * (hero.xp - floor)) / (next - floor)) + '%';
     xp.text.textContent = next == null ? `${num(hero.xp)} (level 20)` : `${num(hero.xp)} / ${num(next)}`;
 
     if (t) {

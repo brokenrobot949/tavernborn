@@ -1,5 +1,5 @@
-// Hero creation: four steps (name, race and appearance, class, ability scores) with a live
-// sprite preview.
+// Hero creation: four steps (race and appearance, class, ability scores, name) with a live
+// sprite preview. The name comes last so the suggestion can suit the race.
 
 import { RACES, RACE_TRAITS, HAIR_STYLES, HAIR_COLORS } from '../../data/races.js';
 import { CLASSES } from '../../data/classes.js';
@@ -12,8 +12,9 @@ import {
 } from '../hero.js';
 import { el, pressBtn, signed } from './dom.js';
 
-const STEPS = ['Name', 'Race', 'Class', 'Ability scores'];
-const START_TIERS = { body: 0, head: 0, hands: 0, feet: 0, weapon: 0, offhand: 0, cloak: null };
+const STEPS = ['Race', 'Class', 'Ability scores', 'Name'];
+// The preview leaves the hat off so the hair being chosen can be seen.
+const START_TIERS = { body: 0, head: null, hands: 0, feet: 0, weapon: 0, offhand: 0, cloak: null };
 const CLASS_NOTES = {
   fighter: 'Strength. Mail, a sword, and a shield. The most hit points.',
   wizard: 'Intelligence. Robes and a staff. Learns a little faster and bruises easily.',
@@ -61,8 +62,8 @@ export function mountCreate(root, state, onDone) {
     return [
       el('h2', { textContent: 'What is the hero called?' }),
       input,
-      el('div', { className: 'row' }, el('button', { className: 'btn', type: 'button', textContent: 'Suggest a name', onclick: () => { draft.name = suggested = randomName(state, draft.race); render(); } })),
-      el('p', { className: 'hint', textContent: 'Type a name, or tap for one that suits the race you pick next.' }),
+      el('div', { className: 'row' }, el('button', { className: 'btn', type: 'button', textContent: 'Suggest another', onclick: () => { draft.name = suggested = randomName(state, draft.race); render(); } })),
+      el('p', { className: 'hint', textContent: `Type a name, or tap for another ${RACES[draft.race].name} name.` }),
     ];
   }
 
@@ -92,7 +93,7 @@ export function mountCreate(root, state, onDone) {
       el('h2', { textContent: 'Class' }),
       row('Class', ...Object.entries(CLASSES).map(([id, c]) => pressBtn(c.name, draft.cls === id, () => { draft.cls = id; render(); }))),
       el('p', { className: 'hint', textContent: CLASS_NOTES[draft.cls] }),
-      el('p', { className: 'hint', textContent: 'Every hero starts in Common gear. Better gear arrives with loot in a later build.' }),
+      el('p', { className: 'hint', textContent: 'Every hero starts in Common gear, hat included (left off here so you can see the hair). Better gear arrives with loot in a later build.' }),
     ];
   }
 
@@ -119,7 +120,7 @@ export function mountCreate(root, state, onDone) {
     view.set({ look: heroLook({ ...draft, tiers: START_TIERS }), anim: 'walk', facing: 'down' });
     stepLabel.textContent = `Step ${step + 1} of ${STEPS.length}: ${STEPS[step]}`;
     const last = step === STEPS.length - 1;
-    nextBtn = el('button', { className: 'btn primary', type: 'button', textContent: last ? 'Begin the adventure' : 'Next', disabled: !draft.name.trim(), onclick: () => {
+    nextBtn = el('button', { className: 'btn primary', type: 'button', textContent: last ? 'Begin the adventure' : 'Next', disabled: last && !draft.name.trim(), onclick: () => {
       if (!last) { step += 1; render(); window.scrollTo(0, 0); return; }
       cancelAnimationFrame(view.frameReq);
       const { name, race, cls, build, skin, hairStyle, hairColor, beard } = draft;
@@ -128,7 +129,7 @@ export function mountCreate(root, state, onDone) {
     nav.replaceChildren(
       el('button', { className: 'btn', type: 'button', textContent: 'Back', disabled: step === 0, onclick: () => { step -= 1; render(); window.scrollTo(0, 0); } }),
       nextBtn);
-    body.replaceChildren(...[stepName, stepRace, stepClass, stepAbilities][step]().filter(Boolean));
+    body.replaceChildren(...[stepRace, stepClass, stepAbilities, stepName][step]().filter(Boolean));
   }
   render();
 }

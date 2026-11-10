@@ -79,7 +79,7 @@ for (let seed = 1; seed <= 200; seed++) {
   for (const e of advance(s, 12 * HOUR)) if (e.type === 'levelup') (reach[e.level] ??= []).push(e.at);
 }
 console.log('\nMedian time to each level over 200 heroes (target in brackets):');
-const target = { 2: '10 min', 3: '40 min', 4: '2 h', 5: '5 h', 6: '10 h' };
+const target = { 2: '10 min', 3: '1 h', 4: '3 h', 5: '6.5 h', 6: '11 h' };
 for (const [level, times] of Object.entries(reach)) {
   times.sort((x, y) => x - y);
   console.log(`  level ${level}: ${fmt(times[Math.floor(times.length / 2)])} [${target[level] ?? '-'}] (${times.length}/200 heroes)`);

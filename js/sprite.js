@@ -52,6 +52,11 @@ export function heroLook({ race, build, skin, hairStyle, hairColor, beard, cls, 
   return { body: b.body, refs };
 }
 
+// LPC draws the front of a shield (110 to 115) over the head but under hats (120 to 139), so a
+// wide brim or a big jaw cuts into it. The front is lifted above every hat, in the same order,
+// and stays under the weapon (140 and up).
+const shieldFront = (ref, z) => (ref.def.startsWith('shield_') && z >= 110 && z < 120 ? 139 + (z - 109) / 10 : z);
+
 // Flatten refs into drawable sub-layers for one body type, sorted by draw order.
 function sublayers(look) {
   const out = [];
@@ -60,7 +65,7 @@ function sublayers(look) {
     if (!subs) { console.warn('no baked layer for', layerKey(ref)); return; }
     for (const s of subs) {
       const set = s.f[s.b[look.body]];
-      if (set) out.push({ z: s.z, order, custom: s.c ? CUSTOM_ANIMS[s.c] : null, files: set });
+      if (set) out.push({ z: shieldFront(ref, s.z), order, custom: s.c ? CUSTOM_ANIMS[s.c] : null, files: set });
     }
   });
   return out.sort((a, b) => a.z - b.z || a.order - b.order);

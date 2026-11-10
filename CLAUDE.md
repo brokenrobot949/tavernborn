@@ -76,7 +76,7 @@ Rob is the game designer and does not write code.
 ## Status
 - Current phase: 1 (Core loop), built and waiting on Rob's phone test. Phase 0 is approved.
 - `index.html` is the game. The Phase 0 sprite proof moved to `sprite-lab.html` (linked from Tavern > Workshop).
-- Built in Phase 1: four-step creation, the task bar, one d20 roll per task, XP and levels 1 to 20, HP,
+- Built in Phase 1: four-step creation (race, class, ability scores, then name; the preview wears no hat), the task bar, one d20 roll per task, XP and levels 1 to 20, HP,
   automatic potions, a basic knockout (recover at the tavern, no paid skip yet), the Chronicle (last 200
   lines), the Bestiary, autosave, offline progress with the "While you were away" card (after 10 minutes),
   export and import of a save string, Roam in Mugwick Vale with nine monsters.
@@ -84,9 +84,11 @@ Rob is the game designer and does not write code.
   the same save, one long call equals second-by-second calls, 30 days resolves in about 0.2 s, and the save
   string round-trips. Run it after any change to `js/sim.js`, `tasks.js`, `rules.js`, `hero.js`, or `state.js`.
 - Pacing lives in `js/rules.js`: `LEVEL_TARGET_HOURS` (the design doc's table) times `XP_PER_SECOND`. Region 1
-  alone currently hits level 2 at 10 min, 3 at 40 min, 5 at 4.8 h, 6 at 9.3 h. Phase 2 tunes it properly.
+  alone currently hits level 2 at 10 min, 3 at 1 h, 4 at 2.9 h, 5 at 6.2 h, 6 at 10.3 h. Levels 3 to 6 were moved
+  later than the design doc's table after Rob's play test (they came too fast). Phase 2 tunes it properly.
 - Placeholders shown honestly in the UI: Map lists regions 2 to 8 as locked, Quest and Delve are disabled,
   Skills only banks points, Gear shows the Common starting kit in every slot (Cloak unlocks at 5, Phase 5).
 - Race quirks: Human, Elf, and Goblin work. Dwarf, Half-Orc, and Dragonborn need Phase 3 (grudges, dungeons, bosses).
 - "Create a new hero" replaces the current hero; the roster of three is Phase 6. No in-game credits screen yet (Phase 7).
+- `sprite.js` draws the front of every shield above hats (LPC puts it under them, which clipped wide brims).
 - Not baked yet: level milestone layers (cape clip), the other 18 hair colours.

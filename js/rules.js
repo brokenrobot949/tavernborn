@@ -35,7 +35,9 @@ export const proficiency = (level) => 2 + Math.floor((level - 1) / 4); // +2 at 
 // pacing"; levels the doc does not list are filled in between). A hero fighting at their own
 // level earns about XP_PER_SECOND, so the XP needed is just the target time times that rate.
 // Phase 2's simulator tunes these two tables.
-export const LEVEL_TARGET_HOURS = [0, 0, 1 / 6, 2 / 3, 2, 5, 10, 18, 30, 48, 72, 105, 144, 192, 247, 312, 384, 468, 552, 636, 720];
+// Levels 3 to 6 sit later than the doc's first table (40 min, 2 h, 5 h, 10 h): in Rob's play test
+// they came too fast to feel earned.
+export const LEVEL_TARGET_HOURS = [0, 0, 1 / 6, 1, 3, 6.5, 11, 18, 30, 48, 72, 105, 144, 192, 247, 312, 384, 468, 552, 636, 720];
 export const XP_PER_SECOND = 0.5;
 export const xpForLevel = (level) => Math.round(LEVEL_TARGET_HOURS[Math.min(level, MAX_LEVEL)] * 3600 * XP_PER_SECOND);
 
