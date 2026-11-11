@@ -10,10 +10,14 @@
 // Phase 3 save loads with every level, skill point, and Feat. Then Phase 5, gear: five different
 // looks per visible slot, drops from every source, auto-equip and auto-sell, the guaranteed quest
 // piece, the named Legendaries, the cloak at level 5, the six loot skills, determinism with loot,
-// and a Phase 4 save loading intact. Exits with an error if any check fails.
+// and a Phase 4 save loading intact. Then Phase 6, the tavern and legacy: each upgrade's price and
+// effect, upgrades shared across heroes, the trophy wall, the roster of three, retirement (only at
+// level 20, freeing the slot, keeping the portrait look and record), the legacy bonus on a new
+// hero's XP and its 10% cap, the Planar Rifts and Paragon ranks, determinism, and a Phase 5 save
+// loading intact. Exits with an error if any check fails.
 
 import { advance, summarize } from '../js/sim.js';
-import { newSave, exportSave, importSave, migrate } from '../js/state.js';
+import { newSave, exportSave, importSave, migrate, SAVE_VERSION } from '../js/state.js';
 import { createHero, assignScores, defaultAppearance, maxHp, regionOpen, raiseAbility, abilityPointsBy, STANDARD_ARRAY } from '../js/hero.js';
 import {
   TREES, ALL_SKILLS, FX_KEYS, SIG_TYPES, MAX_SKILLS, canLearn, whyNot, learnSkill, chooseSubclass, respec, respecCost, pending,
@@ -34,6 +38,16 @@ import { layerKey } from '../js/layer-key.js';
 import { GEAR_SLOTS, LEGENDARIES, NOUNS, MILESTONES } from '../data/loot.js';
 import { SLOT_IDS, startingGear, startingCloak, gearMods, itemStats, describe, better, receive, rollItem, rollTier, legendItem, sellPrice } from '../js/loot.js';
 import { LOOT, GEAR_STATS } from '../js/rules.js';
+import { TAVERN, MAX_HEROES, PARAGON_XP, TRAVEL_SECONDS_PER_REGION, legacyFor, paragonRankFor, paragonXpFor } from '../js/rules.js';
+import {
+  UPGRADE_IDS, buyUpgrade, upgradeRank, upgradePrice, maxRank, tavernMods, trophyWall, recordTrophy, canRecruit, switchHero,
+  dismissHero, retire, canRetire, portraitOf, paragonRank, paragonTitle,
+} from '../js/tavern.js';
+import { activeHero } from '../js/hero.js';
+import { nextTask } from '../js/tasks.js';
+import { heroLook } from '../js/sprite.js';
+import { MONSTER_BY_ID } from '../data/monsters.js';
+const num = (n) => Math.round(n).toLocaleString('en-US');
 
 let failed = 0;
 const ok = (cond, label) => { console.log(`${cond ? 'ok  ' : 'FAIL'} ${label}`); if (!cond) failed += 1; };
@@ -205,7 +219,7 @@ oh.currentTask = { kind: 'roam', monster: 'goose', text: 'Standing ground agains
 const moved = migrate(JSON.parse(JSON.stringify(old)));
 const mh = moved.heroes[0];
 ok(mh.level === 9 && mh.xp >= xpForLevel(9) && mh.xp < xpForLevel(10), `a version 1 save keeps its level (9) and its place within it (${mh.xp} XP; level 10 is at ${xpForLevel(10)})`);
-ok(moved.version === 4 && mh.unread.length === 0 && mh.delve === null, 'the new fields are filled in');
+ok(moved.version === SAVE_VERSION && mh.unread.length === 0 && mh.delve === null, 'the new fields are filled in');
 advance(moved, 9 * HOUR);
 ok(mh.level >= 9 && mh.stats.tasks > 0, `an old save carries on (level ${mh.level} after 9 more hours)`);
 const top = fresh(98); top.version = 1; top.heroes[0].level = MAX_LEVEL; top.heroes[0].xp = 100;
@@ -382,7 +396,7 @@ for (const key of ['abilityPoints', 'raised', 'cooldowns', 'fresh']) delete vh[k
 const up = migrate(JSON.parse(JSON.stringify(v2)));
 const uh = up.heroes[0];
 const half = (uh.xp - xpForLevel(13)) / (xpForLevel(14) - xpForLevel(13));
-ok(up.version === 4 && uh.level === 13 && uh.skillPoints === 15 && uh.feats.length === 3, 'a Phase 3 save keeps its level (13), its 15 skill points, and its 3 Feats');
+ok(up.version === SAVE_VERSION && uh.level === 13 && uh.skillPoints === 15 && uh.feats.length === 3, 'a Phase 3 save keeps its level (13), its 15 skill points, and its 3 Feats');
 ok(Math.abs(half - 0.5) < 0.01, `and its place within the level on the new curve (${Math.round(half * 100)}% of the way to 14)`);
 ok(uh.abilityPoints === 6 && pending(uh).total === 15 + 1 + 6, 'the three ability increases it had already passed are waiting (6 points), with the subclass choice');
 const short = JSON.parse(JSON.stringify(v2)); delete short.heroes[0].skillPoints;
@@ -559,7 +573,7 @@ const keep = JSON.parse(JSON.stringify({ skills: wh.skills, subclass: wh.subclas
 const now4 = migrate(JSON.parse(JSON.stringify(v3)));
 const nh = now4.heroes[0];
 const quarter = (nh.xp - xpForLevel(12)) / (xpForLevel(13) - xpForLevel(12));
-ok(now4.version === 4 && nh.level === 12 && nh.gold === 54321 && nh.skillPoints === 3 && nh.abilityPoints === 2, 'a Phase 4 save keeps its level (12), its gold (54,321 gp), and its banked points');
+ok(now4.version === SAVE_VERSION && nh.level === 12 && nh.gold === 54321 && nh.skillPoints === 3 && nh.abilityPoints === 2, 'a Phase 4 save keeps its level (12), its gold (54,321 gp), and its banked points');
 ok(JSON.stringify(keep) === JSON.stringify({ skills: nh.skills, subclass: nh.subclass, feats: nh.feats, abilities: nh.abilities, bestiary: nh.bestiary, questProgress: nh.questProgress }) && nh.skills.length > 10, `and every skill (${nh.skills.length}), its subclass, Feats, ability scores, Bestiary, and quests`);
 ok(Math.abs(quarter - 0.25) < 0.01, `and its place within the level on the new curve (${Math.round(quarter * 100)}% of the way to 13)`);
 const named = startingGear('cleric');
@@ -581,6 +595,241 @@ ok([0, 1, 2, 3, 4].every((t) => wornEver.has(t)), 'over the month the simulated 
 ok(full.tierAt[10] > full.tierAt[5] && full.tierAt[15] > full.tierAt[10] && full.tierAt[20] > full.tierAt[15], 'and the average rarity of the kit rises from level 5 to 10 to 15 to 20');
 ok(Object.values(full.gear).every((t) => t != null && t >= 2) && Object.values(full.gear).some((t) => t === 4), 'ending with every slot Rare or better and at least one Legendary, so every visible slot has changed look');
 ok(GEAR_STATS.weapon.perTier === 1, 'a weapon adds its rarity to every roll');
+
+// ---------- Phase 6: the tavern and legacy ----------
+{ // its own scope, so its names do not collide with the checks above
+  console.log('\nPhase 6 tavern and legacy:');
+  const firstOf = (events, type, pred = () => true) => events.find((e) => e.type === type && pred(e));
+
+  // 37. Upgrade prices: four upgrades, each rank dearer than the last, and a real sink for gold.
+  const allPrices = UPGRADE_IDS.flatMap((id) => TAVERN[id].price);
+  ok(UPGRADE_IDS.join() === 'room,stable,notice,trophies' && UPGRADE_IDS.every((id) => TAVERN[id].price.every((p, i, a) => i === 0 || p > a[i - 1])), 'four upgrades (room, stable, notice board, trophy wall), every rank dearer than the one before');
+  const totalPrice = allPrices.reduce((x, y) => x + y, 0);
+  ok(totalPrice > 2000000 && TAVERN.room.price.at(-1) >= 500000, `buying everything costs ${num(totalPrice)} gp, more than one hero's whole career earns (about 1.6 million)`);
+  const shopSave = fresh(81);
+  const sh = shopSave.heroes[0];
+  sh.gold = TAVERN.room.price[0] - 1;
+  ok(buyUpgrade(shopSave, sh, 'room') === null && upgradeRank(shopSave, 'room') === 0 && sh.gold === TAVERN.room.price[0] - 1, 'an upgrade cannot be bought one gold piece short, and nothing is taken');
+  sh.gold = 10000000;
+  const lines0 = sh.lines;
+  ok(buyUpgrade(shopSave, sh, 'room') === TAVERN.room.price[0] && upgradeRank(shopSave, 'room') === 1 && sh.gold === 10000000 - TAVERN.room.price[0] && sh.lines === lines0 + 1 && sh.chronicle.at(-1).k === 'tavern', 'buying pays the exact price, adds a rank, and writes a Chronicle line');
+  for (const id of UPGRADE_IDS) while (upgradePrice(shopSave, id) != null) buyUpgrade(shopSave, sh, id);
+  ok(UPGRADE_IDS.every((id) => upgradeRank(shopSave, id) === maxRank(id) && buyUpgrade(shopSave, sh, id) === null), 'every upgrade stops at its last rank');
+  ok(sh.gold === 10000000 - totalPrice, `and the purse is down by exactly the total (${num(totalPrice)} gp)`);
+  ok(buyUpgrade(shopSave, sh, 'jacuzzi') === null, 'an upgrade that does not exist cannot be bought');
+
+  // 38. The room: knockout recovery 8% quicker per rank, added to boots and skills, 60% off at most.
+  const koSeconds = (setup) => {
+    const s = placed(33, 'wizard', 'elf', 4, 'gloamfen', 'delve');
+    setup(s);
+    for (let i = 0; i < 400; i++) { const e = firstOf(advance(s, 60), 'knockout'); if (e) return e.seconds; }
+    return null;
+  };
+  const koBase = koSeconds(() => {});
+  const koRoom = koSeconds((s) => { s.tavern.upgrades.room = 5; });
+  const koCapped = koSeconds((s) => { s.tavern.upgrades.room = 5; s.heroes[0].gear.feet = { tier: 4, level: 20, name: 'Test Boots' }; });
+  ok(koBase && Math.abs(koRoom / koBase - 0.6) < 0.01, `the best room (rank 5) cuts recovery by 40% (${fmt(koBase)} to ${fmt(koRoom)})`);
+  ok(Math.abs(koCapped / koBase - 0.4) < 0.01, `with Legendary boots on top it stops at 60% off (${fmt(koCapped)})`);
+
+  // 39. The stable: travel 8% quicker per rank, added to boots.
+  const travelSecs = (rank) => {
+    const s = placed(82, 'fighter', 'human', 9, 'peaks', 'roam');
+    s.tavern.upgrades.stable = rank;
+    const h = s.heroes[0];
+    h.currentTask = null;
+    orderTravel(h, 'mugwick');
+    return nextTask(s, h).duration;
+  };
+  ok(travelSecs(0) === 3 * TRAVEL_SECONDS_PER_REGION && travelSecs(5) === Math.round(3 * TRAVEL_SECONDS_PER_REGION * 0.6) && travelSecs(2) < travelSecs(0), `a stable shortens the road (three regions: ${fmt(travelSecs(0))}, ${fmt(travelSecs(2))} at rank 2, ${fmt(travelSecs(5))} at rank 5)`);
+
+  // 40. The notice board: odd jobs pay 10% more XP and gold per rank, and their gear is rarer.
+  const oddJob = (rank) => {
+    const s = placed(83, 'cleric', 'human', 10, 'mugwick', 'quest');
+    s.heroes[0].questProgress.mugwick = { done: 6, step: 0, started: false, odd: 0, job: null };
+    s.tavern.upgrades.notice = rank;
+    return firstOf(advance(s, 2 * HOUR), 'questdone', (e) => !e.story);
+  };
+  const job0 = oddJob(0), job5 = oddJob(5);
+  ok(job0 && job5 && Math.abs(job5.xp / job0.xp - 1.5) < 0.02 && Math.abs(job5.gold / job0.gold - 1.5) < 0.02, `the best notice board (rank 5) makes an odd job pay half as much again (${job0.xp} XP and ${job0.gold} gp, then ${job5.xp} XP and ${job5.gold} gp)`);
+  const storyJob = (rank) => { const s = placed(84, 'cleric', 'human', 3, 'mugwick', 'quest'); s.tavern.upgrades.notice = rank; return firstOf(advance(s, 3 * HOUR), 'questdone'); };
+  ok(storyJob(0).xp === storyJob(5).xp && storyJob(0).gold === storyJob(5).gold, 'and story quests pay what they always did');
+  const oddTiers = (rank) => {
+    const s = fresh(85, 'rogue');
+    s.tavern.upgrades.notice = rank;
+    let sum = 0;
+    for (let i = 0; i < 2000; i++) sum += rollTier(s, 12, 'odd', tavernMods(s).oddQuality);
+    return sum / 2000;
+  };
+  ok(oddTiers(5) - oddTiers(0) > 0.4, `an odd job's gear is about half a rarity step better at rank 5 (level 12: ${oddTiers(0).toFixed(2)} to ${oddTiers(5).toFixed(2)})`);
+
+  // 41. The trophy wall: a trophy for each dungeon's first clear by any hero; it hangs if there is a hook.
+  const tw = placed(86, 'fighter', 'dwarf', 4, 'mugwick', 'delve');
+  const twEvents = advance(tw, 12 * HOUR);
+  const firstTrophy = firstOf(twEvents, 'trophy');
+  ok(firstTrophy?.region === 'mugwick' && tw.tavern.trophies.join() === 'mugwick' && twEvents.filter((e) => e.type === 'trophy').length === 1, 'the first clear of a dungeon wins its trophy, once');
+  ok(trophyWall(tw).hooks === 0 && trophyWall(tw).waiting.length === 1 && firstTrophy.text.includes('behind the bar'), 'with no hooks bought it waits behind the bar');
+  tw.heroes[0].gold = 100000;
+  buyUpgrade(tw, tw.heroes[0], 'trophies');
+  ok(trophyWall(tw).hung.join() === 'mugwick' && trophyWall(tw).hooks === 3, 'and goes up when the wall is built');
+  const recordedTwice = recordTrophy(tw, 'mugwick');
+  ok(!recordedTwice && tw.tavern.trophies.length === 1, 'a later clear, by this hero or another, wins nothing more');
+  const twRolls = (rank) => { const s = placed(87, 'rogue', 'human', 6, 'saltmarrow', 'roam'); s.tavern.upgrades.trophies = rank; advance(s, 6 * HOUR); return JSON.stringify(s.heroes[0]); };
+  ok(twRolls(0) === twRolls(3), 'the trophy wall changes nothing else at all');
+
+  // 42. The roster: three heroes, one active, the others wait exactly as they were.
+  const ro = fresh(88, 'fighter', 'human');
+  const newHero = (s, cls, race) => createHero(s, { name: 'Recruit', race, cls, appearance: defaultAppearance(race), baseScores: assignScores(cls, STANDARD_ARRAY) });
+  advance(ro, 2 * HOUR);
+  const first = ro.heroes[0];
+  ok(canRecruit(ro), 'with one hero there is room for another');
+  const second = newHero(ro, 'wizard', 'elf'); ro.heroes.push(second);
+  const third = newHero(ro, 'rogue', 'goblin'); ro.heroes.push(third);
+  ok(!canRecruit(ro) && MAX_HEROES === 3, 'three heroes fill the roster');
+  ok(new Set(ro.heroes.map((h) => h.id)).size === 3, 'and each has their own id');
+  ok(switchHero(ro, second.id) && activeHero(ro) === second && !switchHero(ro, 'nobody') && activeHero(ro) === second, 'switching makes another hero the active one (and an unknown id changes nothing)');
+  const waitingBefore = JSON.stringify(first);
+  advance(ro, 3 * HOUR);
+  ok(JSON.stringify(first) === waitingBefore && second.age === 3 * HOUR && third.age === 0, 'only the active hero moves; the others wait exactly as they were');
+  switchHero(ro, first.id);
+  advance(ro, HOUR);
+  ok(first.age === 3 * HOUR && second.age === 3 * HOUR, 'a hero sent out again picks up where they left off');
+  ok(dismissHero(ro, third.id) && ro.heroes.length === 2 && canRecruit(ro) && activeHero(ro) === first, 'dismissing a hero frees the slot');
+  ok(dismissHero(ro, first.id) && activeHero(ro) === second, 'dismissing the active hero sends the next one out');
+  const tooMany = fresh(89); tooMany.heroes.push(newHero(tooMany, 'wizard', 'elf'), newHero(tooMany, 'rogue', 'elf'), newHero(tooMany, 'cleric', 'elf'));
+  let refused = false;
+  try { migrate(JSON.parse(JSON.stringify(tooMany))); } catch { refused = true; }
+  ok(refused, 'a save with four heroes is refused rather than loaded');
+
+  // 43. Upgrades are shared: bought by one hero, they work for every hero.
+  const sharedKo = (buy) => {
+    const s = placed(33, 'wizard', 'elf', 4, 'gloamfen', 'delve');
+    const buyer = newHero(s, 'fighter', 'human'); buyer.gold = 1000000; s.heroes.push(buyer);
+    switchHero(s, buyer.id);
+    if (buy) for (let i = 0; i < 5; i++) buyUpgrade(s, buyer, 'room');
+    switchHero(s, s.heroes[0].id);
+    const goldBefore = s.heroes[0].gold;
+    let e = null;
+    for (let i = 0; i < 400 && !e; i++) e = firstOf(advance(s, 60), 'knockout');
+    return { seconds: e?.seconds, rank: upgradeRank(s, 'room'), paid: 1000000 - buyer.gold, goldBefore };
+  };
+  const notBought = sharedKo(false), bought = sharedKo(true);
+  ok(bought.rank === 5 && Math.abs(bought.seconds / notBought.seconds - 0.6) < 0.01, `a room bought with one hero's gold shortens another hero's recovery (${fmt(notBought.seconds)} to ${fmt(bought.seconds)})`);
+  ok(bought.paid === TAVERN.room.price.reduce((x, y) => x + y, 0) && bought.goldBefore === 2000, 'and only the buyer paid');
+
+  // 44. Retirement: only at level 20; frees the slot; keeps the portrait look and the record.
+  const rt = placed(90, 'cleric', 'dwarf', 19, 'wyrmspire', 'roam');
+  const rh = rt.heroes[0];
+  const waitingHero = newHero(rt, 'rogue', 'human'); rt.heroes.push(waitingHero);
+  advance(rt, 2 * HOUR);
+  ok(!canRetire(rh) && retire(rt, rh.id) === null && rt.heroes.length === 2, 'a level 19 hero cannot retire');
+  rh.level = MAX_LEVEL; rh.xp = xpForLevel(MAX_LEVEL);
+  rh.gear.weapon = { tier: 4, level: 18, name: 'Mace of the Test' }; rh.gear.trinket = { tier: 4, level: 20, name: 'The Third Seal', legend: 'cinder' };
+  rh.stats.mostEmbarrassingDefeat = 'goose'; rh.stats.knockouts = 7;
+  const lookThen = JSON.stringify(heroLook(portraitOf(rh)));
+  const statsThen = JSON.stringify(rh.stats);
+  const legend = retire(rt, rh.id);
+  ok(!!legend && rt.tavern.legends.length === 1 && !rt.heroes.includes(rh) && rt.heroes.length === 1 && canRecruit(rt), 'a level 20 hero retires: into the Hall, and the slot is free');
+  ok(activeHero(rt) === waitingHero, 'the hero waiting at the tavern is sent out in their place');
+  ok(JSON.stringify(heroLook(legend.look)) === lookThen && legend.look.fx?.glow && legend.look.emblem && Object.keys(legend.look.tiers).length >= 7, 'the portrait keeps the look data, and it redraws exactly as the sprite was: gear, emblem, wisp, and glow');
+  ok(legend.name === rh.name && legend.class === 'cleric' && legend.race === 'dwarf' && legend.level === MAX_LEVEL && JSON.stringify(legend.stats) === statsThen, 'the record keeps the name, class, and lifetime stats');
+  ok(legend.worst === MONSTER_BY_ID.goose.name && legend.stats.knockouts === 7 && legend.best?.name === 'The Third Seal' && legend.line.length > 10, `and the knockout tally, the Most Embarrassing Defeat (${legend.worst}), the best item, and a one-line legend: "${legend.line}"`);
+  ok(rh.chronicle.at(-1).text.includes('Hall of Legends'), 'retiring writes the hero\'s last Chronicle line');
+  ok(retire(rt, rh.id) === null && rt.tavern.legends.length === 1, 'a hero cannot retire twice');
+  ok(Math.abs(rt.tavern.legacyBonus - 0.02) < 1e-9, 'one legend: +2% XP for every hero');
+
+  // 45. Done when: a hero can retire and a new one gets the bonus.
+  const career = (legends) => {
+    const s = fresh(91, 'fighter', 'human');
+    s.heroes = [];
+    s.activeHeroId = null;
+    for (let i = 0; i < legends; i++) {
+      const old = newHero(s, 'wizard', 'elf'); old.level = MAX_LEVEL; old.xp = xpForLevel(MAX_LEVEL); s.heroes.push(old); retire(s, old.id);
+    }
+    const h = newHero(s, 'fighter', 'human');
+    s.heroes.push(h); s.activeHeroId = h.id;
+    return s;
+  };
+  const plainCareer = career(0), oneLegend = career(1);
+  plainCareer.rngSeed = oneLegend.rngSeed = 4242; // the same dice from here on
+  const qStep = (s) => { s.heroes[0].level = 3; s.heroes[0].xp = xpForLevel(3); s.heroes[0].hp = maxHp(s.heroes[0]); setFocus(s.heroes[0], 'quest'); return firstOf(advance(s, HOUR), 'task', (e) => e.source === 'quest').xp; };
+  const xpPlain = qStep(plainCareer), xpLegend = qStep(oneLegend);
+  ok(oneLegend.tavern.legends.length === 1 && Math.abs(xpLegend / xpPlain - 1.07 / 1.05) < 0.006, `a new hero after one retirement earns 2% more XP (a human's quest step: ${xpPlain} XP, then ${xpLegend})`);
+  ok(legacyFor(0) === 0 && legacyFor(3) === 0.06 && legacyFor(5) === 0.1 && legacyFor(9) === 0.1, 'the bonus is 2% a legend: 6% for three, 10% for five, and no more after that');
+  const six = career(6);
+  ok(six.tavern.legends.length === 6 && six.tavern.legacyBonus === 0.1, 'six legends in the Hall still give 10%');
+
+  // 46. Planar Rifts and Paragon ranks.
+  for (let r = 0; r <= 30; r++) if (paragonRankFor(paragonXpFor(r)) !== r || (r > 0 && paragonRankFor(paragonXpFor(r) - 1) !== r - 1)) failed += 1;
+  ok(paragonRankFor(-5) === 0 && paragonRankFor(PARAGON_XP) === 1 && paragonRankFor(3 * PARAGON_XP) === 2, `Paragon ranks need ${num(PARAGON_XP)} XP past level 20 for the first, ${num(paragonXpFor(2))} in all for the second, and so on`);
+  const young = placed(92, 'rogue', 'human', 19, 'wyrmspire', 'roam');
+  ok(!setFocus(young.heroes[0], 'rift') && young.heroes[0].focus === 'roam', 'the Rifts are closed below level 20');
+  const rift = placed(92, 'rogue', 'human', 20, 'wyrmspire', 'roam');
+  const rfh = rift.heroes[0];
+  for (const id of SLOT_IDS) rfh.gear[id] = { tier: 3, level: 18, name: 'Test Kit' };
+  rfh.skillPoints = 27; rfh.abilityPoints = 10; grow(rfh, 'shadow');
+  rfh.hp = maxHp(rfh); rfh.gold = 100000;
+  ok(setFocus(rfh, 'rift'), 'at level 20 the Rifts are a standing order');
+  const riftEvents = advance(rift, 24 * HOUR);
+  const floorDc = riftEvents.filter((e) => e.type === 'task' && e.source === 'rift').map((e) => e.roll.dc);
+  const riftKo = riftEvents.findIndex((e) => e.type === 'knockout' && e.source === 'rift');
+  ok(rfh.stats.riftBest >= 10 && floorDc.length > 20, `a geared level 20 hero goes down ${rfh.stats.riftBest} floors at best in a day (${rfh.stats.riftRuns} runs)`);
+  ok(Math.max(...floorDc) > Math.min(...floorDc) + 2, `and the floors get harder (DC ${Math.min(...floorDc)} at the top, ${Math.max(...floorDc)} at the deepest)`);
+  const afterKo = riftEvents.slice(riftKo + 1).find((e) => e.type === 'task' && e.source === 'rift');
+  ok(riftKo >= 0 && riftEvents[riftKo].lost === 'rift' && afterKo?.roll.dc === floorDc[0], 'a knockout in the Rifts ends the run, and the next starts again at floor 1');
+  ok(riftEvents.some((e) => e.warden === 10) && riftEvents.some((e) => e.type === 'loot' && e.source === 'boss'), 'the Warden of floor 10 leaves a piece of gear');
+  const riftParagon = riftEvents.filter((e) => e.type === 'paragon').map((e) => e.rank);
+  ok(rfh.paragon === paragonRank(rfh) && riftParagon.length === rfh.paragon && rfh.paragon >= 1 && riftParagon.every((r, i) => r === i + 1), `XP past level 20 earns Paragon ranks, each announced once (rank ${rfh.paragon} after a day: ${paragonTitle(rfh.paragon)})`);
+  const legendFind = (seed) => { const s = placed(seed, 'fighter', 'human', 20, 'wyrmspire', 'rift'); const h = s.heroes[0]; for (const id of SLOT_IDS) h.gear[id] = { tier: 4, level: 20, name: 'Test' }; h.skillPoints = 27; h.abilityPoints = 10; grow(h, 'vanguard'); h.hp = maxHp(h); setFocus(h, 'rift'); return advance(s, 5 * 24 * HOUR).filter((e) => e.type === 'loot' && e.legend); };
+  const riftLegends = legendFind(93);
+  ok(riftLegends.length > 0 && riftLegends.every((e) => e.level === MAX_LEVEL), `Wardens sometimes give up one of the eight named Legendaries, at level 20 (${riftLegends.length} in five days)`);
+  const titleOnly = (extra) => { const s = placed(94, 'wizard', 'elf', 20, 'wyrmspire', 'rift'); const h = s.heroes[0]; h.xp += extra; h.paragon = paragonRank(h); setFocus(h, 'rift'); return advance(s, 6 * HOUR).filter((e) => e.type === 'task').map((e) => [e.roll?.die, e.roll?.dc, e.xp, e.gold, e.damage]); };
+  ok(JSON.stringify(titleOnly(0)) === JSON.stringify(titleOnly(paragonXpFor(6))), 'Paragon ranks are titles only: a Paragon 6 rolls, earns, and is hurt exactly like a Paragon 0');
+  const leaving = placed(95, 'fighter', 'human', 20, 'wyrmspire', 'rift');
+  for (const id of SLOT_IDS) leaving.heroes[0].gear[id] = { tier: 4, level: 20, name: 'Test' };
+  leaving.heroes[0].hp = maxHp(leaving.heroes[0]);
+  advance(leaving, 5 * 60);
+  const hadRun = !!leaving.heroes[0].rift;
+  setFocus(leaving.heroes[0], 'roam'); advance(leaving, 10 * 60);
+  ok(hadRun && leaving.heroes[0].rift === null, 'leaving the Rifts for another order ends the run');
+
+  // 47. Determinism with the tavern, the roster, and the Rifts.
+  const busy = (seed) => {
+    const s = placed(seed, 'fighter', 'halforc', 20, 'wyrmspire', 'rift');
+    s.tavern.upgrades = { room: 3, stable: 2, notice: 4, trophies: 1 };
+    s.heroes.push(newHero(s, 'cleric', 'elf'));
+    s.heroes[0].skillPoints = MAX_LEVEL - 1; // what a hero who had levelled there would hold
+    return s;
+  };
+  const bOne = busy(96); advance(bOne, 3 * HOUR);
+  const bMany = busy(96); for (let i = 0; i < 3 * HOUR; i++) advance(bMany, 1);
+  ok(JSON.stringify(bOne) === JSON.stringify(bMany), 'with upgrades, two heroes, and the Rifts, one 3-hour call equals 10,800 one-second calls');
+  const bBack = importSave(exportSave(bOne)); advance(bBack, HOUR); advance(bOne, HOUR);
+  ok(JSON.stringify(bBack) === JSON.stringify(bOne), 'and the whole tavern survives the save string mid-run');
+
+  // 48. A Phase 5 save (version 4) loads intact.
+  const v4 = placed(97, 'rogue', 'elf', 20, 'wyrmspire', 'delve');
+  const fh = v4.heroes[0];
+  advance(v4, 2 * HOUR);
+  fh.xp = xpForLevel(MAX_LEVEL) + paragonXpFor(2) + 10; fh.gold = 1234567; fh.skillPoints = MAX_LEVEL - 1 + fh.feats.length - fh.skills.length;
+  v4.version = 4;
+  v4.tavern = { upgrades: {}, legends: [], legacyBonus: 0 }; // as Phase 5 saved it
+  for (const key of ['rift', 'paragon', 'retireOffered']) delete fh[key];
+  for (const key of ['riftRuns', 'riftFloors', 'riftBest']) delete fh.stats[key];
+  const keep5 = JSON.parse(JSON.stringify({ level: fh.level, xp: fh.xp, gold: fh.gold, gear: fh.gear, skills: fh.skills, skillPoints: fh.skillPoints, feats: fh.feats, abilities: fh.abilities, chronicle: fh.chronicle }));
+  const now5 = migrate(JSON.parse(JSON.stringify(v4)));
+  const n5 = now5.heroes[0];
+  ok(now5.version === SAVE_VERSION && SAVE_VERSION === 5, 'a version 4 save becomes version 5');
+  ok(JSON.stringify(keep5) === JSON.stringify({ level: n5.level, xp: n5.xp, gold: n5.gold, gear: n5.gear, skills: n5.skills, skillPoints: n5.skillPoints, feats: n5.feats, abilities: n5.abilities, chronicle: n5.chronicle }), 'and keeps its level, XP, gold, gear, skills, points, Feats, ability scores, and Chronicle');
+  ok(n5.paragon === 2 && n5.rift === null && n5.retireOffered === false && n5.stats.riftBest === 0, 'a hero already past level 20 has Paragon 2 counted quietly, and will be offered retirement once');
+  ok(now5.tavern.trophies.length === 7 && now5.tavern.legacyBonus === 0 && JSON.stringify(now5.tavern.upgrades) === '{}', 'the trophy wall is filled from the seven dungeons already cleared');
+  const p5 = advance(now5, HOUR).filter((e) => e.type === 'paragon');
+  ok(p5.length === 0 || p5[0].rank === 3, 'no Paragon rank is announced twice');
+  const again5 = migrate(JSON.parse(JSON.stringify(now5)));
+  ok(JSON.stringify(again5) === JSON.stringify(now5), 'loading a current save changes nothing');
+  const odd5 = JSON.parse(JSON.stringify(v4)); odd5.tavern.upgrades = { room: 99, stable: 'two', ballroom: 3 }; odd5.tavern.legends = [{ name: 'A' }, { name: 'B' }];
+  const fixed5 = migrate(odd5);
+  ok(fixed5.tavern.upgrades.room === 5 && fixed5.tavern.upgrades.stable === undefined && fixed5.tavern.upgrades.ballroom === undefined && fixed5.tavern.legacyBonus === 0.04, 'odd upgrade numbers are put right, and the legacy bonus is worked out from the Hall');
+}
 
 // 16. Pacing across many seeds (tools/simulate.html charts all 20 levels).
 const reach = {};

@@ -1,5 +1,5 @@
 // Map tab: the world map (drawn in code, nothing to download), the details of the region tapped,
-// travel, and the standing order: Roam, Quest, or Delve.
+// travel, and the standing order: Roam, Quest, or Delve, and from level 20 the Planar Rifts.
 //
 // The page is rebuilt only when something it shows has changed, so a tap is never lost to the
 // once-a-second redraw.
@@ -10,7 +10,8 @@ import { DUNGEONS } from '../../data/dungeons.js';
 import { CHAPTERS } from '../../data/story.js';
 import { regionOpen } from '../hero.js';
 import { currentQuest, setFocus, orderTravel } from '../tasks.js';
-import { STORY_QUESTS, TRAVEL_SECONDS_PER_REGION } from '../rules.js';
+import { STORY_QUESTS, TRAVEL_SECONDS_PER_REGION, MAX_LEVEL, RIFT } from '../rules.js';
+import { RIFT_NAME, RIFT_TEXT } from '../../data/tavern.js';
 import { el, pressBtn } from './dom.js';
 import { showChapter } from './story.js';
 
@@ -49,7 +50,7 @@ function roadPath() {
   return d;
 }
 
-const FOCUS_LABEL = { roam: 'Roam', quest: 'Quest', delve: 'Delve' };
+const FOCUS_LABEL = { roam: 'Roam', quest: 'Quest', delve: 'Delve', rift: 'Rifts' };
 const times = (n) => (n === 1 ? 'once' : n === 2 ? 'twice' : `${n} times`);
 
 export function mountMap(root, app) {
@@ -150,10 +151,12 @@ export function mountMap(root, app) {
       roam: `Roam: ${hero.name} fights the monsters of ${r.name} one at a time. Low risk, steady XP, and it fills the Bestiary.`,
       quest: `Quest: ${hero.name} takes jobs from the quest board, 5 to 8 steps each. Better gold, and finishing all ${STORY_QUESTS} story quests in a region earns a Feat, worth one bonus skill point. Every finished quest also pays one piece of gear; a story quest's is picked for the slot that needs it most.`,
       delve: `Delve: ${hero.name} runs ${d.name}, ${d.rooms[0]} to ${d.rooms[1]} rooms and then ${d.boss.name}. Hit points do not come back between rooms, and a knockout loses the run and nothing else. The first clear opens the next region. Built for level ${d.level}${hero.level < d.level ? `; at level ${hero.level} ${hero.name} will be outmatched.` : '.'}`,
+      rift: `Rifts: ${hero.name} goes down ${RIFT_NAME.replace(/^The /, 'the ')}, one floor at a time, from wherever they stand. ${RIFT_TEXT.about} Hit points come back a little between floors, but only the potions carried in can be drunk. A Warden on every ${RIFT.wardenEvery}th floor leaves gear, and sometimes one of the eight named Legendaries. A knockout ends the run; the next starts at floor 1. ${hero.rift ? `Now on floor ${hero.rift.floor}. ` : ''}${hero.stats.riftBest ? `Deepest so far: floor ${hero.stats.riftBest}.` : 'Not yet entered.'}`,
     }[hero.focus];
+    const focuses = Object.entries(FOCUS_LABEL).filter(([id]) => id !== 'rift' || hero.level >= MAX_LEVEL);
     return el('section', { className: 'panel' },
-      el('h3', { textContent: `Standing order in ${r.name}` }),
-      el('div', { className: 'row focus' }, ...Object.entries(FOCUS_LABEL).map(([id, label]) => {
+      el('h3', { textContent: hero.focus === 'rift' ? 'Standing order: the Rifts' : `Standing order in ${r.name}` }),
+      el('div', { className: 'row focus' }, ...focuses.map(([id, label]) => {
         const b = pressBtn(label, hero.focus === id, () => { setFocus(hero, id); app.changed(); });
         b.classList.add('grow');
         return b;
@@ -168,7 +171,7 @@ export function mountMap(root, app) {
     const qp = hero.questProgress[selected];
     const next = JSON.stringify([
       hero.id, hero.name, hero.level, hero.region, hero.travelTo, hero.focus, selected, hero.dungeonClears, hero.feats.length,
-      qp?.done, qp?.step, qp?.odd, qp?.started, hero.delve?.room, hero.delve?.rooms,
+      qp?.done, qp?.step, qp?.odd, qp?.started, hero.delve?.room, hero.delve?.rooms, hero.rift?.floor, hero.stats.riftBest,
       MONSTERS[selected].filter((m) => hero.bestiary[m.id]).length,
     ]);
     if (next === key) return;

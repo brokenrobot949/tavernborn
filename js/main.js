@@ -7,6 +7,7 @@ import { advance, summarize } from './sim.js';
 import { loadSave, newSave, storeSave } from './state.js';
 import { activeHero } from './hero.js';
 import { pending } from './skills.js';
+import { switchHero, dismissHero, retire, canRecruit, canRetire, portraitOf } from './tavern.js';
 import { el } from './ui/dom.js';
 import { mountCreate } from './ui/create.js';
 import { mountHero } from './ui/hero.js';
@@ -16,6 +17,7 @@ import { mountGear } from './ui/gear.js';
 import { mountTavern } from './ui/tavern.js';
 import { showAway } from './ui/away.js';
 import { showChapter } from './ui/story.js';
+import { showRetireOffer, drawPortrait } from './ui/legacy.js';
 
 const AWAY_SECONDS = 600; // the summary card appears after more than ten minutes away
 const SAVE_EVERY = 10; // seconds between automatic saves
@@ -28,27 +30,57 @@ let screen = null; // { views, sections, buttons } while the game is showing
 let tab = 'hero';
 let sideTab = 'map'; // the tab shown beside the pinned Hero panel on a wide screen
 let sinceStore = 0;
+let returnTo = null; // the hero to go back to if creating a new one is called off
 
+// The roster: one hero adventures at a time and the others wait at the tavern exactly as they
+// were. Before the active hero changes, the time that has passed is settled on the one who was
+// out adventuring through it.
+function settle() { if (activeHero(save)) tick(); }
 const app = {
   currentSave: () => save,
   replaceSave(next) { save = next; storeSave(save); start(); },
-  newHero() { save.heroes = save.heroes.filter((h) => h.id !== save.activeHeroId); save.activeHeroId = null; storeSave(save); start(); },
+  recruit() {
+    if (!canRecruit(save)) return;
+    settle();
+    returnTo = save.activeHeroId;
+    save.activeHeroId = null;
+    storeSave(save);
+    start();
+  },
+  switchHero(id) { settle(); if (switchHero(save, id)) { storeSave(save); start(); } },
+  retire(id) {
+    settle();
+    const wasActive = id === save.activeHeroId;
+    if (!retire(save, id)) return;
+    storeSave(save);
+    if (wasActive) start('tavern'); else render();
+  },
+  dismiss(id) {
+    settle();
+    const wasActive = id === save.activeHeroId;
+    if (!dismissHero(save, id)) return;
+    storeSave(save);
+    if (wasActive) start('tavern'); else render();
+  },
   // A standing order was given or a choice made (focus, travel, the cleric, a skill, a respec): keep it and redraw.
   changed() { storeSave(save); render(); },
 };
 
-function start() {
+function start(firstTab = 'hero') {
   screen?.views.hero.destroy();
   screen = null;
   root.replaceChildren();
   if (!activeHero(save)) {
+    // Creation. With other heroes waiting it can be called off, back to whoever was out.
+    const cancel = save.heroes.length ? () => { save.activeHeroId = save.heroes.some((h) => h.id === returnTo) ? returnTo : save.heroes[0].id; returnTo = null; save.lastSavedAt = Date.now(); start(); } : null;
     mountCreate(root, save, (hero) => {
       save.heroes.push(hero);
       save.activeHeroId = hero.id;
       save.lastSavedAt = Date.now();
+      returnTo = null;
       storeSave(save);
       start();
-    });
+    }, cancel);
     return;
   }
 
@@ -61,7 +93,8 @@ function start() {
     sections, buttons,
     views: { hero: mountHero(sections.hero, app), map: mountMap(sections.map, app), skills: mountSkills(sections.skills, app), gear: mountGear(sections.gear), tavern: mountTavern(sections.tavern, app) },
   };
-  tab = 'hero';
+  tab = firstTab;
+  sideTab = firstTab === 'hero' ? sideTab : firstTab;
   showTab(tab);
   tick();
 }
@@ -110,6 +143,13 @@ function tick() {
   // Story chapter cards earned by a first dungeon clear, one at a time, after any away card.
   if (hero.unread.length && !root.querySelector('.overlay')) {
     showChapter(root, hero.unread[0], hero, () => { hero.unread.shift(); storeSave(save); });
+  }
+  // Level 20: retirement is offered once, by a card. After that it waits on the Hero tab.
+  if (canRetire(hero) && !hero.retireOffered && !root.querySelector('.overlay')) {
+    hero.retireOffered = true;
+    storeSave(save);
+    const portrait = showRetireOffer(root, hero, { onRetire: () => app.retire(hero.id) });
+    drawPortrait(portrait, portraitOf(hero), 3);
   }
   render();
 }

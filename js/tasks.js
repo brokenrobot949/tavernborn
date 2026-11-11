@@ -9,6 +9,7 @@
 //   travel   walking to another region
 //   return   walking back out after a knockout
 //   tavern   recovering from a knockout at The Wobbly Griffin
+//   rift     one floor of the Planar Rifts (level 20 only), one roll
 //
 // The player's standing orders (focus, travel, paying the cleric) are the three functions at the
 // bottom. They only change the save; the simulator calls the same ones.
@@ -23,6 +24,11 @@
 // Loot (Phase 5): `loot()` below is the one place gear arrives. A monster beaten on the road
 // drops a piece rarely, a dungeon room cleared cleanly sometimes, every finished quest and every
 // beaten boss always. The piece equips itself if it is better and is sold if it is not.
+//
+// The tavern (Phase 6) reaches in through `tavernMods(state)` (js/tavern.js): the room adds to
+// knockout recovery and the stable to travel, the same numbers boots and skills use, and the
+// notice board makes odd jobs pay better. A dungeon's first clear by any hero earns a trophy.
+// After level 20 the Planar Rifts open (focus 'rift') and XP keeps counting toward Paragon ranks.
 
 import { MONSTERS, MONSTER_BY_ID } from '../data/monsters.js';
 import { CLASSES } from '../data/classes.js';
@@ -42,14 +48,16 @@ import {
   OUTMATCHED_DC, OUTMATCHED_DAMAGE, GRUDGE_BONUS, WHAT_IF, grownDc, grownDamage,
   QUEST_STEP_SECONDS, QUEST_XP_PER_SECOND, QUEST_DONE_XP, QUEST_DAMAGE, QUEST_GOLD, questDoneGold, STORY_QUESTS,
   DELVE_XP_PER_SECOND, DELVE_GOLD, BOSS_SECONDS, BOSS_XP, BOSS_LOSS_SHARE, bossGold, DUNGEON_POTIONS, CONFIDENCE_LIMIT,
-  TRAVEL_SECONDS_PER_REGION, RETURN_SECONDS_PER_REGION, LOOT,
+  TRAVEL_SECONDS_PER_REGION, RETURN_SECONDS_PER_REGION, LOOT, MAX_LEVEL, RIFT,
 } from './rules.js';
 import { chronicle, gainXp, maxHp, regionOpen } from './hero.js';
 import { skillMods, SUBCLASS_LEVEL } from './skills.js';
 import { gearMods, rollItem, weakestSlot, legendItem, wearsLegend, receive, dropChance, startingCloak, describe, rarityName, flavorOf, SLOT_BY_ID } from './loot.js';
 import { LOOT_LINES, LEGENDARIES, MILESTONES, TITLES } from '../data/loot.js';
+import { RIFT_TEXT, TROPHIES, TROPHY_HUNG, TROPHY_WAITING, PARAGON_LINE, RIFTS_OPEN } from '../data/tavern.js';
+import { tavernMods, recordTrophy, paragonRank, paragonTitle } from './tavern.js';
 
-export const FOCUSES = ['roam', 'quest', 'delve'];
+export const FOCUSES = ['roam', 'quest', 'delve', 'rift'];
 
 const fill = (text, values) => text.replace(/\{(\w+)\}/g, (_, key) => values[key] ?? '');
 const article = (name) => (/^[aeiou]/i.test(name) ? 'an ' : 'a ') + name;
@@ -83,10 +91,11 @@ function modsOf(hero) {
 // Make a piece (or take the dungeon's named Legendary), hand it over, and write it down. A better
 // piece goes on at once; whichever piece loses is sold. Sticky Fingers and its kind may turn up
 // a second piece wherever one was given (never from a monster on the road, and never a third).
-//   opts: { level, source ('roam' | 'room' | 'chest' | 'quest' | 'odd' | 'boss'), slot, legend, second }
+//   opts: { level, source ('roam' | 'room' | 'chest' | 'quest' | 'odd' | 'boss'), slot, legend, second,
+//           quality (added to the skills' own), legendLevel (a named Legendary found away from its dungeon) }
 function loot(state, hero, events, opts) {
   const sk = modsOf(hero);
-  const { slot, item } = opts.legend ? legendItem(opts.legend) : rollItem(state, hero, { ...opts, quality: sk.n.quality });
+  const { slot, item } = opts.legend ? legendItem(opts.legend, opts.legendLevel) : rollItem(state, hero, { ...opts, quality: sk.n.quality + (opts.quality ?? 0) });
   const before = maxHp(hero);
   const got = receive(hero, slot, item);
   const gained = maxHp(hero) - before; // a better helm adds its hit points at once
@@ -109,7 +118,7 @@ function loot(state, hero, events, opts) {
 
 // Humans learn 5% faster, Intelligence adds a little XP, retired legends (Phase 6) add theirs, and
 // skills add theirs: `source` is 'roam', 'quest', 'delve', or 'boss'.
-const KEY = { roam: 'Roam', quest: 'Quest', delve: 'Delve', boss: 'Boss' };
+const KEY = { roam: 'Roam', quest: 'Quest', delve: 'Delve', boss: 'Boss', rift: 'Delve' }; // the Rifts count as a dungeon
 const xpBonus = (state, hero, sk, source) => 1 + (hero.race === 'human' ? 0.05 : 0) + INT_XP * Math.max(0, mod(hero.abilities.int)) + (state.tavern.legacyBonus ?? 0) + sk.n.xp + sk.n['xp' + KEY[source]];
 const goldBonus = (hero, sk, source) => (1 + 0.05 * mod(hero.abilities.cha)) * (1 + sk.n.gold + sk.n['gold' + KEY[source]]);
 const quicker = (seconds, share, least = 5) => Math.max(least, Math.round(seconds * (1 - Math.min(0.75, share))));
@@ -231,21 +240,26 @@ export function nextTask(state, hero, events = []) {
     const from = hero.returning ? 0 : REGION_INDEX[hero.region];
     const hops = Math.max(1, Math.abs(REGION_INDEX[hero.travelTo] - from));
     hero.delve = null;
-    return { kind: 'travel', to: hero.travelTo, text: fill(pick(state, TRAVEL_TASKS), { place: REGION_BY_ID[hero.travelTo].name }), duration: quicker(hops * TRAVEL_SECONDS_PER_REGION, modsOf(hero).n.travel, 30), elapsed: 0 };
+    return { kind: 'travel', to: hero.travelTo, text: fill(pick(state, TRAVEL_TASKS), { place: REGION_BY_ID[hero.travelTo].name }), duration: quicker(hops * TRAVEL_SECONDS_PER_REGION, travelShare(state, hero), 30), elapsed: 0 };
   }
   hero.travelTo = null;
 
   if (hero.returning) {
     const far = REGION_INDEX[hero.region];
     if (far === 0) hero.returning = false;
-    else return { kind: 'return', text: fill(RETURN_TASK, { place: REGION_BY_ID[hero.region].name }), duration: quicker(Math.min(600, far * RETURN_SECONDS_PER_REGION), modsOf(hero).n.travel, 30), elapsed: 0 };
+    else return { kind: 'return', text: fill(RETURN_TASK, { place: REGION_BY_ID[hero.region].name }), duration: quicker(Math.min(600, far * RETURN_SECONDS_PER_REGION), travelShare(state, hero), 30), elapsed: 0 };
   }
 
   if (hero.focus !== 'delve' || hero.delve?.region !== hero.region) hero.delve = null;
+  if (hero.focus !== 'rift' || hero.level < MAX_LEVEL) hero.rift = null;
+  if (hero.focus === 'rift' && hero.level >= MAX_LEVEL) return riftTask(state, hero, events);
   if (hero.focus === 'delve') return delveTask(state, hero, events);
   if (hero.focus === 'quest') return questTask(state, hero, events);
   return roamTask(state, hero);
 }
+
+// Boots, skills, and the tavern's stable all shorten the road.
+const travelShare = (state, hero) => modsOf(hero).n.travel + tavernMods(state).travel;
 
 // Roam: mostly monsters at or below the hero's level, with the odd tougher one.
 function roamTask(state, hero) {
@@ -310,6 +324,18 @@ function delveTask(state, hero, events) {
 }
 const random50 = (state) => randInt(state, 0, 1) === 1;
 
+// The Planar Rifts: one floor per task, wherever the hero happens to be standing.
+function riftTask(state, hero, events) {
+  if (!hero.rift) {
+    hero.rift = { floor: 1, potions: DUNGEON_POTIONS + modsOf(hero).n.potions }; // potions are carried in, as into a dungeon
+    hero.fresh = true;
+    hero.stats.riftRuns = (hero.stats.riftRuns ?? 0) + 1;
+    emit(hero, events, 'story', RIFT_TEXT.enter);
+  }
+  const worth = randInt(state, RIFT.secs[0], RIFT.secs[1]);
+  return { kind: 'rift', floor: hero.rift.floor, text: pick(state, RIFT_TEXT.tasks), worth, duration: quicker(worth, modsOf(hero).n.speedDelve), elapsed: 0 };
+}
+
 // ---------- resolving a finished task ----------
 
 export function resolveTask(state, hero, task, events) {
@@ -336,6 +362,7 @@ export function resolveTask(state, hero, task, events) {
     case 'quest': return resolveQuestStep(state, hero, task, events);
     case 'delve': return resolveRoom(state, hero, task, events);
     case 'boss': return resolveBoss(state, hero, task, events);
+    case 'rift': return resolveRiftFloor(state, hero, task, events);
     default: return resolveRoam(state, hero, MONSTER_BY_ID[task.monster], events);
   }
 }
@@ -465,6 +492,15 @@ function levelUps(state, hero, xp, events) {
     // Milestones on the sprite: a cloak at 5, the class emblem at 10, a wisp at 15, a glow at 20.
     if (level === LOOT.cloakLevel && !hero.gear.cloak) hero.gear.cloak = startingCloak();
     if (MILESTONES[level]) emit(hero, events, 'milestone', fill(MILESTONES[level], { name: hero.name, title: TITLES[hero.class] }), { level });
+    if (level === MAX_LEVEL) emit(hero, events, 'story', fill(RIFTS_OPEN, { name: hero.name }), { rifts: true });
+  }
+  // Past level 20, XP keeps counting toward Paragon ranks: titles and nothing else.
+  if (hero.level >= MAX_LEVEL) {
+    const rank = paragonRank(hero);
+    while ((hero.paragon ?? 0) < rank) {
+      hero.paragon = (hero.paragon ?? 0) + 1;
+      emit(hero, events, 'paragon', fill(PARAGON_LINE, { rank: hero.paragon, title: paragonTitle(hero.paragon), name: hero.name }), { rank: hero.paragon });
+    }
   }
 }
 
@@ -482,10 +518,11 @@ function resolveQuestStep(state, hero, task, events) {
   const quest = currentQuest(hero);
   if (!quest) return; // the board changed under the task (an old save); the next task sorts it out
   const [lo, hi] = baseGold(quest.level);
+  const board = quest.story ? 1 : 1 + tavernMods(state).odd; // the notice board: better-paid odd jobs
   const foe = {
     name: quest.title, level: quest.level, check: quest.check,
     dc: baseDc(quest.level), dmg: Math.round(baseDamage(quest.level) * QUEST_DAMAGE),
-    xp: Math.round((task.worth ?? task.duration) * QUEST_XP_PER_SECOND), gold: [lo * QUEST_GOLD, hi * QUEST_GOLD],
+    xp: Math.round((task.worth ?? task.duration) * QUEST_XP_PER_SECOND * board), gold: [Math.round(lo * QUEST_GOLD * board), Math.round(hi * QUEST_GOLD * board)],
     hit: QUEST_LINES.hit, miss: QUEST_LINES.miss, crit: pick(state, QUEST_LINES.crit), fumble: pick(state, QUEST_LINES.fumble),
     defeat: `Knocked out on a job, ${quest.title}. ${pick(state, QUEST_LINES.ko)}`,
   };
@@ -497,14 +534,16 @@ function resolveQuestStep(state, hero, task, events) {
 
 function finishQuest(state, hero, qp, quest, events) {
   const sk = modsOf(hero);
-  const xp = Math.round(QUEST_DONE_XP * levelGapXp(quest.level - hero.level) * xpBonus(state, hero, sk, 'quest'));
-  const gold = Math.round(questDoneGold(quest.level) * goldBonus(hero, sk, 'quest') * (1 + 0.05 * Math.max(0, mod(hero.abilities.cha)))); // Charisma: better quest rewards
+  const tav = tavernMods(state);
+  const board = quest.story ? 1 : 1 + tav.odd; // the notice board: better-paid odd jobs
+  const xp = Math.round(QUEST_DONE_XP * board * levelGapXp(quest.level - hero.level) * xpBonus(state, hero, sk, 'quest'));
+  const gold = Math.round(questDoneGold(quest.level) * board * goldBonus(hero, sk, 'quest') * (1 + 0.05 * Math.max(0, mod(hero.abilities.cha)))); // Charisma: better quest rewards
   hero.gold += gold;
   const done = quest.story ? quest.q.done : pick(state, ODD_JOBS.done);
   emit(hero, events, 'questdone', fill(QUEST_DONE, { quest: quest.title, done }), { quest: quest.title, story: quest.story, xp, gold }, { gain: `+${xp} XP, ${gold} gp` });
   // Every finished quest pays one piece of gear. A story quest's is chosen for the slot that
   // needs it most; an odd job pays whatever the client had lying about.
-  loot(state, hero, events, quest.story ? { level: quest.level, source: 'quest', slot: weakestSlot(hero) } : { level: quest.level, source: 'odd' });
+  loot(state, hero, events, quest.story ? { level: quest.level, source: 'quest', slot: weakestSlot(hero) } : { level: quest.level, source: 'odd', quality: tav.oddQuality });
   // A windfall pays the fee again.
   for (const s of sk.sigs.windfall ?? []) {
     if (random(state) >= s.chance) continue;
@@ -681,6 +720,10 @@ function resolveBoss(state, hero, task, events) {
     hero.delve = null;
     emit(hero, events, 'cleared', fill(DUNGEON_CLEARED[first ? 0 : 1], { dungeon: d.name }), { region: run.region, first });
     if (first) {
+      if (recordTrophy(state, run.region)) {
+        const hung = state.tavern.trophies.length <= tavernMods(state).hooks;
+        emit(hero, events, 'trophy', fill(hung ? TROPHY_HUNG : TROPHY_WAITING, { trophy: TROPHIES[run.region] }), { region: run.region });
+      }
       const chapter = CHAPTERS[run.region];
       hero.unread.push(run.region);
       emit(hero, events, 'chapter', `Chapter ${chapter.n}, ${chapter.title}. ${chapter.page} is recovered.`, { region: run.region, chapter: chapter.n });
@@ -691,6 +734,46 @@ function resolveBoss(state, hero, task, events) {
     knockOut(state, hero, { id: b.id, level: d.level, dc: b.dc, defeat: `Defeated by ${midSentence(b.name)}. ${b.ko}` }, events, 'boss');
   }
   levelUps(state, hero, xp, events);
+  if (hero.knockedOutUntil == null) rest(state, hero, events);
+}
+
+// One floor of the Planar Rifts. Floor 1 is about as hard as a room of the last dungeon; each
+// floor after it hits harder and pays more, and every third is one harder to roll against. A
+// Warden on every tenth floor leaves a piece of gear and, now and then, a named Legendary the
+// hero is not wearing. Hit points come back a little between floors, as on the road, but only
+// the potions carried in can be drunk.
+function resolveRiftFloor(state, hero, task, events) {
+  const run = hero.rift;
+  if (!run) return;
+  const floor = run.floor;
+  const d = DUNGEONS[REGIONS[REGIONS.length - 1].id];
+  const up = 1 + RIFT.rewardPerFloor * (floor - 1);
+  const f = (text) => fill(text, { floor, name: hero.name });
+  const foe = {
+    name: `Floor ${floor}`, level: MAX_LEVEL, check: RIFT_TEXT.check, trap: true,
+    dc: d.dc + Math.floor((floor - 1) / RIFT.dcEvery),
+    dmg: Math.round(d.dmg * (1 + RIFT.damagePerFloor * (floor - 1))),
+    xp: Math.round((task.worth ?? task.duration) * DELVE_XP_PER_SECOND * up),
+    gold: [Math.round(d.gold[0] * up), Math.round(d.gold[1] * up)],
+    hit: RIFT_TEXT.hit.map(f), miss: RIFT_TEXT.miss.map(f), crit: f(RIFT_TEXT.crit), fumble: f(RIFT_TEXT.fumble),
+    defeat: f(RIFT_TEXT.ko),
+  };
+  const result = encounter(state, hero, foe, events, 'rift');
+  if (!result.ok) return; // knocked out: the run is over
+  hero.stats.riftFloors = (hero.stats.riftFloors ?? 0) + 1;
+  if (floor % RIFT.wardenEvery === 0) {
+    emit(hero, events, 'story', f(RIFT_TEXT.warden), { warden: floor });
+    loot(state, hero, events, { level: MAX_LEVEL, source: 'boss' });
+    const missing = Object.keys(LEGENDARIES).filter((r) => !wearsLegend(hero, r));
+    if (missing.length && random(state) < RIFT.legend) loot(state, hero, events, { legend: pick(state, missing), legendLevel: MAX_LEVEL, source: 'boss' });
+  } else if (!failed(result) && random(state) < dropChance(hero, 'room', result.outcome === 'crit')) {
+    loot(state, hero, events, { level: MAX_LEVEL, source: 'room' });
+  }
+  if (floor > (hero.stats.riftBest ?? 0)) {
+    hero.stats.riftBest = floor;
+    if (floor % 5 === 0) emit(hero, events, 'story', f(RIFT_TEXT.deepest), { deepest: floor });
+  }
+  run.floor += 1;
   if (hero.knockedOutUntil == null) rest(state, hero, events);
 }
 
@@ -716,11 +799,12 @@ function knockOut(state, hero, foe, events, source) {
   // Constitution, the Elf quirk, and skills shorten the stay.
   let seconds = recoverySeconds(hero.level) * (1 - 0.03 * Math.max(0, mod(hero.abilities.con)));
   if (hero.race === 'elf') seconds *= 0.8;
-  seconds *= 1 - Math.min(0.6, modsOf(hero).n.recovery);
+  seconds *= 1 - Math.min(0.6, modsOf(hero).n.recovery + tavernMods(state).recovery); // boots, skills, and the tavern's room
   hero.knockedOutUntil = hero.age + Math.round(seconds);
 
   const inDungeon = source === 'delve' || source === 'boss';
-  const lost = inDungeon ? 'run' : source === 'quest' ? 'step' : null;
+  const lost = inDungeon ? 'run' : source === 'quest' ? 'step' : source === 'rift' ? 'rift' : null;
+  if (source === 'rift') hero.rift = null; // the next run starts from floor 1
   const region = hero.region;
   let text = foe.defeat + (lost === 'run' ? ' ' + RUN_LOST : lost === 'step' ? ' ' + STEP_LOST : '');
   emit(hero, events, 'knockout', text, { monster: foe.id, source, lost, region, seconds: Math.round(seconds) });
@@ -753,15 +837,16 @@ function rest(state, hero, events) {
   drinkPotion(state, hero, events);
 }
 
-// Potions are bought and drunk on the spot when gold allows. A dungeon run carries a fixed number.
+// Potions are bought and drunk on the spot when gold allows. A dungeon or Rifts run carries a fixed number.
 function drinkPotion(state, hero, events) {
   const sk = modsOf(hero);
   const max = maxHp(hero);
   const cost = Math.max(1, Math.round(potionPrice(hero.level) * (1 - Math.min(0.75, sk.n.potionPrice))));
   if (hero.hp >= max * POTION_BELOW || hero.gold < cost) return;
-  if (hero.delve) {
-    if (hero.delve.potions <= 0) return;
-    hero.delve.potions -= 1;
+  const run = hero.delve ?? hero.rift; // a dungeon or Rifts run carries a fixed number
+  if (run) {
+    if (!(run.potions > 0)) return;
+    run.potions -= 1;
   }
   hero.gold -= cost;
   hero.hp = Math.min(max, hero.hp + Math.ceil(max * POTION_HEAL * (1 + sk.n.potion)));
@@ -770,10 +855,10 @@ function drinkPotion(state, hero, events) {
 
 // ---------- standing orders: the only things the player changes ----------
 
-// Roam, Quest, or Delve. Takes effect when the current task ends. Choosing Delve again after the
-// confidence safeguard gives the hero a fresh three attempts.
+// Roam, Quest, Delve, or (at level 20) the Rifts. Takes effect when the current task ends.
+// Choosing Delve again after the confidence safeguard gives the hero a fresh three attempts.
 export function setFocus(hero, focus) {
-  if (!FOCUSES.includes(focus)) return false;
+  if (!FOCUSES.includes(focus) || (focus === 'rift' && hero.level < MAX_LEVEL)) return false;
   hero.focus = focus;
   if (focus === 'delve') hero.delveFails[hero.region] = 0;
   return true;

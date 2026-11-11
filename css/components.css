@@ -292,3 +292,25 @@ h3.section { margin-top: 4px; }
 .chronicle .k-upgrade .text { font-weight: 600; }
 .chronicle .k-sold .text { color: var(--ink-soft); }
 .chronicle .k-milestone .text { font-family: var(--display); font-weight: 700; color: #7a5600; }
+
+/* ----- Phase 6: the tavern and legacy ----- */
+.upgrade, .roster-hero, .legend { padding: 10px 0; border-top: 1px solid var(--line); }
+.upgrade:first-child, .roster-hero:first-child, .legend:first-child { border-top: 0; }
+.upgrade-head, .roster-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.upgrade-name, .roster-name, .legend-name { font: 700 1rem var(--display); }
+.upgrade-rank { font-size: 0.8rem; color: var(--ink-soft); white-space: nowrap; }
+.upgrade-now { margin-top: 6px; font-size: 0.92rem; }
+.upgrade .hint, .roster-hero .hint { margin-top: 4px; }
+.roster-hero.active { box-shadow: inset 4px 0 0 var(--accent); padding-left: 10px; }
+.roster-hero .row, .upgrade .row { margin-top: 8px; }
+.trophies li > span { font-weight: 400; font-style: italic; text-align: left; }
+.legend-top { display: flex; gap: 12px; align-items: flex-start; }
+.legend-line { margin-top: 6px; font-family: var(--display); font-style: italic; }
+.legend .stats { margin-top: 8px; }
+.best-item { border-right: 5px solid var(--tier, transparent); padding-right: 8px; }
+.portrait-frame { flex: 0 0 auto; display: grid; place-items: center; background: #2b2118; border: 3px solid #8a6a3a; border-radius: 6px; box-shadow: inset 0 0 0 2px #c9962c; padding: 2px; }
+.portrait-frame canvas { display: block; image-rendering: pixelated; }
+.retire-offer .portrait-frame { justify-self: center; }
+.card-actions { justify-content: flex-end; }
+.legacy-note { margin-top: 6px; font-style: italic; }
+.panel.retire { border-color: #c9962c; box-shadow: inset 4px 0 0 #c9962c; }

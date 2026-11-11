@@ -136,10 +136,11 @@ export function rollItem(state, hero, { level, source, slot = null, quality = 0 
   return { slot: where, item: { tier, level, name: nameFor(state, hero.class, where, tier) } };
 }
 
-// A dungeon's named Legendary, at the dungeon's level.
-export function legendItem(regionId) {
+// A dungeon's named Legendary, at the dungeon's level (or `level`: a Warden of the Planar Rifts
+// hands one over at level 20).
+export function legendItem(regionId, level = DUNGEONS[regionId].level) {
   const l = LEGENDARIES[regionId];
-  return { slot: l.slot, item: { tier: MAX_TIER, level: DUNGEONS[regionId].level, name: l.name, legend: regionId } };
+  return { slot: l.slot, item: { tier: MAX_TIER, level, name: l.name, legend: regionId } };
 }
 export const wearsLegend = (hero, regionId) => hero.gear[LEGENDARIES[regionId].slot]?.legend === regionId;
 

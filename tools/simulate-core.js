@@ -23,6 +23,12 @@
 // Each class's three subclasses take turns, so all twelve get an equal share of heroes.
 // `growth: false` plays a player who never opens the Skills tab: every point stays banked.
 //
+// THE TAVERN (Phase 6). The player also spends gold on tavern upgrades, through the same
+// `buyUpgrade` the Tavern tab uses (`shop`): whenever the purse holds twice the price of the
+// cheapest rank left, it is bought, so there is always gold left over for potions and the cleric.
+// Ties go room, stable, notice board, trophy wall. `tavern` starts a hero in a tavern that already
+// has upgrades and legends (the second hero of a career); `shop: false` never buys anything.
+//
 // GEAR. Nothing to play: loot equips and sells itself inside `advance`. The simulator only watches,
 // recording the average rarity across the eight slots at each level (an empty slot counts as
 // Common), which rarities each slot has worn, and what was found and sold.
@@ -41,6 +47,8 @@ import { MONSTERS } from '../data/monsters.js';
 import { DUNGEONS } from '../data/dungeons.js';
 import { TIERS } from '../data/items.js';
 import { SLOT_IDS } from '../js/loot.js';
+import { UPGRADE_IDS, upgradePrice, buyUpgrade } from '../js/tavern.js';
+import { legacyFor } from '../js/rules.js';
 
 export { MAX_LEVEL, LEVEL_TARGET_HOURS, CLASSES, RACES, REGIONS };
 export const CLASS_IDS = Object.keys(CLASSES);
@@ -89,6 +97,20 @@ export function grow(hero, subclass) {
   }
 }
 
+// The simulated player at the tavern: buy the cheapest rank left while the purse holds twice its price.
+export function shop(save, hero) {
+  let spent = 0;
+  for (;;) {
+    const options = UPGRADE_IDS.map((id) => ({ id, price: upgradePrice(save, id) })).filter((o) => o.price != null);
+    if (!options.length) return spent;
+    const cheapest = options.reduce((a, b) => (b.price < a.price ? b : a));
+    if (hero.gold < 2 * cheapest.price) return spent;
+    spent += buyUpgrade(save, hero, cheapest.id);
+  }
+}
+// A tavern after `legends` heroes have retired from it, with the upgrades it already has.
+export const tavernAfter = (upgrades, legends = 1) => ({ upgrades: { ...upgrades }, legends: Array.from({ length: legends }, (_, i) => ({ name: `Legend ${i + 1}` })), legacyBonus: legacyFor(legends), trophies: [] });
+
 // The simulated player's standing orders, re-read every few minutes of game time.
 function steer(hero, sim, style) {
   const i = REGION_INDEX[hero.region];
@@ -104,8 +126,9 @@ function steer(hero, sim, style) {
 
 // Run one hero from creation until they are level 20 and have cleared the last dungeon (or
 // `maxDays`). `world` is 'road' or 'vale'; `style` is 'balanced' or 'roam'.
-export function runHero({ seed, cls, race, subclass = TREES[cls].branches[0].id }, { world = 'road', style = 'balanced', early = 0, maxDays = 60, chunk = 300, growth = true } = {}) {
+export function runHero({ seed, cls, race, subclass = TREES[cls].branches[0].id }, { world = 'road', style = 'balanced', early = 0, maxDays = 60, chunk = 300, growth = true, shop: shops = true, tavern = null } = {}) {
   const save = newSave(seed, 0);
+  if (tavern) save.tavern = JSON.parse(JSON.stringify(tavern));
   const hero = createHero(save, { name: 'Sim', race, cls, appearance: defaultAppearance(race), baseScores: assignScores(cls, STANDARD_ARRAY) });
   save.heroes.push(hero);
   save.activeHeroId = hero.id;
@@ -113,6 +136,7 @@ export function runHero({ seed, cls, race, subclass = TREES[cls].branches[0].id 
     cls, race, subclass, moves: 0, reach: new Array(MAX_LEVEL + 1).fill(null), knockouts: 0, potions: 0, koSeconds: 0, koAtLevel: new Array(MAX_LEVEL + 1).fill(0),
     koBy: { roam: 0, quest: 0, delve: 0, boss: 0 }, clears: {}, runsLost: {}, quests: 0, feats: 0, tasks: 0, level: 1,
     tierAt: new Array(MAX_LEVEL + 1).fill(null), worn: Object.fromEntries(SLOT_IDS.map((id) => [id, new Set([0])])), legends: [], worse: 0,
+    tavernSpent: 0, upgradesAt: new Array(MAX_LEVEL + 1).fill(null),
   };
   const sim = { retryAt: {}, early }; // `early`: levels below the dungeon's own at which to first try it
   const road = world === 'road';
@@ -121,7 +145,7 @@ export function runHero({ seed, cls, race, subclass = TREES[cls].branches[0].id 
   if (road) steer(hero, sim, style);
   while (!finished() && hero.age < limit) {
     for (const e of advance(save, chunk)) {
-      if (e.type === 'levelup') { out.reach[e.level] = e.at; out.tierAt[e.level] = meanTier(hero); }
+      if (e.type === 'levelup') { out.reach[e.level] = e.at; out.tierAt[e.level] = meanTier(hero); out.upgradesAt[e.level] = { ...save.tavern.upgrades }; }
       else if (e.type === 'loot') {
         if (e.equipped) out.worn[e.slot].add(e.tier);
         if (e.legend) out.legends.push(e.legend);
@@ -137,8 +161,10 @@ export function runHero({ seed, cls, race, subclass = TREES[cls].branches[0].id 
       else if (e.type === 'skill') out.moves += 1;
     }
     if (growth) grow(hero, subclass);
+    if (shops) out.tavernSpent += shop(save, hero);
     if (road) steer(hero, sim, style);
   }
+  out.tavern = { ...save.tavern.upgrades };
   out.tasks = hero.stats.tasks;
   out.runs = hero.stats.dungeonRuns;
   out.level = hero.level;
@@ -219,6 +245,8 @@ export function summarize(results) {
     itemsFound: mean(results.map((r) => r.itemsFound)),
     upgrades: mean(results.map((r) => r.upgrades)),
     soldFor: mean(results.map((r) => r.soldFor)),
+    tavernSpent: mean(results.map((r) => r.tavernSpent)),
+    tavernRanks: UPGRADE_IDS.map((id) => ({ id, at: [10, 15, 20].map((l) => mean(results.map((r) => r.upgradesAt[l]?.[id] ?? 0))) })),
     legends: mean(results.map((r) => r.legends.length)),
     dungeons,
     clearedLast: results.filter((r) => r.clears[LAST_REGION]).length,

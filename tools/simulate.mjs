@@ -4,10 +4,12 @@
 //   roam   the same road, but the hero only roams between dungeon attempts
 //   vale   the hero never leaves Mugwick Vale
 //   unspent  the standard road, played by someone who never spends a skill or ability point
+// After the standard run it also plays a second hero for the first 100: each starts in the tavern
+// the first one left (the upgrades they bought) with one legend in the Hall, so +2% XP.
 // Exits with an error if, on the standard run, the median hero does not reach level 20 in 28 to
 // 32 days or fewer than nine in ten heroes clear the last dungeon.
 
-import { prepareWorld, heroPlan, runHero, summarize, formatTime, subclassLabel, TIER_NAMES, DAY, MAX_LEVEL } from './simulate-core.js';
+import { prepareWorld, heroPlan, runHero, summarize, formatTime, subclassLabel, tavernAfter, TIER_NAMES, DAY, MAX_LEVEL } from './simulate-core.js';
 
 const heroes = Number(process.argv[2]) || 500;
 const mode = ['roam', 'vale', 'unspent'].includes(process.argv[3]) ? process.argv[3] : 'road';
@@ -47,6 +49,22 @@ console.log(`  Per hero: ${s.itemsFound.toFixed(0)} pieces found, ${s.upgrades.t
 console.log(`\nPer hero: ${s.knockouts.toFixed(1)} knockouts (${s.koHours.toFixed(1)} h recovering): ${s.koBy.roam.toFixed(1)} roaming, ${s.koBy.quest.toFixed(1)} on quests, ${s.koBy.delve.toFixed(1)} in dungeon rooms, ${s.koBy.boss.toFixed(1)} to bosses.`);
 console.log(`          ${s.potions.toFixed(1)} potions, ${Math.round(s.tasks)} tasks, ${s.quests.toFixed(1)} story quests, ${s.feats.toFixed(1)} feats, ${s.runs.toFixed(1)} dungeon runs. ${s.knockoutFree} of ${heroes} were never knocked out.`);
 console.log(`          ${s.skills.toFixed(1)} skills learned, ${Math.round(s.moves)} signature moves fired, ${Math.round(s.gold)} gp in the purse at the end.`);
+if (options.shop !== false) {
+  console.log(`
+Tavern upgrades bought (average rank at level 10, 15, 20): ${s.tavernRanks.map((u) => `${u.id} ${u.at.map((v) => v.toFixed(1)).join(' / ')}`).join(', ')}. ${Math.round(s.tavernSpent)} gp spent on them per hero.`);
+}
+
+// A second hero in the same tavern: the first hero's upgrades and one legend's +2% XP.
+if (mode === 'road') {
+  const n = Math.min(100, heroes);
+  const second = [];
+  for (let i = 0; i < n; i++) second.push(runHero(heroPlan(i, 2), { ...options, tavern: tavernAfter(results[i].tavern, 1) }));
+  const firstMedian = summarize(results.slice(0, n)).levels.at(-1).median;
+  const s2 = summarize(second);
+  const m2 = s2.levels.at(-1).median;
+  console.log(`
+Second hero (${n} heroes, the first one's upgrades and +2% XP from one legend): level ${MAX_LEVEL} median ${formatTime(m2)}, against ${formatTime(firstMedian)} for those first heroes. ${s2.clearedLast} of ${n} clear the last dungeon; ${s2.knockouts.toFixed(1)} knockouts each.`);
+}
 
 const l20 = s.levels[s.levels.length - 1];
 const days = l20.median == null ? null : l20.median / DAY;

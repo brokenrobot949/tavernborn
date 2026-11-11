@@ -5,13 +5,16 @@
 import { RACES } from '../data/races.js';
 import { CLASSES } from '../data/classes.js';
 import { REGION_BY_ID, START_REGION } from '../data/regions.js';
-import { ADVENTURE_FIELDS, GROWTH_FIELDS, STATS, abilityPointsBy } from './hero.js';
+import { ADVENTURE_FIELDS, GROWTH_FIELDS, LEGACY_FIELDS, STATS, abilityPointsBy } from './hero.js';
 import { startingGear, startingCloak, SLOT_IDS, MAX_TIER } from './loot.js';
 import { LEGENDARIES } from '../data/loot.js';
 import { SKILL_BY_ID, BRANCH_BY_ID, MAX_SKILLS } from './skills.js';
-import { MAX_LEVEL, PAST_CURVES, LOOT, xpForLevel } from './rules.js';
+import { MAX_LEVEL, MAX_HEROES, PAST_CURVES, LOOT, TAVERN, xpForLevel, legacyFor } from './rules.js';
+import { paragonRank } from './tavern.js';
+import { TROPHIES } from '../data/tavern.js';
+import { REGIONS } from '../data/regions.js';
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 const SAVE_KEY = 'tavernborn.save.v1';
 const EXPORT_PREFIX = 'TVB1.';
 
@@ -20,7 +23,7 @@ export function newSave(seed = (Date.now() ^ Math.floor(Math.random() * 0x100000
     version: SAVE_VERSION,
     lastSavedAt: now,
     rngSeed: seed >>> 0,
-    tavern: { upgrades: {}, legends: [], legacyBonus: 0 },
+    tavern: { upgrades: {}, legends: [], legacyBonus: 0, trophies: [] },
     activeHeroId: null,
     heroes: [],
   };
@@ -70,6 +73,25 @@ function gearFields(h) {
   if (!h.gear.cloak && h.level >= LOOT.cloakLevel) h.gear.cloak = startingCloak();
 }
 
+// Phase 6 (version 5): the tavern is real. Upgrades are kept only if they are ranks that exist;
+// the trophy wall is filled from every dungeon a hero here has already cleared; the legacy bonus
+// is worked out again from the legends in the Hall. A hero already past level 20 has their
+// Paragon ranks counted quietly, so the Chronicle does not announce them all at once.
+function tavernFields(save) {
+  const t = save.tavern && typeof save.tavern === 'object' ? save.tavern : {};
+  const upgrades = {};
+  for (const [id, rule] of Object.entries(TAVERN)) {
+    const r = Math.floor(Number(t.upgrades?.[id]) || 0);
+    if (r > 0) upgrades[id] = Math.min(r, rule.price.length);
+  }
+  const legends = Array.isArray(t.legends) ? t.legends.filter((l) => l && typeof l === 'object' && l.name) : [];
+  const trophies = Array.isArray(t.trophies) ? [...new Set(t.trophies)].filter((id) => TROPHIES[id]) : [];
+  for (const r of save.version < 5 ? REGIONS : []) {
+    if (!trophies.includes(r.id) && save.heroes.some((h) => (h.dungeonClears?.[r.id] ?? 0) > 0)) trophies.push(r.id);
+  }
+  save.tavern = { ...t, upgrades, legends, trophies, legacyBonus: legacyFor(legends.length) };
+}
+
 // Bring an older or partial save up to the current shape, or throw if it is not a save at all.
 export function migrate(save) {
   if (!save || typeof save !== 'object' || !Array.isArray(save.heroes)) throw new Error('That is not a Tavernborn save.');
@@ -81,18 +103,21 @@ export function migrate(save) {
     // Phase 3 fields: travel, quests, dungeon runs, grudges, unread chapter cards.
     for (const [key, value] of Object.entries(ADVENTURE_FIELDS())) h[key] ??= value;
     if (!REGION_BY_ID[h.region]) h.region = START_REGION;
-    if (!['roam', 'quest', 'delve'].includes(h.focus)) h.focus = 'roam';
     h.feats ??= [];
     growthFields(h, save.version);
     gearFields(h);
+    for (const [key, value] of Object.entries(LEGACY_FIELDS())) h[key] ??= value;
+    if (!['roam', 'quest', 'delve', 'rift'].includes(h.focus) || (h.focus === 'rift' && h.level < MAX_LEVEL)) h.focus = 'roam';
     // XP never sits below the hero's own level, whatever happened to the curve.
     h.xp = Math.max(Number(h.xp) || 0, xpForLevel(Math.min(h.level, MAX_LEVEL)));
     h.chronicle ??= [];
     h.bestiary ??= {};
     h.lines ??= h.chronicle.length;
     h.age ??= 0;
+    if (save.version < 5) h.paragon = paragonRank(h);
   }
-  save.tavern = { upgrades: {}, legends: [], legacyBonus: 0, ...save.tavern };
+  if (save.heroes.length > MAX_HEROES) throw new Error('That save has more heroes than the roster holds.');
+  tavernFields(save);
   save.rngSeed = (Number(save.rngSeed) || 1) >>> 0;
   if (!Number.isFinite(save.lastSavedAt)) save.lastSavedAt = Date.now();
   if (!save.heroes.some((h) => h.id === save.activeHeroId)) save.activeHeroId = save.heroes[0]?.id ?? null;

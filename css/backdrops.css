@@ -219,3 +219,26 @@
     linear-gradient(#4a3826, #382a1c);
 }
 .scene.tavern { min-height: 280px; }
+
+/* The Planar Rifts (Phase 6): a violet nowhere, two tears in it, and a floor of broken flagstones
+   hanging over nothing. */
+.scene[data-bg='rift'] { background: #120c1c; }
+.scene[data-bg='rift']::before {
+  background-image:
+    radial-gradient(ellipse 4% 30% at 24% 46%, #f4e9ff 0 30%, #b07cff 60%, transparent 100%),
+    radial-gradient(ellipse 14% 44% at 24% 46%, rgba(160, 100, 255, 0.45), transparent 100%),
+    radial-gradient(ellipse 3% 22% at 78% 38%, #e6fff8 0 30%, #5fd6c0 60%, transparent 100%),
+    radial-gradient(ellipse 12% 36% at 78% 38%, rgba(80, 220, 190, 0.35), transparent 100%),
+    radial-gradient(circle 3px at 12% 20%, #d9c8ff 0 98%, transparent 100%),
+    radial-gradient(circle 2px at 46% 12%, #d9c8ff 0 98%, transparent 100%),
+    radial-gradient(circle 2px at 62% 64%, #bff3e8 0 98%, transparent 100%),
+    radial-gradient(circle 3px at 90% 16%, #d9c8ff 0 98%, transparent 100%),
+    linear-gradient(170deg, transparent 52%, #3b2c55 52% 56%, transparent 56%),
+    radial-gradient(ellipse 80% 70% at 50% 40%, #2c1d45, #120c1c 100%);
+}
+.scene[data-bg='rift']::after {
+  background-image:
+    linear-gradient(transparent 70%, #120c1c 70%),
+    repeating-linear-gradient(90deg, #463a5a 0 52px, #120c1c 52px 58px, #3d3350 58px 104px, #120c1c 104px 112px),
+    linear-gradient(#4a3f5e, #2b2338);
+}

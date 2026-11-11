@@ -90,8 +90,20 @@ eight named Legendaries exist, drop, and are not dropped twice; the Cloak slot i
 Object, and Treasure Map each do what their card says and no card says "Not built yet"; loot is
 deterministic and survives the save string; a Phase 4 save (version 3) loads with its level, place
 within the level, gold, skills, points, and Feats, and is given the named starting kit and its
-cloak; and one simulated hero's gear climbs from Common to Legendary over the month. It also prints the median time to each early level
-against the targets (for heroes whose points are left unspent).
+cloak; and one simulated hero's gear climbs from Common to Legendary over the month. Then Phase 6,
+the tavern and legacy: the four upgrades' prices (each rank dearer, everything together about 2.8
+million gp) and that buying pays exactly and stops at the last rank; the room cuts recovery 8% a
+rank and stops at 60% off with boots; the stable shortens travel; the notice board makes odd jobs
+(and only odd jobs) pay more and drop rarer gear; the trophy wall wins a trophy once per dungeon,
+hangs it only on a hook, and changes nothing else; the roster holds three, only the active hero
+moves, and dismissing frees a slot; an upgrade bought with one hero's gold works for another;
+retirement only at level 20, freeing the slot and keeping the portrait look (it redraws exactly)
+and the record; a new hero after one retirement earns 2% more XP, capped at 10%; the Rifts open at
+level 20, get harder each floor, restart at floor 1 after a knockout, and have Wardens; Paragon
+ranks come from XP past level 20, are announced once, and change no roll; determinism and the save
+string with two heroes, upgrades, and the Rifts; and a Phase 5 save (version 4) loading intact. It
+also prints the median time to each early level against the targets (for heroes whose points are
+left unspent).
 
 ## simulate.html and simulate.mjs: the pacing simulator
 
@@ -127,6 +139,13 @@ Arguments: `node tools/simulate.mjs [heroes] [road|roam|vale|unspent] [damageTim
   `unspent` is the road played by someone who never spends a skill or ability point.
 - **Gear.** Nothing is played: loot equips and sells itself inside `advance`. The simulator only
   watches (`tierAt`, `worn`, `gear` on each result).
+- **The tavern.** `shop` in `simulate-core.js` buys tavern upgrades through `buyUpgrade`, the
+  cheapest rank left whenever the purse holds twice its price. The report shows the average rank of
+  each upgrade at levels 10, 15, and 20 and the gold spent. After the judged run, `simulate.mjs`
+  plays a second hero for the first 100: each starts in the tavern its first hero left (the same
+  upgrades) with one legend in the Hall (+2% XP), and the report compares their level 20 median
+  with those first heroes'. `runHero` takes `tavern` (a starting tavern, see `tavernAfter`) and
+  `shop: false`.
 - `damageTimes` (the page's "What if monsters hit harder?") multiplies all damage for that run only,
   through `WHAT_IF` in `js/rules.js`. Nothing is written to the game's files.
 - Rerun after any change to pacing, monsters, quests, dungeons, damage, healing, or skills.

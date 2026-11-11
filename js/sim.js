@@ -37,17 +37,18 @@ export function summarize(events) {
   const s = {
     tasks: 0, xp: 0, gold: 0, natural20s: 0, natural1s: 0, knockouts: 0, potions: 0, levels: [], newMonsters: [], knockedOutBy: [],
     quests: [], oddJobs: 0, feats: [], clears: [], chapters: [], opened: [], arrived: [], runsLost: 0, confidence: [], moves: 0,
-    found: 0, upgrades: [], soldFor: 0,
+    found: 0, upgrades: [], soldFor: 0, trophies: [], paragon: [], riftFloors: 0,
   };
   for (const e of events) {
     if (e.xp) s.xp += e.xp;
     if (e.gold) s.gold += e.gold;
     if (e.type === 'task') {
       s.tasks += 1;
+      if (e.source === 'rift') s.riftFloors += 1;
       if (e.outcome === 'crit') s.natural20s += 1;
       if (e.outcome === 'fumble') s.natural1s += 1;
     } else if (e.type === 'levelup') s.levels.push(e.level);
-    else if (e.type === 'knockout') { s.knockouts += 1; s.knockedOutBy.push(e.monster ?? e.source); if (e.lost === 'run') s.runsLost += 1; }
+    else if (e.type === 'knockout') { s.knockouts += 1; if (e.source === 'rift') s.riftFloors -= 1; s.knockedOutBy.push(e.monster ?? e.source); if (e.lost === 'run') s.runsLost += 1; }
     else if (e.type === 'potion') { s.potions += 1; s.gold -= e.cost; }
     else if (e.type === 'bestiary') s.newMonsters.push(e.monster);
     else if (e.type === 'questdone') { if (e.story) s.quests.push(e.quest); else s.oddJobs += 1; }
@@ -58,6 +59,8 @@ export function summarize(events) {
     else if (e.type === 'arrive') s.arrived.push(e.region);
     else if (e.type === 'confidence') s.confidence.push(e.region);
     else if (e.type === 'skill') s.moves += 1;
+    else if (e.type === 'trophy') s.trophies.push(e.region);
+    else if (e.type === 'paragon') s.paragon.push(e.rank);
     else if (e.type === 'loot') { s.found += 1; s.soldFor += e.gold; if (e.equipped) s.upgrades.push({ slot: e.slot, tier: e.tier, name: e.name }); }
   }
   return s;

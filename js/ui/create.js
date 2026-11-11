@@ -22,8 +22,16 @@ const CLASS_NOTES = {
   cleric: 'Wisdom. Vestments and a stout stick. Sturdy and sensible.',
 };
 
+// A tavern with legends in its Hall says what they are worth to the newcomer.
+function legacyNote(state) {
+  const n = state.tavern?.legends?.length ?? 0;
+  if (!n) return null;
+  return el('p', { className: 'legacy-note', textContent: `${n} legend${n === 1 ? '' : 's'} in the Hall of Legends. This hero earns ${Math.round((state.tavern.legacyBonus ?? 0) * 100)}% more XP for it.` });
+}
+
 // `onDone(hero)` is called with the finished hero. `state` supplies the seeded dice.
-export function mountCreate(root, state, onDone) {
+// `onCancel`, when given (other heroes are waiting on the roster), goes back without a new hero.
+export function mountCreate(root, state, onDone, onCancel = null) {
   const draft = { name: '', race: 'human', cls: 'fighter', scores: [...STANDARD_ARRAY], rolled: false, rollsLeft: MAX_ROLLS, ...defaultAppearance('human') };
   let suggested = (draft.name = randomName(state, draft.race));
   let step = 0;
@@ -36,7 +44,8 @@ export function mountCreate(root, state, onDone) {
   const nav = el('div', { className: 'create-nav' });
 
   root.append(el('div', { className: 'create' },
-    el('header', { className: 'create-head' }, el('h1', { textContent: 'Tavernborn' }), el('p', { textContent: 'A new hero arrives at The Wobbly Griffin.' })),
+    el('header', { className: 'create-head' }, el('h1', { textContent: 'Tavernborn' }), el('p', { textContent: 'A new hero arrives at The Wobbly Griffin.' }),
+      legacyNote(state)),
     el('div', { className: 'stage-wrap' }, stage),
     stepLabel, body, nav));
 
@@ -126,9 +135,10 @@ export function mountCreate(root, state, onDone) {
       const { name, race, cls, build, skin, hairStyle, hairColor, beard } = draft;
       onDone(createHero(state, { name, race, cls, appearance: { build, skin, hairStyle, hairColor, beard }, baseScores: assignScores(cls, draft.scores) }));
     } });
-    nav.replaceChildren(
-      el('button', { className: 'btn', type: 'button', textContent: 'Back', disabled: step === 0, onclick: () => { step -= 1; render(); window.scrollTo(0, 0); } }),
-      nextBtn);
+    const back = step === 0 && onCancel
+      ? el('button', { className: 'btn', type: 'button', textContent: 'Never mind', onclick: () => { cancelAnimationFrame(view.frameReq); onCancel(); } })
+      : el('button', { className: 'btn', type: 'button', textContent: 'Back', disabled: step === 0, onclick: () => { step -= 1; render(); window.scrollTo(0, 0); } });
+    nav.replaceChildren(back, nextBtn);
     body.replaceChildren(...[stepRace, stepClass, stepAbilities, stepName][step]().filter(Boolean));
   }
   render();

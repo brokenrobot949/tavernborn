@@ -275,6 +275,9 @@ export const GEAR = {
 // Level 10 milestone: a class emblem, worn as a clip at the neck in the class's cloth and metal.
 // (Levels 15 and 20, the wisp and the golden glow, are drawn in code: see js/sprite.js.)
 export const EMBLEM_LEVEL = 10;
+// The level 15 wisp (in the class colour) and the level 20 glow are drawn in code by js/sprite.js.
+export const WISP_LEVEL = 15, GLOW_LEVEL = 20;
+export const WISP_COLOR = { fighter: 'rgba(255, 150, 90, 0.85)', wizard: 'rgba(120, 180, 255, 0.85)', rogue: 'rgba(150, 225, 120, 0.85)', cleric: 'rgba(255, 232, 150, 0.85)' };
 export const EMBLEM = {
   fighter: [L('neck_capeclip', 'red', { color2: 'steel' })],
   wizard: [L('neck_capeclip', 'blue', { color2: 'silver' })],

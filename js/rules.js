@@ -214,3 +214,47 @@ export const LOOT = {
 };
 // What a piece sells for: more with its level, doubling with each rarity step.
 export const sellPrice = (item) => (5 + 2 * item.level) * 2 ** item.tier;
+
+// ----- the tavern and legacy (Phase 6) -----
+// Tavern upgrades are bought with the active hero's gold and belong to The Wobbly Griffin, so
+// every hero, present and future, has them. Each has a few ranks; `price[r]` buys rank r + 1.
+// A first hero holds about 20,000 gp at level 8, 65,000 at 10, 170,000 at 12, 500,000 at 15, and
+// 1.5 million at 20, so the last ranks are what a whole career saves up for. Everything together
+// costs about 3 million: more than one hero earns.
+//   room      knockout recovery, added to the same number boots and skills use (60% off at most)
+//   stable    travel, added to the same number boots use (75% off at most, as before)
+//   notice    odd jobs: more XP and gold per rank, and their gear a little rarer
+//   trophies  hooks for the trophy wall; nothing else
+export const TAVERN = {
+  room: { price: [2500, 15000, 60000, 200000, 600000], per: 0.08 },
+  stable: { price: [2500, 15000, 60000, 200000, 600000], per: 0.08 },
+  notice: { price: [2000, 12000, 50000, 175000, 500000], per: 0.1, quality: 0.1 },
+  trophies: { price: [5000, 50000, 300000], hooks: [3, 6, 8] },
+};
+export const MAX_HEROES = 3; // hero slots on the roster; one adventures at a time
+export const LEGACY = { perLegend: 0.02, cap: 0.1 }; // XP for every future hero, per retired legend
+export const legacyFor = (legends) => Math.min(LEGACY.cap, LEGACY.perLegend * legends);
+
+// The Planar Rifts: after level 20, an endless dungeon one floor at a time. Each floor is one
+// roll, harder than the last; hit points come back a little between floors, as on the road. A
+// knockout sends the hero home and the next run starts at floor 1. Every tenth floor has a
+// Warden, who always leaves a piece of gear and sometimes one of the eight named Legendaries.
+export const RIFT = {
+  secs: [90, 150],
+  dcEvery: 3, // +1 DC every this many floors
+  damagePerFloor: 0.12,
+  rewardPerFloor: 0.04, // XP and gold per floor
+  wardenEvery: 10,
+  legend: 0.05, // chance a Warden also gives up a named Legendary the hero is not wearing
+};
+// Paragon ranks: titles only. XP earned after level 20 keeps counting, and rank r needs
+// `PARAGON_XP * r * (r + 1) / 2` of it: 50,000 for the first, 150,000 for the second, and so on.
+export const PARAGON_XP = 50000;
+export const paragonXpFor = (rank) => (PARAGON_XP * rank * (rank + 1)) / 2;
+export function paragonRankFor(extraXp) {
+  const x = Math.max(0, extraXp);
+  let r = Math.max(0, Math.floor((Math.sqrt(1 + (8 * x) / PARAGON_XP) - 1) / 2));
+  while (paragonXpFor(r + 1) <= x) r += 1; // square roots can land a hair short
+  while (r > 0 && paragonXpFor(r) > x) r -= 1;
+  return r;
+}

@@ -31,9 +31,11 @@ Rob is the game designer and does not write code.
   judges, equips, and sells gear; `loot()` in `tasks.js` is the one place a piece arrives. `tasks.js` also holds
   the player's standing orders (`setFocus`, `orderTravel`, `payCleric`); `skills.js` and `hero.js` hold the
   growth choices (`learnSkill`, `chooseSubclass`, `respec`, `raiseAbility`)
+- `js/tavern.js` the tavern and legacy: upgrades (`buyUpgrade`, `tavernMods`), the trophy wall, the roster
+  (`switchHero`, `dismissHero`), retirement and the Hall (`retire`, `portraitOf`), Paragon ranks. Text in `data/tavern.js`
 - `js/sprite.js` LPC layer compositing and animation
 - `js/ui/` one module per tab, plus `create.js` (creation), `away.js` (the summary card), `story.js` (chapter
-  cards), `dom.js` (helpers);
+  cards), `legacy.js` (the retirement card and Hall portraits), `dom.js` (helpers);
   `data/` all content (`data/loot.js` holds gear names and the named Legendaries; `data/items.js` the
   sprite look of each class, slot, and rarity); `css/backdrops.css` the scene backdrops; `tools/` dev-only
 
@@ -84,8 +86,76 @@ Rob is the game designer and does not write code.
 | 7. Polish | Writing pass, sound, credits screen, settings | Tone matches the Humor and voice section |
 
 ## Status
-- Current phase: 5 (Gear and visuals), built and waiting on Rob's phone test. Phases 1 to 4 are also still
+- Current phase: 6 (Tavern and legacy), built and waiting on Rob's phone test. Phases 1 to 5 are also still
   in his phone test. Phase 0 is approved.
+- Built in Phase 6 (`js/tavern.js`, `data/tavern.js`, numbers in `js/rules.js` under TAVERN, LEGACY, RIFT,
+  PARAGON_XP): four tavern upgrades, the trophy wall, a roster of three heroes, retirement to the Hall of
+  Legends with a redrawable portrait and the legacy bonus, the Planar Rifts, and Paragon ranks.
+- Upgrades (`TAVERN`), bought with the active hero's gold, belong to the tavern, so every hero has them.
+  Each is a pure function call (`buyUpgrade`) that writes a Chronicle line of kind `tavern`.
+  - A better room, 5 ranks: knockout recovery 8% quicker per rank, added to boots and skills, 60% off at most.
+  - A stable, 5 ranks: travel 8% quicker per rank, added to boots (75% off at most, as before).
+  - A notice board, 5 ranks: odd jobs pay 10% more XP and gold per rank (steps and the finishing fee), and
+    their gear is 0.1 of a rarity step better per rank. Story quests are untouched.
+  - A trophy wall, 3 ranks: 3, 6, then 8 hooks. Cosmetic only. Each dungeon's first clear by any hero of the
+    tavern wins its trophy (`TROPHIES`, `state.tavern.trophies`); it hangs if there is a free hook and waits
+    behind the bar if not.
+  - Prices: room and stable 2,500 / 15,000 / 60,000 / 200,000 / 600,000; notice board 2,000 / 12,000 /
+    50,000 / 175,000 / 500,000; trophy wall 5,000 / 50,000 / 300,000. All of it: 2,849,000 gp, about two
+    careers' gold. A first hero holds about 20,000 gp at level 8, 65,000 at 10, 500,000 at 15, 1.5 million at 20.
+- The roster (`MAX_HEROES` 3): one hero adventures at a time. The others wait at the tavern exactly as they
+  were: `advance` only moves the active hero, so no time passes for them (no XP, gold, or risk). Before the
+  active hero changes, `main.js` settles the time so far on the one who was out. Recruiting opens creation,
+  which can be called off ("Never mind") while other heroes wait. Dismissing a hero is for good, with no
+  legend. A save with more than three heroes is refused.
+- Retirement (`retire`): level 20 only. Offered once by a card when level 20 is first seen
+  (`hero.retireOffered`), then always on the Hero tab; also on the Tavern roster. Both ask for a second tap.
+  The legend keeps `look` (the input to `heroLook`, from `portraitOf`, so the portrait redraws exactly:
+  gear tiers, emblem, wisp, glow), name, race, class, subclass, Paragon rank, a copy of `stats`, the best
+  item worn, the Most Embarrassing Defeat by name, dungeons cleared, Bestiary count, gold, days, deepest
+  Rifts floor, and a one-line legend (`LEGEND_LINES`). The slot is freed and the next waiting hero goes out;
+  with none left, creation opens and says what the bonus is worth. `legacyBonus` = 2% per legend, at most
+  10% (`legacyFor`), read by `xpBonus` in `js/tasks.js`. The hero's gold leaves with them (both retirement
+  texts say so).
+- The Planar Rifts (`RIFT`): from level 20, a fourth standing order on the Map tab ("Rifts"), entered from
+  wherever the hero stands. Task kind `rift`, one roll per floor. Floor 1 is a room of the Hoard of
+  Vexaldrith; each floor after hits 12% harder and pays 4% more, and every third is +1 DC. Hit points come
+  back a little between floors as on the road; potions are limited to those carried in, as in a dungeon.
+  Every tenth floor a Warden leaves a piece of boss gear and, 5% of the time, a named Legendary the hero is
+  not wearing, at level 20. A knockout ends the run; the next starts at floor 1. Changing order ends it too.
+  Measured on geared level 20 heroes: runs end between floor 10 and 50 by build; best floors 25 to 50 in a
+  day. Own backdrop (`data-bg="rift"`).
+- Paragon ranks: titles only. XP past level 20 counts; rank r needs `PARAGON_XP` (50,000) x r(r+1)/2 in all.
+  Ten written titles (`PARAGON_TITLES`), then "Paragon 11" and so on. Each rank is a `paragon` event and
+  Chronicle line, once. At level 20 the Hero tab's XP bar fills toward the next rank. Level 20 heroes earn
+  about 30,000 to 50,000 XP a day, so rank 1 comes in one or two days, rank 5 in two to four weeks.
+- Measured, `node tools/simulate.mjs`, 500 heroes, the simulated player buying upgrades (`shop`: the
+  cheapest rank whenever the purse holds twice its price): median level 20 at 29.8 days (10th to 90th:
+  27.9 to 32.3), all 500 clear The Hoard of Vexaldrith, 4.2 knockouts per hero (2.4 h recovering). By level 20
+  the average hero has the room, stable, and notice board at rank 4 and the trophy wall at 2.8, has spent about
+  1.09 million gp on them, and keeps about 490,000. Levels 2 to 6 did not move. A second hero (100 heroes,
+  starting in the tavern their first hero left, with one legend's +2% XP): median level 20 at 28.8 days,
+  against 29.5 for those same first heroes, so about 0.7 days quicker; all 100 clear the last dungeon.
+- Saves: version 5. `migrate` keeps only upgrade ranks that exist, works `legacyBonus` out again from the
+  Hall, fills the trophy wall from dungeons already cleared (version 4 saves only), and counts a level 20
+  hero's Paragon ranks quietly. No hero loses a level, skill, point, gear, or gold.
+- `node tools/check-sim.mjs` proves the sim (192 checks): Phases 1 to 5 as before, plus for Phase 6 each
+  upgrade's price and effect, upgrades shared across heroes, the trophy wall, the roster, retirement and the
+  portrait look, the legacy bonus and its cap, the Rifts and Paragon ranks, determinism and the save string
+  with two heroes and the Rifts, and a version 4 save loading intact.
+- Spec departures to raise with Rob, new in Phase 6:
+  - The Rifts are a standing order reached from the Map tab's order buttons, not a ninth spot on the map.
+  - Paragon ranks come from XP past level 20 (any activity), not from Rift floors alone.
+  - Inactive heroes are frozen: no time passes for them. (The doc says they "wait at the tavern exactly as
+    you left them".)
+  - A hero can be dismissed for good to free a slot (the doc has no way to empty a slot below level 20).
+  - A retiring hero's gold is not passed on.
+  - Trophies are a list on the Tavern tab; the tavern backdrop does not show them.
+  - Wardens hand over named Legendaries at level 20, so one can replace a lower-level Legendary.
+- Placeholders shown honestly: the Tavern tab's "Sound and credits" panel says both arrive in Phase 7 and
+  links to CREDITS.md.
+
+## Phase 5 record
 - Built in Phase 5: loot (`js/loot.js`, names in `data/loot.js`, numbers in `js/rules.js`), gear that changes
   the rules, auto-equip and auto-sell, the eight named Legendaries, the cloak at level 5, the level 10, 15,
   and 20 milestones on the sprite, a backdrop for each region plus the dungeon and the tavern
@@ -182,8 +252,7 @@ Rob is the game designer and does not write code.
   - The level 10 emblem is LPC's neck clip, which comes with a short collar in the class colour; the title
     that goes with it is shown after the hero's class on the Hero tab (`TITLES` in `data/loot.js`).
   - Sticky Fingers no longer pays a second purse of gold; it pays in gear.
-- Placeholders shown honestly in the UI: the Tavern lists upgrades, roster, and retirement as still to come
-  (Phase 6). There is one dungeon backdrop for all eight dungeons. No Hall of Legends portrait yet.
+- There is one dungeon backdrop for all eight dungeons.
 - `index.html` is the game. The Phase 0 sprite proof is `sprite-lab.html`; the simulator is
   `tools/simulate.html` (both linked from Tavern > Workshop).
 - Levels 3 to 6 were moved later than the design doc's table after Rob's play test (they came too fast);
@@ -192,7 +261,8 @@ Rob is the game designer and does not write code.
   Learn, ability, and respec buttons ask for a second tap. The Gear tab has nothing to tap.
 - The knockout fall plays only for a knockout seen as it happens, for a second and a half, in the scene where
   it happened; then the scene moves to the tavern.
-- "Create a new hero" replaces the current hero; the roster of three is Phase 6. No in-game credits screen yet (Phase 7).
+- No in-game credits screen or sound yet (Phase 7).
 - `sprite.js` draws the front of every shield above hats (LPC puts it under them, which clipped wide brims).
 - Not baked yet: the other 18 hair colours.
 - Local preview: `.claude/launch.json` has five servers (ports 8771, 8773, 8779, 8784, 8792) so sessions do not collide.
+  Phase 6 was tested on `tavernborn-phase5` (8792).

@@ -1,34 +1,30 @@
 // Hero tab: scene panel with the sprite, name and level, HP and XP bars, the task bar, and the
-// Chronicle beneath.
+// Chronicle beneath. At level 20 the XP bar counts toward the next Paragon rank, and a panel
+// offers retirement to the Hall of Legends.
 
 import { RACES } from '../../data/races.js';
 import { CLASSES } from '../../data/classes.js';
 import { REGION_BY_ID } from '../../data/regions.js';
 import { DUNGEONS } from '../../data/dungeons.js';
-import { SLOTS, TIERS, EMBLEM_LEVEL } from '../../data/items.js';
+import { TIERS, EMBLEM_LEVEL } from '../../data/items.js';
+import { RIFT_NAME } from '../../data/tavern.js';
 import { TITLES } from '../../data/loot.js';
 import { SpriteView, heroLook, drawStill } from '../sprite.js';
 import { maxHp, xpToNext } from '../hero.js';
-import { xpForLevel } from '../rules.js';
+import { xpForLevel, paragonXpFor, legacyFor } from '../rules.js';
+import { portraitOf, paragonRank, paragonTitle, paragonXp, canRetire } from '../tavern.js';
 import { currentQuest, clericFee, payCleric } from '../tasks.js';
 import { subclassName } from '../skills.js';
-import { el, num, heroClock } from './dom.js';
+import { el, num, heroClock, confirmBtn } from './dom.js';
 
 const STAGE_H = 70; // sprite pixels; the scene is this tall times 4
 const SHOWN_LINES = 80;
 
-// Level milestones: the class emblem at 10, a wisp in the class colour at 15, a golden glow at 20.
-// (The cloak at 5 is a real piece of gear and arrives through the Cloak slot.)
-const WISP_LEVEL = 15, GLOW_LEVEL = 20;
-const WISP_COLOR = { fighter: 'rgba(255, 150, 90, 0.85)', wizard: 'rgba(120, 180, 255, 0.85)', rogue: 'rgba(150, 225, 120, 0.85)', cleric: 'rgba(255, 232, 150, 0.85)' };
 
 // The sprite layers for a hero: appearance, the look of whatever is in each gear slot (its
 // rarity picks one of five looks), and the milestones their level has earned.
-export function heroSpriteLook(hero) {
-  const tiers = Object.fromEntries(SLOTS.map((s) => [s.id, hero.gear[s.id]?.tier ?? null]));
-  const fx = hero.level >= WISP_LEVEL ? { wisp: WISP_COLOR[hero.class], glow: hero.level >= GLOW_LEVEL } : null;
-  return heroLook({ race: hero.race, cls: hero.class, ...hero.appearance, tiers, emblem: hero.level >= EMBLEM_LEVEL, fx });
-}
+// The Hall of Legends keeps the same look data (`portraitOf`, js/tavern.js) to redraw a portrait.
+export const heroSpriteLook = (hero) => heroLook(portraitOf(hero));
 
 // One line above the task bar saying what the task is part of.
 function taskContext(hero, t) {
@@ -40,6 +36,7 @@ function taskContext(hero, t) {
   else if (t.kind === 'return') text = 'Walking back out';
   else if (t.kind === 'camp') text = `Resting before ${d.name}`;
   else if (t.kind === 'boss') text = `${d.name}: ${d.boss.name}`;
+  else if (t.kind === 'rift') text = `${RIFT_NAME}: floor ${t.floor}${hero.stats.riftBest ? ` (deepest ${hero.stats.riftBest})` : ''}`;
   else if (t.kind === 'delve') text = hero.delve ? `${d.name}: room ${hero.delve.room + 1} of ${hero.delve.rooms}` : d.name;
   else if (t.kind === 'quest') {
     const q = currentQuest(hero);
@@ -89,12 +86,17 @@ export function mountHero(root, app) {
   const cleric = el('div', { className: 'panel cleric', hidden: true }, el('div', { className: 'row' }, clericBtn), clericNote);
   let current = null; // { state, hero } as of the last update
   clericBtn.onclick = () => { if (current && payCleric(current.state, current.hero) != null) app.changed(); };
+  // Retirement: offered once by a card at level 20, then always here. No penalty for ignoring it.
+  const retireNote = el('p', { className: 'hint' });
+  const retireRow = el('div', { className: 'row' });
+  const retirePanel = el('div', { className: 'panel retire', hidden: true }, el('h3', { textContent: 'Retirement' }), retireNote, retireRow);
+  let retireKey = '';
 
   const list = el('ul', { className: 'chronicle', attrs: { 'aria-live': 'polite' } });
   root.append(
     scene,
     el('div', { className: 'hero-head' }, el('div', {}, name, sub), gold),
-    hp.wrap, xp.wrap, task, cleric,
+    hp.wrap, xp.wrap, task, cleric, retirePanel,
     el('h3', { className: 'section', textContent: 'Chronicle' }),
     list,
   );
@@ -141,10 +143,11 @@ export function mountHero(root, app) {
     const inTavern = knockedOut && !falling;
     const walking = !t || ['travel', 'return', 'camp'].includes(t.kind);
     const inDungeon = !!t && ['delve', 'boss', 'camp'].includes(t.kind);
+    const inRift = t?.kind === 'rift';
     const anim = inTavern || walking ? 'walk' : t.elapsed / t.duration >= 0.3 ? CLASSES[hero.class].attack : 'walk';
     const nextScene = (inTavern ? 'tavern' : anim) + key;
     // The backdrop: the tavern, the region's dungeon, or the region itself. All drawn in CSS.
-    if (!falling) scene.dataset.bg = inTavern ? 'tavern' : inDungeon ? 'dungeon' : hero.region;
+    if (!falling) scene.dataset.bg = inTavern ? 'tavern' : inRift ? 'rift' : inDungeon ? 'dungeon' : hero.region;
     if (!falling && nextScene !== sceneKey) {
       sceneKey = nextScene;
       scene.classList.toggle('tavern', inTavern);
@@ -154,11 +157,12 @@ export function mountHero(root, app) {
       else view.set({ look, anim, facing: 'right' });
       lookKey = key;
     }
-    if (!falling) place.textContent = inTavern ? 'The Wobbly Griffin' : t?.kind === 'travel' || t?.kind === 'return' ? 'On the road' : inDungeon ? DUNGEONS[hero.region].name : REGION_BY_ID[hero.region].name;
+    if (!falling) place.textContent = inTavern ? 'The Wobbly Griffin' : inRift ? RIFT_NAME : t?.kind === 'travel' || t?.kind === 'return' ? 'On the road' : inDungeon ? DUNGEONS[hero.region].name : REGION_BY_ID[hero.region].name;
 
     name.textContent = hero.name;
     const subclass = subclassName(hero);
-    sub.textContent = `Level ${hero.level} ${RACES[hero.race].name} ${CLASSES[hero.class].name}${subclass ? ', ' + subclass : ''}${hero.level >= EMBLEM_LEVEL ? '. ' + TITLES[hero.class] : ''}`;
+    const rank = paragonRank(hero);
+    sub.textContent = `Level ${hero.level} ${RACES[hero.race].name} ${CLASSES[hero.class].name}${subclass ? ', ' + subclass : ''}${hero.level >= EMBLEM_LEVEL ? '. ' + TITLES[hero.class] : ''}${rank ? `. Paragon ${rank}, ${paragonTitle(rank)}` : ''}`;
     gold.textContent = `${num(hero.gold)} gp`;
 
     const max = maxHp(hero);
@@ -166,8 +170,16 @@ export function mountHero(root, app) {
     hp.text.textContent = knockedOut ? `${hero.hp} / ${max} (recovering)` : `${hero.hp} / ${max}`;
     const next = xpToNext(hero);
     const floor = xpForLevel(hero.level);
-    xp.fill.style.width = next == null ? '100%' : Math.max(0, (100 * (hero.xp - floor)) / (next - floor)) + '%';
-    xp.text.textContent = next == null ? `${num(hero.xp)} (level 20)` : `${num(hero.xp)} / ${num(next)}`;
+    if (next != null) {
+      xp.fill.style.width = Math.max(0, (100 * (hero.xp - floor)) / (next - floor)) + '%';
+      xp.text.textContent = `${num(hero.xp)} / ${num(next)}`;
+    } else {
+      // Level 20: the bar fills toward the next Paragon rank instead.
+      const done = paragonXp(hero) - paragonXpFor(rank);
+      const need = paragonXpFor(rank + 1) - paragonXpFor(rank);
+      xp.fill.style.width = Math.max(0, Math.min(100, (100 * done) / need)) + '%';
+      xp.text.textContent = `Paragon ${rank + 1}: ${num(done)} / ${num(need)}`;
+    }
 
     if (t) {
       // aim the bar one second ahead; the CSS transition fills the gap smoothly
@@ -189,6 +201,19 @@ export function mountHero(root, app) {
       clericBtn.textContent = `Pay the cleric ${num(fee)} gp`;
       clericBtn.disabled = hero.gold < fee;
       clericNote.textContent = `${hero.name} gets up unaided in ${Math.ceil(left / 60)} min. The cleric will see to it now for a fee${hero.gold < fee ? ', which is more gold than there is' : ''}. Waiting costs nothing.`;
+    }
+
+    // Retirement, from level 20. Rebuilt only when something on it changes, so taps are not lost.
+    const legends = state.tavern.legends.length;
+    const rKey = [hero.id, canRetire(hero), legends].join('|');
+    if (rKey !== retireKey) {
+      retireKey = rKey;
+      retirePanel.hidden = !canRetire(hero);
+      if (canRetire(hero)) {
+        const after = legacyFor(legends + 1);
+        retireNote.textContent = `${hero.name} can retire to the Hall of Legends: a portrait on the wall, a record of the career, and the hero slot freed. Every hero after them earns ${Math.round(after * 100)}% more XP (2% per legend, 10% at most${legends ? `; ${legends} in the Hall already` : ''}). Or keep going: the Planar Rifts are open on the Map tab, for Paragon ranks, which are titles only. Their gold goes with them, so spend it on tavern upgrades first. Retiring cannot be undone.`;
+        retireRow.replaceChildren(confirmBtn('Retire to the Hall of Legends', 'Tap again: retire for good', () => app.retire(hero.id), 'btn primary grow'));
+      }
     }
 
     // Chronicle: newest first; only lines not yet on the page are added
