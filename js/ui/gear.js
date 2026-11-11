@@ -2,7 +2,9 @@
 // Loot arrives in Phase 5; until then every hero wears the Common starting kit.
 
 import { TIERS } from '../../data/items.js';
-import { MONSTERS, MONSTER_BY_ID } from '../../data/monsters.js';
+import { MONSTERS } from '../../data/monsters.js';
+import { REGION_BY_ID } from '../../data/regions.js';
+import { foeName } from '../tasks.js';
 import { RACES, RACE_TRAITS } from '../../data/races.js';
 import { CLASSES } from '../../data/classes.js';
 import { ABILITIES, ABILITY_NAMES, mod } from '../rules.js';
@@ -26,7 +28,7 @@ export function mountGear(root) {
       el('span', { className: 'ab-score', textContent: String(hero.abilities[a]) }),
       el('span', { className: 'ab-mod', textContent: signed(mod(hero.abilities[a])) })));
 
-    const worst = hero.stats.mostEmbarrassingDefeat ? MONSTER_BY_ID[hero.stats.mostEmbarrassingDefeat]?.name : null;
+    const worst = hero.stats.mostEmbarrassingDefeat ? foeName(hero.stats.mostEmbarrassingDefeat) : null;
     const stat = (label, value) => el('li', {}, el('span', { textContent: label }), el('span', { textContent: value }));
     const trait = RACE_TRAITS[hero.race];
 
@@ -49,9 +51,13 @@ export function mountGear(root) {
         stat('Tasks finished', num(hero.stats.tasks)),
         stat('Natural 20s', num(hero.stats.natural20s)),
         stat('Natural 1s', num(hero.stats.natural1s)),
+        stat('Story quests finished', num(hero.stats.quests)),
+        stat('Odd jobs done', num(hero.stats.oddJobs)),
+        stat('Feats', num(hero.feats.length)),
+        stat('Dungeons cleared', `${num(hero.stats.dungeonClears)} of ${num(hero.stats.dungeonRuns)} runs`),
         stat('Knockouts', num(hero.stats.knockouts)),
         stat('Most Embarrassing Defeat', worst ?? 'None yet'))),
-      el('section', { className: 'panel' }, el('h3', { textContent: `Bestiary (${monsters.filter((m) => hero.bestiary[m.id]).length} of ${monsters.length})` }), el('ul', { className: 'bestiary' }, ...bestiary)),
+      el('section', { className: 'panel' }, el('h3', { textContent: `Bestiary: ${REGION_BY_ID[hero.region].name} (${monsters.filter((m) => hero.bestiary[m.id]).length} of ${monsters.length})` }), el('ul', { className: 'bestiary' }, ...bestiary)),
     );
   }
   return { update };

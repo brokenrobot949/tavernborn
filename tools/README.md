@@ -55,7 +55,7 @@ python tools/serve.py
 Serves the repo at `http://localhost:8766` with caching off, so a rebake shows up on reload.
 ES modules do not load from `file://`.
 
-## check-sim.mjs: proof that offline progress works
+## check-sim.mjs: proof that the simulation works
 
 ```bash
 node tools/check-sim.mjs
@@ -63,7 +63,11 @@ node tools/check-sim.mjs
 
 Creates fresh heroes, advances them 9 hours in one call, and checks that they level, that the same
 seed gives the same save, that a month away resolves in under a second, and that the save string
-round-trips. It also prints the median time to each level against the design targets.
+round-trips. Then the Phase 3 activities: six story quests earn a Feat, a dungeon clear shows a
+chapter and opens the next region, travel works and locked regions refuse it, a knockout loses the
+run and nothing else, three knockouts running switch the hero to Roam, the cleric's fee, the Dwarf,
+Half-Orc, and Dragonborn quirks, a version 1 save keeping its level, and one hero clearing all
+eight dungeons. It also prints the median time to each early level against the targets.
 
 ## simulate.html and simulate.mjs: the pacing simulator
 
@@ -73,18 +77,22 @@ Open `http://localhost:8766/tools/simulate.html` (or Tavern > Workshop in the ga
 node tools/simulate.mjs
 ```
 
-Both run 500 heroes from level 1 to 20 through the real `advance(state, seconds)` and report the
-time to each level (10th percentile, median, 90th) against `LEVEL_TARGET_HOURS`, with a breakdown
-by class and race and knockout and potion counts. The terminal version exits with an error unless
-the median hero reaches level 20 in 28 to 32 days. Arguments: `node tools/simulate.mjs [heroes]
-[road|vale] [damageTimes]`.
+Both run 500 heroes through the real `advance(state, seconds)` in the real eight regions, from
+level 1 until they are level 20 and have cleared the last dungeon. They report the time to each
+level (10th percentile, median, 90th) against `LEVEL_TARGET_HOURS`, a breakdown by class and race,
+each dungeon's first clear (how many heroes, when, at what level, runs lost), and where the
+knockouts happened. The terminal version exits with an error unless the median hero reaches level
+20 in 28 to 32 days and at least nine in ten heroes clear The Hoard of Vexaldrith.
+
+Arguments: `node tools/simulate.mjs [heroes] [road|roam|vale] [damageTimes]`.
 
 - `simulate-core.js` is the shared engine; `simulate-worker.js` lets the page use every CPU core.
-- **Stand-ins.** Regions with no monsters in `data/monsters.js` get nine temporary ones scaled from
-  Mugwick Vale's nine (same XP and task length, DC of 10 + proficiency, damage scaled with hit
-  points), and the hero moves to the next region as soon as their level allows, with no travel.
-  They live in memory only. A region with real monsters is never given stand-ins, so Phase 3's
-  data replaces them without touching the simulator. `vale` mode keeps the hero in Mugwick Vale.
-- `damageTimes` (the page's "What if monsters hit harder?") multiplies every damage die for that
-  run only. Nothing is written to the game's files.
-- Rerun after any change to pacing, monsters, damage, or healing.
+- **No stand-ins.** Every region has real monsters, quests, and a dungeon. The only invented part
+  is the player: `steer` in `simulate-core.js` gives the same orders the Map tab does (`setFocus`,
+  `orderTravel`). It roams to level 2, does a region's six story quests and then roams, delves on
+  reaching the level the dungeon is built for, waits a level if the hero loses confidence there,
+  and walks on once the dungeon is cleared and the next region's level range is reached.
+- `road` is that player (the judged run). `roam` never quests. `vale` never leaves Mugwick Vale.
+- `damageTimes` (the page's "What if monsters hit harder?") multiplies all damage for that run only,
+  through `WHAT_IF` in `js/rules.js`. Nothing is written to the game's files.
+- Rerun after any change to pacing, monsters, quests, dungeons, damage, or healing.

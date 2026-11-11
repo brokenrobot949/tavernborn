@@ -16,7 +16,7 @@ export function advance(state, seconds) {
   const events = [];
   const hero = activeHero(state);
   if (!hero) return events;
-  if (!hero.currentTask) hero.currentTask = nextTask(state, hero);
+  if (!hero.currentTask) hero.currentTask = nextTask(state, hero, events);
   let left = Math.max(0, Math.floor(seconds));
   while (left > 0) {
     const task = hero.currentTask;
@@ -26,7 +26,7 @@ export function advance(state, seconds) {
     left -= step;
     if (task.elapsed >= task.duration) {
       resolveTask(state, hero, task, events);
-      hero.currentTask = nextTask(state, hero);
+      hero.currentTask = nextTask(state, hero, events);
     }
   }
   return events;
@@ -34,18 +34,28 @@ export function advance(state, seconds) {
 
 // Boil a list of events down to the numbers the "While you were away" card shows.
 export function summarize(events) {
-  const s = { tasks: 0, xp: 0, gold: 0, natural20s: 0, natural1s: 0, knockouts: 0, potions: 0, levels: [], newMonsters: [], knockedOutBy: [] };
+  const s = {
+    tasks: 0, xp: 0, gold: 0, natural20s: 0, natural1s: 0, knockouts: 0, potions: 0, levels: [], newMonsters: [], knockedOutBy: [],
+    quests: [], oddJobs: 0, feats: [], clears: [], chapters: [], opened: [], arrived: [], runsLost: 0, confidence: [],
+  };
   for (const e of events) {
+    if (e.xp) s.xp += e.xp;
+    if (e.gold) s.gold += e.gold;
     if (e.type === 'task') {
       s.tasks += 1;
-      s.xp += e.xp;
-      s.gold += e.gold;
       if (e.outcome === 'crit') s.natural20s += 1;
       if (e.outcome === 'fumble') s.natural1s += 1;
     } else if (e.type === 'levelup') s.levels.push(e.level);
-    else if (e.type === 'knockout') { s.knockouts += 1; s.knockedOutBy.push(e.monster); }
+    else if (e.type === 'knockout') { s.knockouts += 1; s.knockedOutBy.push(e.monster ?? e.source); if (e.lost === 'run') s.runsLost += 1; }
     else if (e.type === 'potion') { s.potions += 1; s.gold -= e.cost; }
     else if (e.type === 'bestiary') s.newMonsters.push(e.monster);
+    else if (e.type === 'questdone') { if (e.story) s.quests.push(e.quest); else s.oddJobs += 1; }
+    else if (e.type === 'feat') s.feats.push(e.region);
+    else if (e.type === 'cleared') s.clears.push(e.region);
+    else if (e.type === 'chapter') s.chapters.push(e.chapter);
+    else if (e.type === 'unlock') s.opened.push(e.region);
+    else if (e.type === 'arrive') s.arrived.push(e.region);
+    else if (e.type === 'confidence') s.confidence.push(e.region);
   }
   return s;
 }

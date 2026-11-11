@@ -87,13 +87,14 @@ export const HAIR_STYLES = [
 // add names here (from palette_definitions/hair/hair_ulpc.json) and rebake to offer more.
 export const HAIR_COLORS = ['black', 'dark_brown', 'chestnut', 'redhead', 'blonde', 'gray', 'white', 'raven'];
 
-// Rules side of each race: ability bonuses and the quirk. `built` is false while the quirk
-// waits on a later phase (knockout grudges, dungeons, and boss fights arrive in Phase 3).
+// Rules side of each race: ability bonuses and the quirk. `built` is false while a quirk waits
+// on a later phase; all six work as of Phase 3. A task is one roll, so the Dwarf's grudge is a
+// bonus to that roll rather than to damage.
 export const RACE_TRAITS = {
   human: { bonus: { str: 1, dex: 1, con: 1, int: 1, wis: 1, cha: 1 }, quirk: 'Jack of Most Trades', effect: '+5% XP', built: true },
   elf: { bonus: { dex: 2, int: 1 }, quirk: "Hasn't Slept Since the Third Age", effect: 'Recovers from knockouts 20% faster', built: true },
-  dwarf: { bonus: { con: 2, str: 1 }, quirk: 'Holds a Grudge', effect: 'Bonus damage against any monster type that has knocked them out', built: false },
+  dwarf: { bonus: { con: 2, str: 1 }, quirk: 'Holds a Grudge', effect: '+2 on rolls against any monster or boss that has knocked them out', built: true },
   goblin: { bonus: { dex: 2, con: 1 }, quirk: 'Somehow Still Alive', effect: 'Rerolls the first natural 1 of each task', built: true },
-  halforc: { bonus: { str: 2, con: 1 }, quirk: 'Too Stubborn to Fall', effect: 'Once per dungeon, drops to 1 HP instead of 0', built: false },
-  dragonborn: { bonus: { str: 2, cha: 1 }, quirk: 'Breath Weapon', effect: 'Opens every boss fight with a free hit', built: false },
+  halforc: { bonus: { str: 2, con: 1 }, quirk: 'Too Stubborn to Fall', effect: 'Once per dungeon run, drops to 1 HP instead of 0', built: true },
+  dragonborn: { bonus: { str: 2, cha: 1 }, quirk: 'Breath Weapon', effect: 'Opens every boss fight with a free hit', built: true },
 };

@@ -14,6 +14,7 @@ import { mountSkills } from './ui/skills.js';
 import { mountGear } from './ui/gear.js';
 import { mountTavern } from './ui/tavern.js';
 import { showAway } from './ui/away.js';
+import { showChapter } from './ui/story.js';
 
 const AWAY_SECONDS = 600; // the summary card appears after more than ten minutes away
 const SAVE_EVERY = 10; // seconds between automatic saves
@@ -31,6 +32,8 @@ const app = {
   currentSave: () => save,
   replaceSave(next) { save = next; storeSave(save); start(); },
   newHero() { save.heroes = save.heroes.filter((h) => h.id !== save.activeHeroId); save.activeHeroId = null; storeSave(save); start(); },
+  // A standing order was given (focus, travel, the cleric): keep it and redraw.
+  changed() { storeSave(save); render(); },
 };
 
 function start() {
@@ -55,7 +58,7 @@ function start() {
     el('nav', { className: 'tabbar', attrs: { role: 'tablist', 'aria-label': 'Sections' } }, ...Object.values(buttons)));
   screen = {
     sections, buttons,
-    views: { hero: mountHero(sections.hero), map: mountMap(sections.map), skills: mountSkills(sections.skills), gear: mountGear(sections.gear), tavern: mountTavern(sections.tavern, app) },
+    views: { hero: mountHero(sections.hero, app), map: mountMap(sections.map, app), skills: mountSkills(sections.skills), gear: mountGear(sections.gear), tavern: mountTavern(sections.tavern, app) },
   };
   tab = 'hero';
   showTab(tab);
@@ -96,6 +99,10 @@ function tick() {
   sinceStore += gap;
   if (gap >= AWAY_SECONDS) showAway(root, { seconds: gap, summary: summarize(events), hero });
   if (sinceStore >= SAVE_EVERY) { sinceStore = 0; storeSave(save); }
+  // Story chapter cards earned by a first dungeon clear, one at a time, after any away card.
+  if (hero.unread.length && !root.querySelector('.overlay')) {
+    showChapter(root, hero.unread[0], hero, () => { hero.unread.shift(); storeSave(save); });
+  }
   render();
 }
 

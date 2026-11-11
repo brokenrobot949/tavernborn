@@ -49,16 +49,16 @@
   <main id="app" class="sim">
     <section class="panel">
       <h2>Run heroes through the real game rules</h2>
-      <p class="hint">Each hero is created the normal way and played by the game's own engine at high speed, from level 1 to level 20. Classes and races take turns, so all 24 pairs get an equal share. Nothing here touches your save.</p>
+      <p class="hint">Each hero is created the normal way and played by the game's own engine at high speed, from level 1 until they are level 20 and have cleared the last dungeon. Classes and races take turns, so all 24 pairs get an equal share. Nothing here touches your save.</p>
       <div class="row" id="opt-heroes"><span class="label">Heroes</span></div>
-      <div class="row" id="opt-world"><span class="label">World</span></div>
+      <div class="row" id="opt-world"><span class="label">How the hero is played</span></div>
       <div class="row" id="opt-damage"><span class="label">What if monsters hit harder?</span></div>
       <div class="row">
         <button class="btn primary" id="run" type="button">Run the simulation</button>
         <button class="btn" id="stop" type="button" hidden>Stop</button>
       </div>
       <div class="progress" aria-hidden="true"><i id="bar"></i></div>
-      <p class="hint" id="status" role="status">Not run yet. 500 heroes take about a minute on a phone.</p>
+      <p class="hint" id="status" role="status">Not run yet. 500 heroes take a minute or two on a phone.</p>
     </section>
 
     <section class="panel standin" id="standin"></section>
@@ -91,9 +91,16 @@
       <div class="scroll" id="race-table"></div>
     </section>
 
+    <section class="panel" id="dungeon-panel" hidden>
+      <h2>Dungeons</h2>
+      <p class="hint">The first clear of each dungeon: how many heroes managed it, when the median hero did, at what level, and how many runs a hero lost there on average before and after.</p>
+      <div class="scroll" id="dungeon-table"></div>
+      <p class="hint" id="ko-sources"></p>
+    </section>
+
     <section class="panel" id="ko-panel" hidden>
       <h2>Knockouts at each level</h2>
-      <p class="hint">Average knockouts per hero while at that level. Higher levels last longer, so they have more time to collect them. The spikes are the levels where a hero walks into a new region.</p>
+      <p class="hint">Average knockouts per hero while at that level. Higher levels last longer, so they have more time to collect them. The taller bars are the levels where a hero first tries a dungeon.</p>
       <div class="chart" id="ko-chart"></div>
       <p class="readout" id="ko-readout">Tap a bar to see its numbers.</p>
     </section>
@@ -105,7 +112,8 @@
 
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-    const options = { heroes: 500, world: 'road', damageTimes: 1, zoom: 'month' };
+    const options = { heroes: 500, mode: 'road', damageTimes: 1, zoom: 'month' };
+    const runOptions = () => ({ world: options.mode === 'vale' ? 'vale' : 'road', style: options.mode === 'roam' ? 'roam' : 'balanced', damageTimes: options.damageTimes });
     let summary = null;
     let workers = [];
     let runId = 0;
@@ -126,26 +134,27 @@
       }
     }
     choice('opt-heroes', 'heroes', [[100, '100'], [500, '500'], [1000, '1,000']]);
-    choice('opt-world', 'world', [['road', 'All eight regions'], ['vale', 'Mugwick Vale only']], describeWorld);
+    choice('opt-world', 'mode', [['road', 'Quests and dungeons'], ['roam', 'Roam and dungeons'], ['vale', 'Mugwick Vale only']], describeWorld);
     choice('opt-damage', 'damageTimes', [[1, 'As built'], [1.25, 'x1.25'], [1.5, 'x1.5'], [2, 'x2']], describeWorld);
     choice('opt-zoom', 'zoom', [['month', 'Whole month'], ['day', 'First day']], () => summary && drawLevels());
 
-    // ----- the stand-in notice -----
+    // ----- what the simulator plays -----
     function describeWorld() {
       const regions = prepareWorld({ damageTimes: options.damageTimes });
       const range = (list, f) => { const v = list.map(f); const a = Math.min(...v), b = Math.max(...v); return a === b ? `${a}` : `${a} to ${b}`; };
-      const rows = regions.map((r) => `<tr><td>${esc(r.name)}${r.standIn ? ' *' : ''}</td><td>${r.levels[0]} to ${r.levels[1]}</td><td>${range(r.monsters, (m) => m.dc)}</td><td>d${range(r.monsters, (m) => m.dmg).replace(' to ', ' to d')}</td><td>${range(r.monsters, (m) => m.xp)}</td></tr>`).join('');
-      const standIns = regions.filter((r) => r.standIn).length;
-      const vale = options.world === 'vale';
+      const rows = regions.map((r) => `<tr><td>${esc(r.name)}</td><td>${r.levels[0]} to ${r.levels[1]}</td><td>${r.monsters.length}</td><td>${range(r.monsters, (m) => m.dc)}</td><td>d${range(r.monsters, (m) => m.dmg).replace(' to ', ' to d')}</td><td>${r.dungeon.level}</td><td>d${r.dungeon.dmg}</td><td>d${r.dungeon.boss.dmg}</td></tr>`).join('');
+      const player = {
+        road: 'does each region\'s six story quests, then roams. On reaching the level a dungeon is built for, the hero delves until it is cleared, then walks to the next region. If the hero loses confidence in a dungeon (three knockouts running), the player waits a level before trying again.',
+        roam: 'only ever roams between dungeon attempts, and otherwise does the same: delve on reaching the dungeon\'s level, then walk on.',
+        vale: 'never leaves Mugwick Vale and only roams. Monsters far below the hero pay less XP, so this shows what staying put costs.',
+      }[options.mode];
       $('standin').innerHTML = `
-        <h2>What is real and what is a stand-in</h2>
-        <p class="hint"><b>Real:</b> every roll, XP award, hit, potion, knockout, and level-up comes from the game's own engine, and Mugwick Vale's nine monsters are the real ones.</p>
-        <p class="hint"><b>Stand-in:</b> ${vale
-          ? 'none in this mode. The hero stays in Mugwick Vale for all 20 levels, which is the game exactly as built today. Past level 5 or so nothing there can hurt them, so this mode runs faster than the finished game will.'
-          : `the ${standIns} regions marked * have no monsters yet (Phase 3). Until they do, the simulator invents nine temporary monsters for each by scaling the Vale's nine: the roll stays about as hard as it is for a new hero, damage grows with hit points, and XP per task stays the same. The hero also moves to the next region the moment their level allows, with no travel time. When Phase 3 adds real monsters, they replace the stand-ins here automatically and this result will shift.`}</p>
-        ${options.damageTimes !== 1 ? `<p class="hint"><b>What if:</b> every monster's damage die is multiplied by ${options.damageTimes} for this run only. The game's files are not changed.</p>` : ''}
-        <details><summary>Show the monsters used</summary><div class="scroll"><table>
-          <tr><th>Region</th><th>Levels</th><th>DC</th><th>Damage</th><th>XP</th></tr>${rows}
+        <h2>What is real and what is made up</h2>
+        <p class="hint"><b>Real:</b> everything in the game. Every roll, XP award, hit, potion, quest step, dungeon room, boss fight, journey, knockout, and level-up comes from the game's own engine, in the real eight regions. There are no stand-in monsters any more.</p>
+        <p class="hint"><b>Made up:</b> the player. Somebody has to choose a focus and say when to travel, so the simulator plays one who ${player}</p>
+        ${options.damageTimes !== 1 ? `<p class="hint"><b>What if:</b> everything hits ${options.damageTimes} times as hard for this run only. The game's files are not changed.</p>` : ''}
+        <details><summary>Show the numbers used</summary><div class="scroll"><table>
+          <tr><th>Region</th><th>Levels</th><th>Monsters</th><th>DC</th><th>Damage</th><th>Dungeon level</th><th>Room</th><th>Boss</th></tr>${rows}
         </table></div></details>`;
     }
     describeWorld();
@@ -157,7 +166,8 @@
     $('stop').onclick = () => { runId += 1; stopWorkers(); setRunning(false); $('status').textContent = 'Stopped.'; };
     $('run').onclick = () => {
       const id = ++runId;
-      const opts = { world: options.world, damageTimes: options.damageTimes };
+      const opts = runOptions();
+      const mode = options.mode, damageTimes = options.damageTimes;
       const count = options.heroes;
       const results = new Array(count);
       let done = 0;
@@ -166,7 +176,7 @@
       const progress = () => {
         $('bar').style.width = `${(100 * done / count).toFixed(1)}%`;
         $('status').textContent = `${done} of ${count} heroes have finished their month.`;
-        if (done === count || done % Math.max(10, Math.round(count / 10)) === 0) render(results.filter(Boolean), done === count);
+        if (done === count || done % Math.max(10, Math.round(count / 10)) === 0) render(results.filter(Boolean), done === count, { mode, damageTimes });
         if (done === count) {
           stopWorkers(); setRunning(false);
           $('status').textContent = `${count} heroes simulated in ${((performance.now() - started) / 1000).toFixed(0)} seconds.`;
@@ -205,12 +215,21 @@
     };
 
     // ----- results -----
-    function render(results, complete) {
+    function render(results, complete, ran) {
       if (!results.length) return;
       summary = summarize(results);
       summary.complete = complete;
+      summary.ran = ran;
       for (const id of ['results', 'chart-panel', 'groups-panel', 'ko-panel']) $(id).hidden = false;
-      drawTiles(); drawLevels(); drawGroups(); drawKnockouts();
+      $('dungeon-panel').hidden = ran.mode === 'vale';
+      drawTiles(); drawLevels(); drawGroups(); drawDungeons(); drawKnockouts();
+    }
+
+    function drawDungeons() {
+      const s = summary;
+      $('dungeon-table').innerHTML = `<table><tr><th>Dungeon</th><th>Built for</th><th>Cleared by</th><th>Median time</th><th>At level</th><th>Runs lost</th></tr>${s.dungeons.map((d) =>
+        `<tr><td>${esc(d.name)}</td><td>${d.builtFor}</td><td>${d.cleared} of ${s.heroes}</td><td>${formatTime(d.at)}</td><td>${d.level ?? '-'}</td><td>${d.runsLost.toFixed(1)}</td></tr>`).join('')}</table>`;
+      $('ko-sources').textContent = `Where the ${s.knockouts.toFixed(1)} knockouts per hero happened: ${s.koBy.roam.toFixed(1)} roaming, ${s.koBy.quest.toFixed(1)} on quests, ${s.koBy.delve.toFixed(1)} in dungeon rooms, ${s.koBy.boss.toFixed(1)} against bosses. Each hero finished ${s.quests.toFixed(1)} story quests and made ${s.runs.toFixed(1)} dungeon runs.`;
     }
 
     function drawTiles() {
@@ -218,12 +237,15 @@
       const l20 = s.levels[s.levels.length - 1];
       const days = l20.median == null ? null : l20.median / DAY;
       const pass = days != null && days >= 28 && days <= 32;
-      const judged = options.world === 'road' && options.damageTimes === 1;
+      const judged = s.ran.mode === 'road' && s.ran.damageTimes === 1;
+      const road = s.ran.mode !== 'vale';
+      const cleared = s.clearedLast >= 0.9 * s.heroes;
       const verdict = days == null ? '<span class="verdict fail">✗ The median hero did not reach level 20 in 60 days</span>'
         : pass ? `<span class="verdict pass">✓ Inside the 28 to 32 day target${judged ? '' : ' (not the standard run)'}</span>`
         : `<span class="verdict fail">✗ Outside the 28 to 32 day target${judged ? '' : ' (not the standard run)'}</span>`;
       $('tiles').innerHTML = `
         <div class="tile wide"><b>${days == null ? 'Not reached' : days.toFixed(1) + ' days'}</b><span>Median time to level ${MAX_LEVEL}${s.complete ? '' : ' (so far)'}. Middle 80% of heroes: ${formatTime(l20.p10)} to ${formatTime(l20.p90)}.</span><br>${verdict}</div>
+        ${road ? `<div class="tile wide"><b>${s.clearedLast} of ${s.heroes}</b><span>heroes cleared the last dungeon, The Hoard of Vexaldrith${s.complete ? '' : ' (so far)'}</span><br><span class="verdict ${cleared ? 'pass' : 'fail'}">${cleared ? '✓' : '✗'} Phase 3 asks for a simulated hero to clear Wyrmspire; this run wants nine in ten</span></div>` : ''}
         <div class="tile"><b>${s.finished} of ${s.heroes}</b><span>heroes reached level ${MAX_LEVEL} within 60 days</span></div>
         <div class="tile"><b>${s.knockouts.toFixed(1)}</b><span>knockouts per hero (${s.koHours.toFixed(1)} hours recovering)</span></div>
         <div class="tile"><b>${s.potions.toFixed(1)}</b><span>potions drunk per hero</span></div>
@@ -290,8 +312,8 @@
     }
 
     function drawGroups() {
-      const table = (title, groups, names) => `<table><tr><th>${title}</th><th>Lvl 5</th><th>Lvl 10</th><th>Lvl 20</th><th>KOs</th><th>Potions</th></tr>${groups.map((g) =>
-        `<tr><td>${esc(names[g.id].name)}</td><td>${formatTime(g.l5)}</td><td>${formatTime(g.l10)}</td><td>${formatTime(g.l20)}</td><td>${g.knockouts.toFixed(1)}</td><td>${g.potions.toFixed(1)}</td></tr>`).join('')}</table>`;
+      const table = (title, groups, names) => `<table><tr><th>${title}</th><th>Lvl 5</th><th>Lvl 10</th><th>Lvl 20</th><th>KOs</th><th>Potions</th><th>Last dungeon</th></tr>${groups.map((g) =>
+        `<tr><td>${esc(names[g.id].name)}</td><td>${formatTime(g.l5)}</td><td>${formatTime(g.l10)}</td><td>${formatTime(g.l20)}</td><td>${g.knockouts.toFixed(1)}</td><td>${g.potions.toFixed(1)}</td><td>${g.clearedLast} of ${g.heroes}</td></tr>`).join('')}</table>`;
       $('class-table').innerHTML = table('Class', summary.byClass, CLASSES);
       $('race-table').innerHTML = table('Race', summary.byRace, RACES);
     }

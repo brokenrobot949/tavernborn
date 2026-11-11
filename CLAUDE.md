@@ -27,9 +27,11 @@ Rob is the game designer and does not write code.
   The live game calls it once a second; on load it is called with the seconds since `lastSavedAt`.
   Long gaps run task by task, not second by second. Random numbers come from a seeded generator
   stored in the save. It returns a list of events; the Chronicle and "While you were away" use that list.
-- `js/rules.js`, `tasks.js`, `hero.js`, `skills.js`, `loot.js` the systems `sim.js` calls
+- `js/rules.js`, `tasks.js`, `hero.js`, `skills.js`, `loot.js` the systems `sim.js` calls. `tasks.js` also holds
+  the player's standing orders (`setFocus`, `orderTravel`, `payCleric`)
 - `js/sprite.js` LPC layer compositing and animation
-- `js/ui/` one module per tab, plus `create.js` (creation), `away.js` (the summary card), `dom.js` (helpers);
+- `js/ui/` one module per tab, plus `create.js` (creation), `away.js` (the summary card), `story.js` (chapter
+  cards), `dom.js` (helpers);
   `data/` all content; `tools/` dev-only
 
 ## Sprites
@@ -74,38 +76,52 @@ Rob is the game designer and does not write code.
 | 7. Polish | Writing pass, sound, credits screen, settings | Tone matches the Humor and voice section |
 
 ## Status
-- Current phase: 2 (Simulator), built and waiting on Rob's phone test. Phase 1 (Core loop) is also still
-  in his phone test. Phase 0 is approved.
-- Built in Phase 2: `tools/simulate.html` (Tavern > Workshop > "Open the pacing simulator") and
-  `node tools/simulate.mjs`. Both run 500 heroes through the real `advance()` and report time to each level
-  against the targets, by class and race, with knockouts and potions. Engine: `tools/simulate-core.js`.
-- Simulator stand-ins: regions 2 to 8 have no monsters yet, so the simulator scales Mugwick Vale's nine
-  monsters up for each (same XP and task length, DC 10 + proficiency, damage scaled with hit points) and
-  moves the hero up the road with no travel time. Real monsters added in Phase 3 replace the stand-ins
-  automatically; rerun the simulator then, because the result will shift.
-- Measured with stand-ins, 500 heroes, median (target): L2 10 min (10 min), L3 59 min (1 h), L4 3.1 h (3 h),
-  L5 6.6 h (6.5 h), L6 11.5 h (11 h), L8 29.9 h (30 h), L10 2.9 days (3), L12 5.9 days (6), L15 12.8 days (13),
-  L18 22.9 days (23), L20 29.8 days (30). Middle 80% of heroes reach level 20 between 28.5 and 31.2 days.
-  Staying in Mugwick Vale alone (the game as built today) gives level 20 at about 25 to 26 days.
-- Danger findings (recommendations for Phase 3, nothing changed): the Vale is harmless (0 knockouts). With
-  stand-ins a hero averages 17 knockouts in the month, but very unevenly: Fighter 0.6, Rogue 5, Cleric 9,
-  Wizard 55. Damage has a cliff: at 1.5x damage a hero averages about 480 knockouts and only half reach level 20 in
-  60 days; at 2x it is about 1,000 and nobody does. Healing between tasks is a flat 15% of max HP, so once
-  damage outruns it everything collapses. Phase 3 should rebalance damage and healing together.
-- `index.html` is the game. The Phase 0 sprite proof moved to `sprite-lab.html` (linked from Tavern > Workshop).
-- Built in Phase 1: four-step creation (race, class, ability scores, then name; the preview wears no hat), the task bar, one d20 roll per task, XP and levels 1 to 20, HP,
-  automatic potions, a basic knockout (recover at the tavern, no paid skip yet), the Chronicle (last 200
-  lines), the Bestiary, autosave, offline progress with the "While you were away" card (after 10 minutes),
-  export and import of a save string, Roam in Mugwick Vale with nine monsters.
-- `node tools/check-sim.mjs` proves the sim: every race and class levels in 9 hours away, the same seed gives
-  the same save, one long call equals second-by-second calls, 30 days resolves in about 0.2 s, and the save
-  string round-trips. Run it after any change to `js/sim.js`, `tasks.js`, `rules.js`, `hero.js`, or `state.js`.
-- Pacing lives in `js/rules.js`: `LEVEL_TARGET_HOURS` (the design doc's table) times `XP_PER_SECOND` (0.5) up to
-  level 6, and times `XP_PER_SECOND_LATE` (0.48, tuned in Phase 2) for the hours after it. Levels 3 to 6 were
-  moved later than the design doc's table after Rob's play test (they came too fast); do not move them earlier.
-- Placeholders shown honestly in the UI: Map lists regions 2 to 8 as locked, Quest and Delve are disabled,
-  Skills only banks points, Gear shows the Common starting kit in every slot (Cloak unlocks at 5, Phase 5).
-- Race quirks: Human, Elf, and Goblin work. Dwarf, Half-Orc, and Dragonborn need Phase 3 (grudges, dungeons, bosses).
+- Current phase: 3 (Activities and map), built and waiting on Rob's phone test. Phases 1 and 2 are also
+  still in his phone test. Phase 0 is approved.
+- Built in Phase 3: real monsters for all eight regions (51 in `data/monsters.js`), 48 story quests and
+  generated odd jobs (`data/quests.js`), eight dungeons with bosses (`data/dungeons.js`), the eight chapter
+  cards of The Dragon's Due (`data/story.js`), the drawn world map with travel and the Roam / Quest / Delve
+  switch (Map tab), the tavern cleric's paid knockout skip (Hero and Tavern tabs), and the three race quirks
+  that were waiting (Dwarf, Half-Orc, Dragonborn).
+- How it works: `js/tasks.js` has eight task kinds (roam, quest, delve, boss, camp, travel, return, tavern).
+  The player's only orders are `setFocus`, `orderTravel`, and `payCleric` in that file; the UI and the
+  simulator call the same three. An order takes effect when the current task ends. A region opens when the
+  dungeon before it is cleared once. A dungeon run is 8 to 15 rooms with no healing between them (two
+  potions per run), then a boss fought over several rolls. A knockout loses the run or the quest step and
+  nothing else; three in a row in one dungeon switches the hero to Roam (the confidence safeguard).
+- Measured, `node tools/simulate.mjs`, 500 heroes, real content, no stand-ins, median (target): L2 10 min
+  (10 min), L3 65 min (1 h), L4 3.2 h (3 h), L5 6.5 h (6.5 h), L6 11.6 h (11 h), L8 30.2 h (30 h), L10 3.0 days
+  (3), L12 5.9 days (6), L15 12.8 days (13), L18 22.7 days (23), L20 29.5 days (30). Middle 80% reach level 20
+  between 28.2 and 30.7 days. All 500 clear The Hoard of Vexaldrith (median day 29.8). A roam-only player
+  also lands at 29.5 days. Staying in Mugwick Vale no longer pays: about a quarter reach level 20 in 60 days.
+- Danger after the rebalance: 11.8 knockouts per hero per month (0.7 roaming, 2.8 on quests, 2.4 in dungeon
+  rooms, 5.9 to bosses), about one lost run per dungeon before its first clear. By class: Fighter 6, Rogue 11,
+  Wizard 15, Cleric 15 (was 0.6 to 55). No cliff: at 1.5x damage every hero still finishes (32.6 days, 89
+  knockouts); at 2x all reach level 20 (38.8 days) and about half clear the last dungeon.
+- What changed in the rules (`js/rules.js`): healing after a Roam or Quest task is 5% of max HP plus 25% of
+  what is missing (was a flat 15%); a foe above the hero's level adds +1 DC and +25% damage per level and pays
+  +12% XP per level; one below pays 6% less per level. `XP_PER_SECOND_LATE` went from 0.48 to 0.51. Wizards
+  have a 15% ward (`data/classes.js`) to make up for the d6 hit die. Dungeon room and boss damage in
+  `data/dungeons.js` was tuned with the simulator; rerun it after touching any of these.
+- Saves: version 2. `migrate` in `js/state.js` fills the new hero fields and moves a version 1 hero's XP to
+  the same place within their level on the new curve. No hero loses a level.
+- `node tools/check-sim.mjs` proves the sim: the Phase 1 checks plus quests, Feats, dungeon clears, travel,
+  what a knockout costs, the confidence safeguard, the cleric's fee, the three quirks, old saves, and one hero
+  clearing all eight dungeons. Run it after any change to `js/sim.js`, `tasks.js`, `rules.js`, `hero.js`,
+  `state.js`, or the data files.
+- Spec departures to raise with Rob: the Dwarf grudge is +2 on the roll, not bonus damage (a task is one roll
+  and the hero deals no damage number). The Wizard ward is not in the design doc. Chapter cards do not yet
+  change for later heroes ("Another one."); that needs the roster (Phase 6).
+- Placeholders shown honestly in the UI: quests do not pay the guaranteed gear piece yet (Phase 5), Skills
+  only banks points (Feats add to them), Gear shows the Common starting kit, the Tavern lists upgrades,
+  roster, and retirement as still to come. The scene backdrop is the same field everywhere except dungeons
+  (dark) and the tavern; region backdrops are Phase 5. The knockout "fall" animation is not played yet.
+- `index.html` is the game. The Phase 0 sprite proof is `sprite-lab.html`; the simulator is
+  `tools/simulate.html` (both linked from Tavern > Workshop).
+- Pacing lives in `js/rules.js`: `LEVEL_TARGET_HOURS` times `XP_PER_SECOND` (0.5) up to level 6, and times
+  `XP_PER_SECOND_LATE` (0.51) after it. Levels 3 to 6 were moved later than the design doc's table after Rob's
+  play test (they came too fast); do not move them earlier.
 - "Create a new hero" replaces the current hero; the roster of three is Phase 6. No in-game credits screen yet (Phase 7).
 - `sprite.js` draws the front of every shield above hats (LPC puts it under them, which clipped wide brims).
 - Not baked yet: level milestone layers (cape clip), the other 18 hair colours.
+- Local preview: `.claude/launch.json` has three servers (ports 8771, 8773, 8779) so sessions do not collide.

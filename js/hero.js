@@ -3,7 +3,7 @@
 import { RACES, RACE_TRAITS, HAIR_COLORS, HAIR_STYLES } from '../data/races.js';
 import { CLASSES } from '../data/classes.js';
 import { NAMES } from '../data/names.js';
-import { START_REGION } from '../data/regions.js';
+import { REGIONS, REGION_INDEX, START_REGION } from '../data/regions.js';
 import { ARRIVAL } from '../data/chronicle.js';
 import { ABILITIES, MAX_LEVEL, mod, pick, roll, xpForLevel } from './rules.js';
 
@@ -71,6 +71,27 @@ const STARTING_GEAR = () => ({
   hands: { tier: 0 }, feet: { tier: 0 }, cloak: null, trinket: null,
 });
 
+// Everything Phase 3 keeps on a hero. state.js uses the same list to bring older saves up to date.
+//   travelTo        region the hero has been told to walk to, or null
+//   returning       true while walking back out after a knockout
+//   questProgress   per region: { done (story quests finished), step, started, odd (odd jobs done), job }
+//   dungeonClears   per region: times its dungeon has been cleared
+//   delve           the dungeon run in progress: { region, room, rooms, potions, stubborn }, or null
+//   delveFails      per region: knockouts in a row in its dungeon
+//   grudges         what has knocked the hero out (the Dwarf quirk reads it)
+//   unread          story chapters earned and not yet shown as a card
+export const ADVENTURE_FIELDS = () => ({
+  travelTo: null, returning: false, questProgress: {}, dungeonClears: {}, delve: null, delveFails: {}, grudges: {}, unread: [],
+});
+export const STATS = { knockouts: 0, mostEmbarrassingDefeat: null, natural20s: 0, natural1s: 0, tasks: 0, quests: 0, oddJobs: 0, dungeonRuns: 0, dungeonClears: 0 };
+
+// A region is open once the dungeon of the region before it has been cleared. The first always is.
+export function regionOpen(hero, regionId) {
+  const i = REGION_INDEX[regionId];
+  if (i == null) return false;
+  return i === 0 || (hero.dungeonClears[REGIONS[i - 1].id] ?? 0) > 0;
+}
+
 // `baseScores` are the six ability scores already assigned to abilities, before the race bonus.
 export function createHero(state, { name, race, cls, appearance, baseScores }) {
   const hero = {
@@ -92,11 +113,10 @@ export function createHero(state, { name, race, cls, appearance, baseScores }) {
     focus: 'roam',
     currentTask: null,
     knockedOutUntil: null,
-    questProgress: {},
-    dungeonClears: {},
+    ...ADVENTURE_FIELDS(),
     bestiary: {},
     feats: [],
-    stats: { knockouts: 0, mostEmbarrassingDefeat: null, natural20s: 0, natural1s: 0, tasks: 0 },
+    stats: { ...STATS },
     age: 0, // seconds this hero has existed; the Chronicle's clock
     lines: 0, // Chronicle lines ever written
     chronicle: [],

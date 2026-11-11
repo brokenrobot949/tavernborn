@@ -1,82 +1,42 @@
 // The pacing simulator's engine, shared by tools/simulate.html (charts) and tools/simulate.mjs
 // (a table in the terminal). Dev-only: the game never loads this file.
 //
-// Every hero here is run by the real `advance(state, seconds)` from js/sim.js. Nothing about
-// rolls, XP, damage, potions, or knockouts is copied.
+// Every hero here is run by the real `advance(state, seconds)` from js/sim.js, in the real eight
+// regions with their real monsters, quests, and dungeons. Nothing about rolls, XP, damage, potions,
+// travel, or knockouts is copied or stood in for.
 //
-// STAND-INS. Only Mugwick Vale has monsters so far, and its toughest is level 3. A level 12 hero
-// left there never misses and is never hurt, which says nothing about the finished game. So for
-// every region that has no monsters in data/monsters.js yet, this file makes nine temporary ones
-// from the Vale's nine and moves the hero up the road as they level:
-//   level   the region's lowest, middle, and highest level (three monsters each)
-//   dc      10 + proficiency at that level, plus the Vale monster's 0 or 1 extra, so the roll
-//           stays about as hard as it is for a new hero in the Vale
-//   dmg     the Vale monster's damage die, scaled with a typical hero's hit points
-//   xp, secs  unchanged, so a hero at the right level earns XP at the Vale's rate
-//   gold    scaled with the price of a potion
-// The stand-ins exist only in memory while the simulator runs. Phase 3's real monsters replace
-// them automatically: a region with real monsters is never given stand-ins.
+// THE PLAYER. The one thing the simulator has to invent is the player, who in the real game picks
+// a focus and says when to travel. `steer` plays a sensible one, using the same orders the Map tab
+// uses (setFocus, orderTravel):
+//   - roam until level 2 (a new hero's focus is Roam), then
+//   - try the region's dungeon on reaching the level it is built for
+//   - if the hero loses confidence there (three knockouts running), wait for the next level
+//   - once it is cleared and the hero has reached the next region's range, walk there
+//   - otherwise: 'balanced' does the region's six story quests and then roams;
+//                'roam' only ever roams
+// 'vale' keeps the hero roaming in Mugwick Vale for all 20 levels, to show what staying put costs.
 
 import { advance } from '../js/sim.js';
 import { newSave } from '../js/state.js';
 import { createHero, assignScores, defaultAppearance, STANDARD_ARRAY } from '../js/hero.js';
-import { MAX_LEVEL, LEVEL_TARGET_HOURS, proficiency, potionPrice } from '../js/rules.js';
+import { setFocus, orderTravel } from '../js/tasks.js';
+import { MAX_LEVEL, LEVEL_TARGET_HOURS, STORY_QUESTS, WHAT_IF } from '../js/rules.js';
 import { CLASSES } from '../data/classes.js';
 import { RACES } from '../data/races.js';
-import { REGIONS, START_REGION } from '../data/regions.js';
-import { MONSTERS, MONSTER_BY_ID } from '../data/monsters.js';
+import { REGIONS, REGION_INDEX } from '../data/regions.js';
+import { MONSTERS } from '../data/monsters.js';
+import { DUNGEONS } from '../data/dungeons.js';
 
 export { MAX_LEVEL, LEVEL_TARGET_HOURS, CLASSES, RACES, REGIONS };
 export const CLASS_IDS = Object.keys(CLASSES);
 export const RACE_IDS = Object.keys(RACES);
 export const DAY = 86400;
+export const LAST_REGION = REGIONS[REGIONS.length - 1].id;
 
-// Hit points of a middling hero (d8 class, Constitution 14) at a level; only used to scale damage.
-const typicalHp = (level) => 8 + (level - 1) * 5 + level * 2;
-
-const standInRegions = new Set();
-const realDamage = new Map(); // monster -> its damage die before the "what if" multiplier
-
-function standIn(region, t, template) {
-  const [lo, hi] = region.levels;
-  const level = t.level <= 1 ? lo : t.level >= 3 ? hi : Math.round((lo + hi) / 2);
-  const easiest = Math.min(...template.filter((m) => m.level === t.level).map((m) => m.dc));
-  const goldScale = potionPrice(level) / potionPrice(t.level);
-  return {
-    ...t,
-    id: `standin_${region.id}_${t.id}`,
-    name: `${region.name} stand-in (${t.name})`,
-    level,
-    dc: 10 + proficiency(level) + (t.dc - easiest),
-    dmg: Math.max(1, Math.round((t.dmg * typicalHp(level)) / typicalHp(t.level))),
-    gold: [Math.round(t.gold[0] * goldScale), Math.round(t.gold[1] * goldScale)],
-    standIn: true,
-  };
-}
-
-// Make sure every region has monsters, and apply the "what if monsters hit harder" multiplier
-// (1 = the game's real numbers). Safe to call again with a different multiplier.
+// Set the "what if monsters hit harder" multiplier (1 = the game as built) and describe the world.
 export function prepareWorld({ damageTimes = 1 } = {}) {
-  const template = MONSTERS[START_REGION];
-  for (const region of REGIONS) {
-    if (MONSTERS[region.id] && !standInRegions.has(region.id)) continue;
-    standInRegions.add(region.id);
-    MONSTERS[region.id] = template.map((t) => standIn(region, { ...t, dmg: realDamage.get(t) ?? t.dmg }, template));
-    for (const m of MONSTERS[region.id]) MONSTER_BY_ID[m.id] = m;
-  }
-  for (const m of Object.values(MONSTERS).flat()) {
-    if (!realDamage.has(m)) realDamage.set(m, m.dmg);
-    m.dmg = Math.max(1, Math.round(realDamage.get(m) * damageTimes));
-  }
-  return REGIONS.map((r) => ({ id: r.id, name: r.name, levels: r.levels, standIn: standInRegions.has(r.id), monsters: MONSTERS[r.id] }));
-}
-
-// The furthest region whose level range the hero has reached. Travel is Phase 3; here the hero
-// simply turns up.
-export function regionFor(level) {
-  let id = START_REGION;
-  for (const r of REGIONS) if (level >= r.levels[0]) id = r.id;
-  return id;
+  WHAT_IF.damage = damageTimes;
+  return REGIONS.map((r) => ({ id: r.id, name: r.name, levels: r.levels, monsters: MONSTERS[r.id], dungeon: DUNGEONS[r.id] }));
 }
 
 // Hero number `i` of a run: classes and races take turns so all 24 pairs get an equal share.
@@ -84,38 +44,64 @@ export function heroPlan(i, seedBase = 1) {
   return { seed: (seedBase * 100003 + i * 7919) >>> 0, cls: CLASS_IDS[i % CLASS_IDS.length], race: RACE_IDS[Math.floor(i / CLASS_IDS.length) % RACE_IDS.length] };
 }
 
-// Run one hero from creation to level 20 (or `maxDays`). `world` is 'road' (move up the regions as
-// levels allow) or 'vale' (stay in Mugwick Vale, which is the game as built today).
-export function runHero({ seed, cls, race }, { world = 'road', maxDays = 60, chunk = 900 } = {}) {
+// The simulated player's standing orders, re-read every few minutes of game time.
+function steer(hero, sim, style) {
+  const i = REGION_INDEX[hero.region];
+  const region = REGIONS[i];
+  const next = REGIONS[i + 1];
+  const cleared = (hero.dungeonClears[region.id] ?? 0) > 0;
+  if (cleared && next && hero.level >= next.levels[0] && hero.travelTo !== next.id) orderTravel(hero, next.id);
+  const ready = hero.level >= Math.max(region.levels[1] - sim.early, sim.retryAt[region.id] ?? 0);
+  const storyLeft = (hero.questProgress[region.id]?.done ?? 0) < STORY_QUESTS;
+  const focus = !cleared && ready ? 'delve' : style === 'balanced' && storyLeft && hero.level >= 2 ? 'quest' : 'roam';
+  if (focus !== hero.focus) setFocus(hero, focus);
+}
+
+// Run one hero from creation until they are level 20 and have cleared the last dungeon (or
+// `maxDays`). `world` is 'road' or 'vale'; `style` is 'balanced' or 'roam'.
+export function runHero({ seed, cls, race }, { world = 'road', style = 'balanced', early = 0, maxDays = 60, chunk = 300 } = {}) {
   const save = newSave(seed, 0);
   const hero = createHero(save, { name: 'Sim', race, cls, appearance: defaultAppearance(race), baseScores: assignScores(cls, STANDARD_ARRAY) });
   save.heroes.push(hero);
   save.activeHeroId = hero.id;
-  const out = { cls, race, reach: new Array(MAX_LEVEL + 1).fill(null), knockouts: 0, potions: 0, koSeconds: 0, koAtLevel: new Array(MAX_LEVEL + 1).fill(0), tasks: 0, level: 1 };
+  const out = {
+    cls, race, reach: new Array(MAX_LEVEL + 1).fill(null), knockouts: 0, potions: 0, koSeconds: 0, koAtLevel: new Array(MAX_LEVEL + 1).fill(0),
+    koBy: { roam: 0, quest: 0, delve: 0, boss: 0 }, clears: {}, runsLost: {}, quests: 0, feats: 0, tasks: 0, level: 1,
+  };
+  const sim = { retryAt: {}, early }; // `early`: levels below the dungeon's own at which to first try it
+  const road = world === 'road';
   const limit = maxDays * DAY;
-  while (hero.level < MAX_LEVEL && hero.age < limit) {
+  const finished = () => hero.level >= MAX_LEVEL && (!road || out.clears[LAST_REGION]);
+  if (road) steer(hero, sim, style);
+  while (!finished() && hero.age < limit) {
     for (const e of advance(save, chunk)) {
       if (e.type === 'levelup') out.reach[e.level] = e.at;
-      else if (e.type === 'knockout') { out.knockouts += 1; out.koSeconds += e.seconds; out.koAtLevel[hero.level] += 1; }
-      else if (e.type === 'potion') out.potions += 1;
+      else if (e.type === 'knockout') {
+        out.knockouts += 1; out.koSeconds += e.seconds; out.koAtLevel[hero.level] += 1; out.koBy[e.source] += 1;
+        if (e.lost === 'run') out.runsLost[e.region] = (out.runsLost[e.region] ?? 0) + 1;
+      } else if (e.type === 'potion') out.potions += 1;
+      else if (e.type === 'cleared' && e.first) out.clears[e.region] = { at: e.at, level: hero.level };
+      else if (e.type === 'confidence') sim.retryAt[e.region] = Math.min(MAX_LEVEL, hero.level + 1);
+      else if (e.type === 'questdone' && e.story) out.quests += 1;
+      else if (e.type === 'feat') out.feats += 1;
     }
-    if (world === 'road') {
-      const region = regionFor(hero.level);
-      if (region !== hero.region) { hero.region = region; hero.currentTask = null; }
-    }
+    if (road) steer(hero, sim, style);
   }
   out.tasks = hero.stats.tasks;
+  out.runs = hero.stats.dungeonRuns;
   out.level = hero.level;
   out.gold = hero.gold;
+  out.age = hero.age;
   return out;
 }
 
 const quantile = (sorted, q) => (sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))] : null);
 const mean = (list) => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : 0);
+const sorted = (list) => list.filter((v) => v != null).sort((a, b) => a - b);
 
 // Seconds to reach `level` across a set of results: 10th percentile, median, 90th, and how many got there.
 export function spread(results, level) {
-  const times = results.map((r) => r.reach[level]).filter((t) => t != null).sort((a, b) => a - b);
+  const times = sorted(results.map((r) => r.reach[level]));
   return { count: times.length, p10: quantile(times, 0.1), median: quantile(times, 0.5), p90: quantile(times, 0.9), min: times[0] ?? null, max: times[times.length - 1] ?? null };
 }
 
@@ -128,10 +114,23 @@ export function summarize(results) {
       id, heroes: rs.length,
       l5: spread(rs, 5).median, l10: spread(rs, 10).median, l20: spread(rs, MAX_LEVEL).median,
       knockouts: mean(rs.map((r) => r.knockouts)), potions: mean(rs.map((r) => r.potions)),
+      clearedLast: rs.filter((r) => r.clears[LAST_REGION]).length,
     };
   });
   const koByLevel = [];
-  for (let level = 1; level < MAX_LEVEL; level++) koByLevel.push({ level, perHero: mean(results.map((r) => r.koAtLevel[level])) });
+  for (let level = 1; level <= MAX_LEVEL; level++) koByLevel.push({ level, perHero: mean(results.map((r) => r.koAtLevel[level])) });
+  // Dungeons: how many heroes cleared each, when, at what level, and how many runs they lost there.
+  const dungeons = REGIONS.map((r) => {
+    const got = results.filter((x) => x.clears[r.id]);
+    return {
+      id: r.id, name: DUNGEONS[r.id].name, builtFor: DUNGEONS[r.id].level, cleared: got.length,
+      at: quantile(sorted(got.map((x) => x.clears[r.id].at)), 0.5),
+      level: quantile(sorted(got.map((x) => x.clears[r.id].level)), 0.5),
+      runsLost: mean(results.map((x) => x.runsLost[r.id] ?? 0)),
+    };
+  });
+  const koBy = {};
+  for (const k of ['roam', 'quest', 'delve', 'boss']) koBy[k] = mean(results.map((r) => r.koBy[k]));
   return {
     heroes: results.length,
     finished: results.filter((r) => r.level >= MAX_LEVEL).length,
@@ -139,11 +138,17 @@ export function summarize(results) {
     byClass: group('cls', CLASS_IDS),
     byRace: group('race', RACE_IDS),
     koByLevel,
+    koBy,
+    dungeons,
+    clearedLast: results.filter((r) => r.clears[LAST_REGION]).length,
     knockouts: mean(results.map((r) => r.knockouts)),
     knockoutFree: results.filter((r) => r.knockouts === 0).length,
     potions: mean(results.map((r) => r.potions)),
     koHours: mean(results.map((r) => r.koSeconds)) / 3600,
     tasks: mean(results.map((r) => r.tasks)),
+    quests: mean(results.map((r) => r.quests)),
+    feats: mean(results.map((r) => r.feats)),
+    runs: mean(results.map((r) => r.runs ?? 0)),
   };
 }
 

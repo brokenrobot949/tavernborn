@@ -1,29 +1,183 @@
-// Map tab. Phase 1 has one open region and one focus (Roam); the drawn world map, travel, and
-// the other seven regions arrive in Phase 3.
+// Map tab: the world map (drawn in code, nothing to download), the details of the region tapped,
+// travel, and the standing order: Roam, Quest, or Delve.
+//
+// The page is rebuilt only when something it shows has changed, so a tap is never lost to the
+// once-a-second redraw.
 
-import { REGIONS } from '../../data/regions.js';
+import { REGIONS, REGION_INDEX } from '../../data/regions.js';
 import { MONSTERS } from '../../data/monsters.js';
+import { DUNGEONS } from '../../data/dungeons.js';
+import { CHAPTERS } from '../../data/story.js';
+import { regionOpen } from '../hero.js';
+import { currentQuest, setFocus, orderTravel } from '../tasks.js';
+import { STORY_QUESTS, TRAVEL_SECONDS_PER_REGION } from '../rules.js';
 import { el, pressBtn } from './dom.js';
+import { showChapter } from './story.js';
 
-export function mountMap(root) {
-  function update(state, hero) {
-    const cards = REGIONS.map((r, i) => {
-      const here = r.id === hero.region;
-      const head = el('div', { className: 'region-head' },
-        el('h3', { textContent: `${i + 1}. ${r.name}` }),
-        el('span', { className: 'tag', textContent: here ? 'You are here' : 'Locked' }));
-      const levels = el('p', { className: 'hint', textContent: `Levels ${r.levels[0]} to ${r.levels[1]}. ${r.flavor}` });
-      if (!here) return el('section', { className: 'panel region locked' }, head, levels);
-      const all = MONSTERS[r.id];
-      const met = all.filter((m) => hero.bestiary[m.id]).length;
-      const off = (label) => { const b = pressBtn(label, false, null); b.disabled = true; return b; };
-      return el('section', { className: 'panel region' }, head, levels,
-        el('p', { className: 'region-line', textContent: `Monsters defeated at least once: ${met} of ${all.length}.` }),
-        el('p', { className: 'region-line', textContent: `Dungeon: ${r.dungeon}. The door is stuck for now.` }),
-        el('div', { className: 'row focus' }, el('span', { className: 'label', textContent: 'Focus' }), pressBtn('Roam', true, null), off('Quest'), off('Delve')),
-        el('p', { className: 'hint', textContent: 'Roam: the hero fights the region\'s monsters one at a time. Quests and dungeons open in a later build.' }));
+const NS = 'http://www.w3.org/2000/svg';
+const svg = (tag, attrs = {}, ...kids) => {
+  const node = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  node.append(...kids.filter(Boolean));
+  return node;
+};
+
+// Where each region sits on the parchment (viewBox 340 x 400), in road order from the tavern at
+// the bottom left to the volcano at the top, and a small doodle for each.
+const SPOTS = [
+  { x: 62, y: 348, doodle: 'M-46 -4h14v-9l-7 -6l-7 6z M-41 -4v-5h4v5 M-35 -17v-4' }, // the tavern
+  { x: 188, y: 326, doodle: 'M26 4l6 -14l6 14z M36 6l7 -17l7 17z M30 12v-8 M43 14v-8' }, // trees
+  { x: 284, y: 262, doodle: 'M-44 20q5 -6 10 0t10 0t10 0 M-40 28q5 -6 10 0t10 0' }, // waves
+  { x: 176, y: 214, doodle: 'M26 8l10 -20l7 10l6 -8l9 18z' }, // peaks
+  { x: 58, y: 178, doodle: 'M26 10v-14 M31 10v-18 M36 10v-12 M22 12h20 M26 -4l-3 -3 M31 -8l3 -3' }, // reeds
+  { x: 150, y: 112, doodle: 'M-46 12q10 -12 20 0 M-34 16q8 -9 16 0 M-40 -6a4 4 0 1 0 0.1 0' }, // dunes and a sun
+  { x: 268, y: 122, doodle: 'M26 -12l4 12l4 -12z M36 -12l3 9l3 -9z M26 10l5 -8l5 8z' }, // stalactites
+  { x: 236, y: 44, doodle: 'M-52 14l14 -26h8l14 26z M-36 -14q-2 -6 2 -9t0 -9' }, // the volcano
+];
+
+// A smooth road through the eight spots.
+function roadPath() {
+  // A Catmull-Rom curve written as cubic segments, so the road passes through every spot.
+  const at = (i) => SPOTS[Math.max(0, Math.min(SPOTS.length - 1, i))];
+  let d = `M${SPOTS[0].x} ${SPOTS[0].y}`;
+  for (let i = 0; i < SPOTS.length - 1; i++) {
+    const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
+    const c1 = [p1.x + (p2.x - p0.x) / 6, p1.y + (p2.y - p0.y) / 6];
+    const c2 = [p2.x - (p3.x - p1.x) / 6, p2.y - (p3.y - p1.y) / 6];
+    d += ` C${c1[0].toFixed(1)} ${c1[1].toFixed(1)} ${c2[0].toFixed(1)} ${c2[1].toFixed(1)} ${p2.x} ${p2.y}`;
+  }
+  return d;
+}
+
+const FOCUS_LABEL = { roam: 'Roam', quest: 'Quest', delve: 'Delve' };
+const times = (n) => (n === 1 ? 'once' : n === 2 ? 'twice' : `${n} times`);
+
+export function mountMap(root, app) {
+  let selected = null; // region id whose details are showing; follows the hero until tapped
+  let followed = null;
+  let key = '';
+
+  function draw(hero) {
+    const here = REGION_INDEX[hero.region];
+    const map = svg('svg', { viewBox: '0 0 340 400', class: 'worldmap', role: 'group', 'aria-label': 'World map: eight regions along the road from The Wobbly Griffin' });
+    map.append(
+      svg('rect', { x: 3, y: 3, width: 334, height: 394, rx: 10, class: 'map-edge' }),
+      svg('path', { d: roadPath(), class: 'road-bed' }),
+      svg('path', { d: roadPath(), class: 'road' }));
+    REGIONS.forEach((r, i) => {
+      const s = SPOTS[i];
+      const open = regionOpen(hero, r.id);
+      const state = i === here ? 'here' : open ? 'open' : 'locked';
+      const words = r.name.replace(/^The /, '').split(' ');
+      const label = svg('text', { x: 0, y: 34, class: 'map-name' });
+      label.textContent = words.length > 2 ? words.slice(0, 2).join(' ') : words.join(' ');
+      const number = svg('text', { x: 0, y: 5, class: 'map-num' });
+      number.textContent = String(i + 1);
+      const node = svg('g', {
+        transform: `translate(${s.x} ${s.y})`, class: `spot ${state}${r.id === selected ? ' picked' : ''}${hero.travelTo === r.id ? ' bound' : ''}`,
+        role: 'button', tabindex: 0, 'aria-pressed': String(r.id === selected),
+        'aria-label': `${r.name}, levels ${r.levels[0]} to ${r.levels[1]}, ${state === 'here' ? 'you are here' : state}`,
+      },
+        svg('path', { d: s.doodle, class: 'doodle' }),
+        svg('circle', { r: 24, class: 'hit' }),
+        svg('circle', { r: 15, class: 'dot' }),
+        r.id === selected ? svg('circle', { r: 20, class: 'ring' }) : null,
+        number, label);
+      const pickIt = () => { selected = r.id; app.changed(); };
+      node.addEventListener('click', pickIt);
+      node.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickIt(); } });
+      map.append(node);
     });
-    root.replaceChildren(el('h2', { className: 'view-title', textContent: 'The road from The Wobbly Griffin' }), ...cards);
+    return map;
+  }
+
+  function details(state, hero) {
+    const i = REGION_INDEX[selected];
+    const r = REGIONS[i];
+    const d = DUNGEONS[r.id];
+    const here = r.id === hero.region;
+    const open = regionOpen(hero, r.id);
+    const bound = hero.travelTo === r.id;
+    const line = (text) => el('p', { className: 'region-line', textContent: text });
+    const head = el('div', { className: 'region-head' },
+      el('h3', { textContent: `${i + 1}. ${r.name}` }),
+      el('span', { className: 'tag', textContent: here ? 'You are here' : bound ? 'On the way' : open ? 'Open' : 'Locked' }));
+    const levels = el('p', { className: 'hint', textContent: `Levels ${r.levels[0]} to ${r.levels[1]}. ${r.flavor}` });
+    if (!open) {
+      const before = REGIONS[i - 1];
+      return el('section', { className: 'panel region locked' }, head, levels,
+        line(`A sketch on the map and nothing more. The road opens when ${DUNGEONS[before.id].name}, in ${before.name}, has been cleared.`));
+    }
+
+    const all = MONSTERS[r.id];
+    const met = all.filter((m) => hero.bestiary[m.id]).length;
+    const qp = hero.questProgress[r.id];
+    const story = qp?.done ?? 0;
+    const quest = here && hero.focus === 'quest' && qp?.started ? currentQuest(hero) : null;
+    const clears = hero.dungeonClears[r.id] ?? 0;
+    const run = here && hero.delve ? hero.delve : null;
+    const kids = [head, levels];
+    if (hero.level < r.levels[0]) kids.push(line(`Above ${hero.name}'s level (${hero.level}). Fights here pay more XP and end in the tavern far more often.`));
+    kids.push(
+      line(`Monsters defeated at least once: ${met} of ${all.length}.`),
+      line(`Story quests: ${story} of ${STORY_QUESTS}.${hero.feats.includes(r.id) ? ' Feat earned.' : ''}${qp?.odd ? ` Odd jobs done: ${qp.odd}.` : ''}`),
+      quest ? line(`On the board now: ${quest.title}, step ${Math.min(qp.step + 1, quest.steps)} of ${quest.steps}.`) : null,
+      line(`Dungeon: ${d.name}, built for level ${d.level}. ${clears ? `Cleared ${times(clears)}.` : 'Not yet cleared.'}`),
+      run ? line(run.room >= run.rooms ? `Run in progress: every room done, ${d.boss.name} is next.` : `Run in progress: room ${run.room + 1} of ${run.rooms}.`) : null,
+      el('p', { className: 'hint', textContent: d.about }));
+
+    if (clears) {
+      const c = CHAPTERS[r.id];
+      kids.push(el('div', { className: 'row' }, el('button', { className: 'btn', type: 'button', textContent: `Read chapter ${c.n}: ${c.title}`, onclick: () => showChapter(document.getElementById('game'), r.id, hero) })));
+    }
+    if (!here) {
+      const hops = Math.max(1, Math.abs(i - REGION_INDEX[hero.region]));
+      const minutes = Math.round((hops * TRAVEL_SECONDS_PER_REGION) / 60 * 10) / 10;
+      kids.push(el('div', { className: 'row' }, bound
+        ? el('button', { className: 'btn', type: 'button', textContent: 'Cancel the journey', onclick: () => { orderTravel(hero, hero.region); app.changed(); } })
+        : el('button', { className: 'btn primary', type: 'button', textContent: 'Travel here', onclick: () => { orderTravel(hero, r.id); app.changed(); } })));
+      kids.push(el('p', { className: 'hint', textContent: bound
+        ? `${hero.name} sets off when the current task ends.`
+        : `About ${minutes} minutes on the road. ${hero.name} sets off when the current task ends.${hero.delve ? ' Leaving abandons the dungeon run in progress.' : ''}` }));
+    }
+    return el('section', { className: 'panel region' }, ...kids.filter(Boolean));
+  }
+
+  function orders(hero) {
+    const r = REGIONS[REGION_INDEX[hero.region]];
+    const d = DUNGEONS[r.id];
+    const about = {
+      roam: `Roam: ${hero.name} fights the monsters of ${r.name} one at a time. Low risk, steady XP, and it fills the Bestiary.`,
+      quest: `Quest: ${hero.name} takes jobs from the quest board, 5 to 8 steps each. Better gold, and finishing all ${STORY_QUESTS} story quests in a region earns a Feat, worth one bonus skill point. The gear piece each quest is meant to pay arrives with loot in a later build.`,
+      delve: `Delve: ${hero.name} runs ${d.name}, ${d.rooms[0]} to ${d.rooms[1]} rooms and then ${d.boss.name}. Hit points do not come back between rooms, and a knockout loses the run and nothing else. The first clear opens the next region. Built for level ${d.level}${hero.level < d.level ? `; at level ${hero.level} ${hero.name} will be outmatched.` : '.'}`,
+    }[hero.focus];
+    return el('section', { className: 'panel' },
+      el('h3', { textContent: `Standing order in ${r.name}` }),
+      el('div', { className: 'row focus' }, ...Object.entries(FOCUS_LABEL).map(([id, label]) => {
+        const b = pressBtn(label, hero.focus === id, () => { setFocus(hero, id); app.changed(); });
+        b.classList.add('grow');
+        return b;
+      })),
+      el('p', { className: 'hint', textContent: about }),
+      el('p', { className: 'hint', textContent: 'A new order takes effect when the current task ends.' }));
+  }
+
+  function update(state, hero) {
+    if (followed !== hero.id + hero.region) { followed = hero.id + hero.region; selected = hero.region; }
+    if (!REGION_INDEX[selected] && selected !== REGIONS[0].id) selected = hero.region;
+    const qp = hero.questProgress[selected];
+    const next = JSON.stringify([
+      hero.id, hero.name, hero.level, hero.region, hero.travelTo, hero.focus, selected, hero.dungeonClears, hero.feats.length,
+      qp?.done, qp?.step, qp?.odd, qp?.started, hero.delve?.room, hero.delve?.rooms,
+      MONSTERS[selected].filter((m) => hero.bestiary[m.id]).length,
+    ]);
+    if (next === key) return;
+    key = next;
+    root.replaceChildren(
+      el('h2', { className: 'view-title', textContent: 'The road from The Wobbly Griffin' }),
+      el('div', { className: 'map-frame' }, draw(hero)),
+      details(state, hero),
+      orders(hero));
   }
   return { update };
 }
