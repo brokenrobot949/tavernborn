@@ -4,6 +4,7 @@ import { REGION_BY_ID } from '../../data/regions.js';
 import { DUNGEONS } from '../../data/dungeons.js';
 import { foeName } from '../tasks.js';
 import { pending } from '../skills.js';
+import { TIERS } from '../../data/items.js';
 import { el, num, duration } from './dom.js';
 
 export function showAway(root, { seconds, summary: s, hero }) {
@@ -14,6 +15,9 @@ export function showAway(root, { seconds, summary: s, hero }) {
   const dungeons = (ids) => [...new Set(ids)].map((id) => DUNGEONS[id].name).join(', ');
   const item = (label, value) => el('li', {}, el('span', { textContent: label }), el('span', { textContent: value }));
   const waiting = pending(hero);
+  // Loot: how much turned up, and the best of what went on (the rarest first, three at most).
+  const worn = [...s.upgrades].sort((a, b) => b.tier - a.tier);
+  const best = worn.slice(0, 3).map((u) => `${u.name} (${TIERS[u.tier].name})`).join(', ') + (worn.length > 3 ? `, and ${worn.length - 3} more` : '');
   const rows = [
     s.levels.length ? item('Levels gained', `${s.levels.length} (now level ${hero.level})`) : item('Level', `${hero.level}, no change`),
     item('Tasks finished', num(s.tasks)),
@@ -31,6 +35,9 @@ export function showAway(root, { seconds, summary: s, hero }) {
     item('Knockouts', s.knockouts ? `${s.knockouts} (${names(s.knockedOutBy)})` : 'None'),
     s.runsLost ? item('Dungeon runs lost', num(s.runsLost)) : null,
     s.confidence.length ? item('Change of plan', `Roaming to rebuild confidence after ${dungeons(s.confidence)}`) : null,
+    s.found ? item('Gear found', `${num(s.found)} piece${s.found === 1 ? '' : 's'}, ${worn.length} better than what was worn`) : item('Gear found', 'None'),
+    worn.length ? item('Now wearing', best) : null,
+    s.found ? item('Sold', `${num(s.soldFor)} gp for the rest`) : null,
     s.potions ? item('Potions drunk', num(s.potions)) : null,
     s.newMonsters.length ? item('New in the Bestiary', names(s.newMonsters)) : null,
     s.moves ? item('Signature moves used', num(s.moves)) : null,

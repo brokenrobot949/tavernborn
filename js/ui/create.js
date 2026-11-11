@@ -93,14 +93,14 @@ export function mountCreate(root, state, onDone) {
       el('h2', { textContent: 'Class' }),
       row('Class', ...Object.entries(CLASSES).map(([id, c]) => pressBtn(c.name, draft.cls === id, () => { draft.cls = id; render(); }))),
       el('p', { className: 'hint', textContent: CLASS_NOTES[draft.cls] }),
-      el('p', { className: 'hint', textContent: 'Every hero starts in Common gear, hat included (left off here so you can see the hair). Better gear arrives with loot in a later build.' }),
+      el('p', { className: 'hint', textContent: 'Every hero starts in Common gear, hat included (left off here so you can see the hair). Better gear is found on the road and puts itself on.' }),
     ];
   }
 
   function stepAbilities() {
     const scores = abilities();
     const main = CLASSES[draft.cls].main;
-    const hp = maxHp({ class: draft.cls, level: 1, abilities: scores });
+    const hp = maxHp({ class: draft.cls, level: 1, abilities: scores, skills: [], gear: {} }); // a hero-to-be: no skills, no gear
     return [
       el('h2', { textContent: 'Ability scores' }),
       el('div', { className: 'abilities' }, ...ABILITIES.map((a) => el('div', { className: 'ability' + (a === main ? ' main' : '') },

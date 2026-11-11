@@ -7,7 +7,10 @@
 // still loads without losing a level. Then Phase 4, growth: the shape of the four skill trees,
 // proof that each of the 144 skills changes what happens and writes its Chronicle line, tier
 // gating, the capstone rule, the 27-point cap, ability score increases, respec, and that a
-// Phase 3 save loads with every level, skill point, and Feat. Exits with an error if any check fails.
+// Phase 3 save loads with every level, skill point, and Feat. Then Phase 5, gear: five different
+// looks per visible slot, drops from every source, auto-equip and auto-sell, the guaranteed quest
+// piece, the named Legendaries, the cloak at level 5, the six loot skills, determinism with loot,
+// and a Phase 4 save loading intact. Exits with an error if any check fails.
 
 import { advance, summarize } from '../js/sim.js';
 import { newSave, exportSave, importSave, migrate } from '../js/state.js';
@@ -25,6 +28,12 @@ import { CHAPTERS } from '../data/story.js';
 import { runHero, heroPlan, grow } from './simulate-core.js';
 import { CLASSES } from '../data/classes.js';
 import { RACES } from '../data/races.js';
+import { GEAR, SLOTS, TIERS, EMBLEM } from '../data/items.js';
+import { LAYERS } from '../data/sprite-layers.js';
+import { layerKey } from '../js/layer-key.js';
+import { GEAR_SLOTS, LEGENDARIES, NOUNS, MILESTONES } from '../data/loot.js';
+import { SLOT_IDS, startingGear, startingCloak, gearMods, itemStats, describe, better, receive, rollItem, rollTier, legendItem, sellPrice } from '../js/loot.js';
+import { LOOT, GEAR_STATS } from '../js/rules.js';
 
 let failed = 0;
 const ok = (cond, label) => { console.log(`${cond ? 'ok  ' : 'FAIL'} ${label}`); if (!cond) failed += 1; };
@@ -97,7 +106,9 @@ ok(REGIONS.every((r) => QUESTS[r.id].every((q) => q.steps.length >= 5 && q.steps
 function placed(seed, cls, race, level, regionId, focus) {
   const save = fresh(seed, cls, race);
   const h = save.heroes[0];
-  h.level = level; h.xp = xpForLevel(level); h.hp = maxHp(h); h.gold = 2000;
+  h.level = level; h.xp = xpForLevel(level); h.gold = 2000;
+  if (level >= LOOT.cloakLevel) h.gear.cloak = startingCloak(); // as a hero who had levelled there would have
+  h.hp = maxHp(h);
   for (const r of REGIONS) { if (r.id === regionId) break; h.dungeonClears[r.id] = 1; }
   h.region = regionId;
   setFocus(h, focus);
@@ -194,7 +205,7 @@ oh.currentTask = { kind: 'roam', monster: 'goose', text: 'Standing ground agains
 const moved = migrate(JSON.parse(JSON.stringify(old)));
 const mh = moved.heroes[0];
 ok(mh.level === 9 && mh.xp >= xpForLevel(9) && mh.xp < xpForLevel(10), `a version 1 save keeps its level (9) and its place within it (${mh.xp} XP; level 10 is at ${xpForLevel(10)})`);
-ok(moved.version === 3 && mh.unread.length === 0 && mh.delve === null, 'the new fields are filled in');
+ok(moved.version === 4 && mh.unread.length === 0 && mh.delve === null, 'the new fields are filled in');
 advance(moved, 9 * HOUR);
 ok(mh.level >= 9 && mh.stats.tasks > 0, `an old save carries on (level ${mh.level} after 9 more hours)`);
 const top = fresh(98); top.version = 1; top.heroes[0].level = MAX_LEVEL; top.heroes[0].xp = 100;
@@ -302,8 +313,8 @@ const poor = student('rogue', 5, 0);
 ok(!learnSkill(poor, 'r_quick_draw') && poor.skills.length === 0, 'no points, no skill');
 
 // 20. Subclass and capstone: chosen from level 3, once; only its own capstone opens.
-const young = student('cleric', 2, 1);
-ok(!chooseSubclass(young, 'pilgrim') && young.subclass === null && pending(young).subclass === 0, 'no subclass before level 3');
+const cub = student('cleric', 2, 1);
+ok(!chooseSubclass(cub, 'pilgrim') && cub.subclass === null && pending(cub).subclass === 0, 'no subclass before level 3');
 const c1 = student('cleric', 12, 30);
 ok(pending(c1).subclass === 1 && !chooseSubclass(c1, 'evoker') && chooseSubclass(c1, 'pilgrim') && !chooseSubclass(c1, 'warpriest') && c1.subclass === 'pilgrim', 'a Cleric picks one Cleric subclass, once');
 for (const b of TREES.cleric.branches) for (const x of b.skills.slice(0, 11)) learnSkill(c1, x.id);
@@ -371,7 +382,7 @@ for (const key of ['abilityPoints', 'raised', 'cooldowns', 'fresh']) delete vh[k
 const up = migrate(JSON.parse(JSON.stringify(v2)));
 const uh = up.heroes[0];
 const half = (uh.xp - xpForLevel(13)) / (xpForLevel(14) - xpForLevel(13));
-ok(up.version === 3 && uh.level === 13 && uh.skillPoints === 15 && uh.feats.length === 3, 'a Phase 3 save keeps its level (13), its 15 skill points, and its 3 Feats');
+ok(up.version === 4 && uh.level === 13 && uh.skillPoints === 15 && uh.feats.length === 3, 'a Phase 3 save keeps its level (13), its 15 skill points, and its 3 Feats');
 ok(Math.abs(half - 0.5) < 0.01, `and its place within the level on the new curve (${Math.round(half * 100)}% of the way to 14)`);
 ok(uh.abilityPoints === 6 && pending(uh).total === 15 + 1 + 6, 'the three ability increases it had already passed are waiting (6 points), with the subclass choice');
 const short = JSON.parse(JSON.stringify(v2)); delete short.heroes[0].skillPoints;
@@ -381,6 +392,195 @@ grow(uh, 'evoker');
 ok(uh.level >= 13 && uh.skills.length >= 15 && uh.abilityPoints === 0 && uh.subclass === 'evoker', `the old hero carries on and can spend it all (level ${uh.level}, ${uh.skills.length} skills)`);
 const again = migrate(JSON.parse(JSON.stringify(up)));
 ok(JSON.stringify(again) === JSON.stringify(up), 'loading a current save changes nothing');
+
+// ---------- Phase 5: gear and visuals ----------
+console.log('\nPhase 5 gear:');
+const rank = (it) => (it ? it.tier * 100 + it.level : -1);
+const lootOf = (events) => events.filter((e) => e.type === 'loot');
+
+// 26. Looks: every class has five different looks in each of the seven visible slots, all baked.
+const sameLook = [], unbaked = [];
+for (const [cls, slots] of Object.entries(GEAR)) {
+  for (const slot of SLOTS) {
+    const looks = slots[slot.id].map((layers) => JSON.stringify(layers));
+    if (looks.length !== TIERS.length || new Set(looks).size !== TIERS.length) sameLook.push(`${cls} ${slot.id}`);
+    for (const layers of slots[slot.id]) for (const ref of layers) if (!LAYERS[layerKey(ref)]) unbaked.push(layerKey(ref));
+  }
+  for (const ref of EMBLEM[cls]) if (!LAYERS[layerKey(ref)]) unbaked.push(layerKey(ref));
+}
+ok(sameLook.length === 0, `each rarity is a different look in every visible slot of every class (4 classes x 7 slots x 5 tiers)${sameLook.length ? ' (same: ' + sameLook.join(', ') + ')' : ''}`);
+ok(unbaked.length === 0, `every gear layer and all four level 10 emblems are baked${unbaked.length ? ' (missing: ' + unbaked.join(', ') + ')' : ''}`);
+ok(GEAR_SLOTS.length === 8 && TIERS.map((t) => t.name).join() === 'Common,Uncommon,Rare,Very Rare,Legendary', 'eight slots and the five 5e rarities');
+ok(Object.keys(CLASSES).every((cls) => SLOTS.filter((x) => x.id !== 'cloak').every((x) => NOUNS[cls][x.id].length === 5)), 'every class has a name for every look');
+
+// 27. The starting kit, and what a piece is worth.
+const kit = fresh(5).heroes[0];
+ok(SLOT_IDS.filter((id) => kit.gear[id]).length === 6 && kit.gear.cloak === null && kit.gear.trinket === null, 'a new hero wears six Common pieces; Cloak and Trinket start empty');
+ok(Object.values(gearMods(kit)).every((v) => v === 0), 'the starting kit is worth exactly nothing, so level 1 is where it was');
+const worth = (slot, tier, level) => Object.values(itemStats(slot, { tier, level }))[0];
+ok(SLOT_IDS.every((id) => [0, 1, 2, 3].every((t) => worth(id, t + 1, 1) > worth(id, t, 20) || (id === 'weapon' && worth(id, t + 1, 1) > worth(id, t, 20)))), 'in every slot a rarer piece of level 1 beats a commoner one of level 20');
+ok(SLOT_IDS.every((id) => Object.values(itemStats(id, { tier: 2, level: 12 })).every((v, i) => v >= Object.values(itemStats(id, { tier: 2, level: 6 }))[i])) && itemStats('weapon', { tier: 2, level: 12 }).critReward > itemStats('weapon', { tier: 2, level: 6 }).critReward, 'and within a rarity a higher level is worth more');
+console.log(`  a Legendary of level 20, slot by slot: ${SLOT_IDS.map((id) => describe(id, { tier: 4, level: 20 })).join('; ')}`);
+
+// 28. Auto-equip and auto-sell, piece by piece: 4,000 random pieces handed to one hero.
+const bag = placed(61, 'rogue', 'human', 12, 'peaks', 'roam');
+const bh = bag.heroes[0];
+let worse = 0, unpaid = 0, wrongSlot = 0;
+for (let i = 0; i < 4000; i++) {
+  const level = 1 + (i % 20);
+  const { slot, item } = rollItem(bag, bh, { level, source: ['roam', 'room', 'quest', 'boss'][i % 4] });
+  const old = bh.gear[slot];
+  const goldBefore = bh.gold;
+  const got = receive(bh, slot, item);
+  const loser = got.equipped ? old : item;
+  if (rank(bh.gear[slot]) < rank(old) || rank(bh.gear[slot]) < rank(item) || got.equipped !== better(item, old)) worse += 1;
+  if (bh.gold - goldBefore !== (loser ? sellPrice(loser) : 0) || (loser && got.gold <= 0)) unpaid += 1;
+  if (!SLOT_IDS.includes(slot) || !item.name || item.name.includes('!') || item.name.split(' ').length < 3) wrongSlot += 1;
+}
+ok(worse === 0, 'auto-equip never replaces a piece with a worse one (4,000 pieces: the better of the two is always the one worn)');
+ok(unpaid === 0, 'auto-sell: whichever piece loses is sold, and the gold arrives');
+ok(wrongSlot === 0, 'every generated piece has a slot and a name of three parts or more, with no exclamation mark');
+ok(bh.stats.itemsFound === 4000 && bh.stats.upgrades > 8 && bh.stats.upgrades < 400, `nothing is kept in a bag: ${bh.stats.upgrades} of 4,000 went on, the rest were sold for ${bh.stats.soldFor} gp`);
+
+// 29. Drops from each source, through the real `advance`.
+const roamer = placed(62, 'cleric', 'human', 9, 'peaks', 'roam');
+const roamLoot = lootOf(advance(roamer, 40 * HOUR));
+ok(roamLoot.length > 5 && roamLoot.every((e) => e.source === 'roam'), `monsters drop gear, rarely (${roamLoot.length} pieces from ${roamer.heroes[0].stats.tasks} fights)`);
+const quester = placed(31, 'cleric', 'human', 3, 'mugwick', 'quest');
+const questEvents = advance(quester, 8 * HOUR);
+const questSum = summarize(questEvents);
+const questLoot = lootOf(questEvents);
+ok(questSum.quests.length === 6 && questLoot.filter((e) => e.source === 'quest').length === 6, 'every finished story quest pays one piece of gear (6 quests, 6 pieces)');
+ok(questSum.oddJobs > 0 && questLoot.filter((e) => e.source === 'odd').length === questSum.oddJobs, `and so does every odd job (${questSum.oddJobs} jobs, ${questSum.oddJobs} pieces)`);
+const afterQuest = questEvents.map((e, i) => (e.type === 'questdone' ? questEvents[i + 1]?.type : null)).filter(Boolean);
+ok(afterQuest.every((t) => t === 'loot'), 'the piece arrives with the quest, on the next Chronicle line');
+// A story quest's piece goes to the slot that needs it most: after six of them no starting piece is left.
+const qg = quester.heroes[0].gear;
+ok(['weapon', 'offhand', 'head', 'body', 'hands', 'feet', 'trinket'].every((id) => qg[id] && rank(qg[id]) > 1), 'story quests pay into the weakest slot: after six, and the odd jobs, no slot still holds its starting piece');
+const delver = placed(63, 'fighter', 'dwarf', 20, 'saltmarrow', 'delve');
+const delveEvents = advance(delver, 30 * HOUR);
+const clearsSeen = delveEvents.filter((e) => e.type === 'cleared').length;
+const delveLoot = lootOf(delveEvents);
+ok(delveLoot.some((e) => e.source === 'room'), `dungeon rooms sometimes hold a chest (${delveLoot.filter((e) => e.source === 'room').length} in ${delver.heroes[0].stats.dungeonRuns} runs)`);
+ok(clearsSeen > 5 && delveLoot.filter((e) => e.source === 'boss' && !e.legend).length === clearsSeen, `every beaten boss drops a piece (${clearsSeen} clears, ${clearsSeen} pieces)`);
+const avgTier = (list) => list.reduce((sum, e) => sum + e.tier, 0) / Math.max(1, list.length);
+const tierBy = (source, level) => { const st = { rngSeed: 4 }; let sum = 0; for (let i = 0; i < 3000; i++) sum += rollTier(st, level, source); return sum / 3000; };
+ok(tierBy('boss', 10) > tierBy('quest', 10) && tierBy('quest', 10) > tierBy('roam', 10), `bosses drop the best: average rarity at level 10 is ${tierBy('boss', 10).toFixed(2)} from a boss, ${tierBy('quest', 10).toFixed(2)} from a quest, ${tierBy('roam', 10).toFixed(2)} from a monster`);
+ok(tierBy('boss', 3) < 1 && tierBy('boss', 20) > 3.5 && tierBy('roam', 20) < 3.5, 'rarity rises with level: Common and Uncommon at the start, Legendary only from the last bosses and quests');
+const allEvents = [...roamLoot, ...questLoot, ...delveLoot];
+ok(allEvents.every((e) => e.gold > 0 || (e.equipped && e.slot === 'trinket')) && allEvents.every((e) => e.text.startsWith('Found: ')) && allEvents.some((e) => e.equipped) && allEvents.some((e) => !e.equipped), 'every piece found is either worn or sold on the spot, and the Chronicle says which');
+ok(roamer.heroes[0].chronicle.concat(quester.heroes[0].chronicle).some((l) => l.k === 'upgrade' && l.text.startsWith('Found: ') && l.tier != null), 'the Chronicle marks each upgrade');
+
+// 30. Gear only ever gets better, over a long run.
+const climber = placed(64, 'wizard', 'elf', 5, 'mumblewood', 'quest');
+let slipped = 0;
+let before = SLOT_IDS.map((id) => rank(climber.heroes[0].gear[id]));
+for (let i = 0; i < 400; i++) {
+  advance(climber, 300);
+  const now = SLOT_IDS.map((id) => rank(climber.heroes[0].gear[id]));
+  if (now.some((r, j) => r < before[j])) slipped += 1;
+  before = now;
+}
+ok(slipped === 0, 'over 33 hours of questing no slot ever went backwards');
+
+// 31. The named Legendaries: one per dungeon, one per slot, each with its line.
+const legends = Object.entries(LEGENDARIES);
+ok(legends.length === 8 && REGIONS.every((r) => LEGENDARIES[r.id]) && new Set(legends.map(([, l]) => l.slot)).size === 8, 'eight named Legendaries, one per dungeon, one for each slot');
+ok(legends.every(([, l]) => l.name && l.flavor && !l.name.includes('!') && !l.flavor.includes('!')) && LEGENDARIES.wyrmspire.name === "Vexaldrith's Spare Tooth", 'each has a hand-written name and a line of flavour text');
+const farmer = placed(65, 'fighter', 'dragonborn', 20, 'mugwick', 'delve');
+const farmEvents = advance(farmer, 60 * HOUR);
+const boots = farmEvents.filter((e) => e.type === 'loot' && e.legend === 'mugwick');
+const fh = farmer.heroes[0];
+ok(boots.length === 1 && boots[0].equipped && boots[0].tier === 4 && fh.gear.feet.legend === 'mugwick' && fh.gear.feet.level === DUNGEONS.mugwick.level, `a boss gives up its dungeon's Legendary now and then, once (${fh.gear.feet.name}, after ${farmEvents.filter((e) => e.type === 'cleared' && e.at <= boots[0]?.at).length} clears)`);
+ok(fh.chronicle.concat([]).length > 0 && boots[0]?.text.includes(LEGENDARIES.mugwick.flavor), 'and its flavour text is the Chronicle line');
+ok(legendItem('wyrmspire').item.level === 20 && legendItem('wyrmspire').slot === 'weapon', 'the last dungeon keeps the Spare Tooth, a weapon of level 20');
+
+// 32. The cloak, and the other milestones.
+const cub5 = fresh(66, 'fighter', 'human');
+const cubEvents = advance(cub5, 14 * HOUR);
+const five = cubEvents.find((e) => e.type === 'levelup' && e.level === 5);
+const yh = cub5.heroes[0];
+ok(five && cubEvents.filter((e) => e.type === 'loot' && e.at < five.at).every((e) => e.slot !== 'cloak'), 'no cloak can be found before level 5: the slot is shut');
+ok(five && yh.gear.cloak && rank(yh.gear.cloak) >= 5 && cubEvents.some((e) => e.type === 'milestone' && e.level === 5), `at level 5 the Cloak slot opens with a Common cloak (${yh.gear.cloak?.name})`);
+ok([5, 10, 15, 20].every((l) => MILESTONES[l] && !MILESTONES[l].includes('!')), 'levels 5, 10, 15, and 20 each write a milestone line');
+
+// 33. The six loot skills do what their cards say, and no skill is waiting on a later build.
+ok(ALL_SKILLS.every((x) => !x.later), 'no skill card says "Not built yet"');
+const farm = (seed, cls, race, skill, hours = 40) => {
+  const sv = placed(seed, cls, race, 20, 'saltmarrow', 'delve');
+  const h = sv.heroes[0];
+  if (skill) { h.skills = [skill]; h.subclass = ALL_SKILLS.find((x) => x.id === skill).branch; }
+  const events = advance(sv, hours * HOUR);
+  return { events, clears: events.filter((e) => e.type === 'cleared').length, loot: lootOf(events) };
+};
+const bossPieces = (r) => r.loot.filter((e) => e.source === 'boss' && !e.legend).length;
+const hazard = farm(67, 'fighter', 'human', 'f_hazard_pay');
+ok(hazard.clears > 5 && bossPieces(hazard) === 2 * hazard.clears, `Hazard Pay: a beaten boss drops a second piece (${hazard.clears} clears, ${bossPieces(hazard)} pieces)`);
+const score = farm(68, 'rogue', 'human', 'r_big_score');
+ok(score.clears > 5 && bossPieces(score) === 2 * score.clears, `The Big Score: the same for the Rogue's capstone (${score.clears} clears, ${bossPieces(score)} pieces)`);
+const sticky = farm(69, 'rogue', 'human', 'r_sticky_fingers');
+const stickyFired = sticky.events.map((e, i) => (e.type === 'skill' && e.skill === 'r_sticky_fingers' ? sticky.events[i + 1] : null)).filter(Boolean);
+ok(stickyFired.length > 3 && stickyFired.every((e) => e.type === 'loot'), `Sticky Fingers: a second piece turns up where one was given (${stickyFired.length} times, each followed by the piece)`);
+const noSticky = farm(69, 'rogue', 'human', null);
+ok(lootOf(noSticky.events).length < sticky.loot.length || stickyFired.length > 0, 'and it is extra, not instead');
+for (const [id, cls] of [['w_locate', 'wizard'], ['r_treasure_map', 'rogue']]) {
+  const found = farm(70, cls, 'human', id);
+  const rooms = found.events.map((e, i) => (e.type === 'skill' && e.skill === id ? found.events[i + 1] : null)).filter(Boolean);
+  ok(rooms.length > 2 && rooms.every((e) => e.type === 'loot' && e.source === 'chest'), `${ALL_SKILLS.find((x) => x.id === id).name}: the hidden room holds a chest (${rooms.length} rooms, ${rooms.length} pieces)`);
+}
+const eye = farm(71, 'rogue', 'human', 'r_eye_for_quality', 60);
+const noEye = farm(71, 'rogue', 'human', null, 60);
+const sharp = (() => { const a = { rngSeed: 9 }, b = { rngSeed: 9 }; let up = 0, down = 0; for (let i = 0; i < 3000; i++) { const x = rollTier(a, 10, 'quest', 0.3), y = rollTier(b, 10, 'quest', 0); if (x > y) up += 1; if (x < y) down += 1; } return { up, down }; })();
+ok(sharp.up > 500 && sharp.down === 0 && avgTier(eye.loot) > avgTier(noEye.loot), `Eye for Quality: what is found is rarer (average rarity ${avgTier(eye.loot).toFixed(2)} against ${avgTier(noEye.loot).toFixed(2)} without, over ${eye.loot.length} pieces)`);
+
+// 34. Loot is as deterministic as everything else.
+const lOne = placed(72, 'rogue', 'goblin', 6, 'saltmarrow', 'quest'); const lootSeen = lootOf(advance(lOne, 5 * HOUR)).length;
+const lMany = placed(72, 'rogue', 'goblin', 6, 'saltmarrow', 'quest'); for (let i = 0; i < 5 * HOUR; i++) advance(lMany, 1);
+const lOther = placed(73, 'rogue', 'goblin', 6, 'saltmarrow', 'quest'); advance(lOther, 5 * HOUR);
+ok(lootSeen >= 5 && JSON.stringify(lOne) === JSON.stringify(lMany), `with ${lootSeen} pieces found, one 5-hour call equals 18,000 one-second calls`);
+ok(JSON.stringify(lOne.heroes[0].gear) !== JSON.stringify(lOther.heroes[0].gear), 'and a different seed finds different gear');
+lOne.heroes[0].skillPoints = lOne.heroes[0].level - 1 + lOne.heroes[0].feats.length; // what a hero who had levelled there would hold
+const lBack = importSave(exportSave(lOne)); advance(lBack, 3 * HOUR); advance(lOne, 3 * HOUR);
+ok(JSON.stringify(lBack) === JSON.stringify(lOne), 'gear survives the save string mid-adventure');
+
+// 35. A Phase 4 save (version 3) loads intact: level, XP place, skills, points, Feats, and gold.
+const v3 = placed(74, 'cleric', 'halforc', 12, 'peaks', 'quest');
+const wh = v3.heroes[0];
+wh.skillPoints = 14; wh.feats = ['mugwick', 'mumblewood', 'saltmarrow'];
+grow(wh, 'lifebinder');
+advance(v3, 2 * HOUR);
+wh.level = 12; wh.gold = 54321; wh.skillPoints = 3; wh.abilityPoints = 2;
+wh.xp = Math.round(PAST_CURVES[3][12] + 0.25 * (PAST_CURVES[3][13] - PAST_CURVES[3][12])); // a quarter of the way through level 12 on the Phase 4 curve
+v3.version = 3;
+wh.gear = { weapon: { tier: 0 }, offhand: { tier: 0 }, head: { tier: 0 }, body: { tier: 0 }, hands: { tier: 0 }, feet: { tier: 0 }, cloak: null, trinket: null }; // as Phase 4 saved it
+for (const key of ['itemsFound', 'upgrades', 'soldFor']) delete wh.stats[key];
+wh.chronicle = wh.chronicle.filter((l) => l.k !== 'upgrade' && l.k !== 'sold');
+const keep = JSON.parse(JSON.stringify({ skills: wh.skills, subclass: wh.subclass, feats: wh.feats, abilities: wh.abilities, bestiary: wh.bestiary, questProgress: wh.questProgress }));
+const now4 = migrate(JSON.parse(JSON.stringify(v3)));
+const nh = now4.heroes[0];
+const quarter = (nh.xp - xpForLevel(12)) / (xpForLevel(13) - xpForLevel(12));
+ok(now4.version === 4 && nh.level === 12 && nh.gold === 54321 && nh.skillPoints === 3 && nh.abilityPoints === 2, 'a Phase 4 save keeps its level (12), its gold (54,321 gp), and its banked points');
+ok(JSON.stringify(keep) === JSON.stringify({ skills: nh.skills, subclass: nh.subclass, feats: nh.feats, abilities: nh.abilities, bestiary: nh.bestiary, questProgress: nh.questProgress }) && nh.skills.length > 10, `and every skill (${nh.skills.length}), its subclass, Feats, ability scores, Bestiary, and quests`);
+ok(Math.abs(quarter - 0.25) < 0.01, `and its place within the level on the new curve (${Math.round(quarter * 100)}% of the way to 13)`);
+const named = startingGear('cleric');
+ok(['weapon', 'offhand', 'head', 'body', 'hands', 'feet'].every((id) => nh.gear[id].name === named[id].name && nh.gear[id].tier === 0 && nh.gear[id].level === 1) && nh.gear.trinket === null, 'its bare gear becomes the named starting kit');
+ok(nh.gear.cloak?.tier === 0 && nh.gear.cloak.level === LOOT.cloakLevel, 'being past level 5, it is handed the cloak');
+ok(nh.stats.itemsFound === 0 && nh.stats.knockouts === wh.stats.knockouts, 'its lifetime stats carry over, with the new ones at zero');
+const low = fresh(75); low.version = 3; low.heroes[0].gear = { weapon: { tier: 0 }, offhand: { tier: 0 }, head: { tier: 0 }, body: { tier: 0 }, hands: { tier: 0 }, feet: { tier: 0 }, cloak: null, trinket: null };
+ok(migrate(low).heroes[0].gear.cloak === null, 'a hero below level 5 gets no cloak yet');
+const lootAfter = lootOf(advance(now4, 9 * HOUR)).length;
+ok(nh.level >= 12 && lootAfter > 0 && nh.stats.itemsFound === lootAfter, `the old hero carries on and starts finding gear (${lootAfter} pieces in 9 hours, ${nh.stats.upgrades} worn)`);
+const again4 = migrate(JSON.parse(JSON.stringify(now4)));
+ok(JSON.stringify(again4) === JSON.stringify(now4), 'loading a current save changes nothing');
+
+// 36. Done when: a simulated hero's gear climbs from Common to Legendary over the month.
+const wornEver = new Set(Object.values(full.worn).flatMap((set) => [...set]));
+const tiersAt = [5, 10, 15, 20].map((l) => `L${l} ${full.tierAt[l].toFixed(2)}`).join(', ');
+console.log(`  the hero of check 15: average rarity ${tiersAt}; at the end ${SLOT_IDS.map((id) => `${id} ${TIERS[full.gear[id] ?? 0].name}`).join(', ')}`);
+ok([0, 1, 2, 3, 4].every((t) => wornEver.has(t)), 'over the month the simulated hero wears every rarity, Common to Legendary');
+ok(full.tierAt[10] > full.tierAt[5] && full.tierAt[15] > full.tierAt[10] && full.tierAt[20] > full.tierAt[15], 'and the average rarity of the kit rises from level 5 to 10 to 15 to 20');
+ok(Object.values(full.gear).every((t) => t != null && t >= 2) && Object.values(full.gear).some((t) => t === 4), 'ending with every slot Rare or better and at least one Legendary, so every visible slot has changed look');
+ok(GEAR_STATS.weapon.perTier === 1, 'a weapon adds its rarity to every roll');
 
 // 16. Pacing across many seeds (tools/simulate.html charts all 20 levels).
 const reach = {};

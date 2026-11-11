@@ -24,7 +24,7 @@ const OUT = path.join(ROOT, 'assets', 'lpc');
 
 const load = (rel) => import(pathToFileURL(path.join(ROOT, rel)).href);
 const { RACES, BODY_TYPES, HAIR_STYLES, HAIR_COLORS } = await load('data/races.js');
-const { GEAR, SLOTS, TIERS, BODY_FALLBACK } = await load('data/items.js');
+const { GEAR, SLOTS, TIERS, BODY_FALLBACK, EMBLEM } = await load('data/items.js');
 const { layerKey } = await load('js/layer-key.js');
 
 // Animations the game uses, and the oversize weapon animations that map onto them.
@@ -106,6 +106,7 @@ function allRefs() {
       slots[slot.id].forEach((tier, i) => tier.forEach((ref) => add(ref, `${cls} ${slot.id} ${TIERS[i].name}`)));
     }
   }
+  for (const [cls, layers] of Object.entries(EMBLEM)) layers.forEach((ref) => add(ref, `${cls} level 10 emblem`));
   return refs;
 }
 
@@ -149,8 +150,10 @@ function resolve(ref, defs, mats, tree) {
   if (variantMode && ref.force) {
     variant = (ref.variant ?? def.variants[0]).replaceAll(' ', '_');
     const m = slotPalettes(mats, { material: ref.force, palettes: [mats[ref.force].default] }, ref.color, issues, true);
-    if (m) maps.push(m);
-    notes.push(`forced ${ref.force} recolor to "${ref.color}": upstream ships this item in one fixed colour`);
+    // `ramp`: the art is not drawn in the material's palette at all (the mace is plain greys), so
+    // every pixel but the outline is given the target colour of the same brightness instead
+    if (m) maps.push(ref.ramp ? { ramp: m.to } : m);
+    notes.push(`forced ${ref.force} recolor to "${ref.color}"${ref.ramp ? ' by brightness' : ''}: upstream ships this item in one fixed colour`);
   } else if (variantMode) {
     if (!(def.variants ?? []).includes(ref.color)) {
       issues.push(`CHECK 2: "${ref.color}" is not one of this item's variants (${(def.variants ?? []).join(', ')})`);
@@ -271,7 +274,17 @@ function recolor(img, maps) {
   let hits = 0;
   for (let i = 0; i < d.length; i += 4) {
     if (d[i + 3] === 0) continue;
+    const ramp = maps.find((m) => m.ramp)?.ramp;
+    if (ramp) {
+      const lum = 0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2];
+      if (lum < 24) continue; // the outline stays
+      const to = ramp[Math.max(1, Math.min(ramp.length - 1, 1 + Math.round(((lum - 50) / 160) * (ramp.length - 2))))];
+      d[i] = to[0]; d[i + 1] = to[1]; d[i + 2] = to[2];
+      hits++;
+      continue;
+    }
     search: for (const m of maps) {
+      if (m.ramp) continue;
       for (let c = 0; c < m.from.length; c++) {
         const f = m.from[c];
         if (Math.abs(d[i] - f[0]) <= 1 && Math.abs(d[i + 1] - f[1]) <= 1 && Math.abs(d[i + 2] - f[2]) <= 1) {

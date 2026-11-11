@@ -148,7 +148,7 @@ export function mountMap(root, app) {
     const d = DUNGEONS[r.id];
     const about = {
       roam: `Roam: ${hero.name} fights the monsters of ${r.name} one at a time. Low risk, steady XP, and it fills the Bestiary.`,
-      quest: `Quest: ${hero.name} takes jobs from the quest board, 5 to 8 steps each. Better gold, and finishing all ${STORY_QUESTS} story quests in a region earns a Feat, worth one bonus skill point. The gear piece each quest is meant to pay arrives with loot in a later build.`,
+      quest: `Quest: ${hero.name} takes jobs from the quest board, 5 to 8 steps each. Better gold, and finishing all ${STORY_QUESTS} story quests in a region earns a Feat, worth one bonus skill point. Every finished quest also pays one piece of gear; a story quest's is picked for the slot that needs it most.`,
       delve: `Delve: ${hero.name} runs ${d.name}, ${d.rooms[0]} to ${d.rooms[1]} rooms and then ${d.boss.name}. Hit points do not come back between rooms, and a knockout loses the run and nothing else. The first clear opens the next region. Built for level ${d.level}${hero.level < d.level ? `; at level ${hero.level} ${hero.name} will be outmatched.` : '.'}`,
     }[hero.focus];
     return el('section', { className: 'panel' },

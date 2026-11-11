@@ -232,7 +232,7 @@
       const s = summary;
       $('dungeon-table').innerHTML = `<table><tr><th>Dungeon</th><th>Built for</th><th>Cleared by</th><th>Median time</th><th>At level</th><th>Runs lost</th></tr>${s.dungeons.map((d) =>
         `<tr><td>${esc(d.name)}</td><td>${d.builtFor}</td><td>${d.cleared} of ${s.heroes}</td><td>${formatTime(d.at)}</td><td>${d.level ?? '-'}</td><td>${d.runsLost.toFixed(1)}</td></tr>`).join('')}</table>`;
-      $('ko-sources').textContent = `Where the ${s.knockouts.toFixed(1)} knockouts per hero happened: ${s.koBy.roam.toFixed(1)} roaming, ${s.koBy.quest.toFixed(1)} on quests, ${s.koBy.delve.toFixed(1)} in dungeon rooms, ${s.koBy.boss.toFixed(1)} against bosses. Each hero finished ${s.quests.toFixed(1)} story quests and made ${s.runs.toFixed(1)} dungeon runs.`;
+      $('ko-sources').textContent = `Where the ${s.knockouts.toFixed(1)} knockouts per hero happened: ${s.koBy.roam.toFixed(1)} roaming, ${s.koBy.quest.toFixed(1)} on quests, ${s.koBy.delve.toFixed(1)} in dungeon rooms, ${s.koBy.boss.toFixed(1)} against bosses. Each hero finished ${s.quests.toFixed(1)} story quests and made ${s.runs.toFixed(1)} dungeon runs. Gear, as the average rarity across the eight slots (0 Common to 4 Legendary): ${s.gearByLevel.filter((g) => [5, 10, 15, 20].includes(g.level) && g.tier != null).map((g) => `level ${g.level} ${g.tier.toFixed(2)}`).join(', ')}; at the end ${s.endShare.filter((e) => e.share > 0.005).map((e) => `${e.name} ${Math.round(e.share * 100)}%`).join(', ')} of slots. Each hero found ${Math.round(s.itemsFound)} pieces, wore ${Math.round(s.upgrades)}, and sold the rest for ${Math.round(s.soldFor).toLocaleString('en-US')} gp.`;
     }
 
     function drawTiles() {

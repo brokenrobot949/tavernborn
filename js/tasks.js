@@ -13,11 +13,16 @@
 // The player's standing orders (focus, travel, paying the cleric) are the three functions at the
 // bottom. They only change the save; the simulator calls the same ones.
 //
-// Skills (Phase 4) reach in here through `skillMods(hero)` from skills.js: `sk.n` holds the passive
-// numbers, already added up, and `sk.sigs` the signature moves by type. A move that fires writes
+// Skills (Phase 4) and gear (Phase 5) reach in here through `modsOf(hero)`: `sk.n` holds the passive
+// numbers from learned skills (`skillMods`, skills.js) and worn gear (`gearMods`, loot.js), already
+// added up, and `sk.sigs` the signature moves by type. A move that fires writes
 // its own Chronicle line through `fire`. Moves that can only be used so often keep count in the
 // dungeon run (`hero.delve.used`), the quest (`used` in its progress), the boss fight, or a
 // cooldown clock (`hero.cooldowns`).
+//
+// Loot (Phase 5): `loot()` below is the one place gear arrives. A monster beaten on the road
+// drops a piece rarely, a dungeon room cleared cleanly sometimes, every finished quest and every
+// beaten boss always. The piece equips itself if it is better and is sold if it is not.
 
 import { MONSTERS, MONSTER_BY_ID } from '../data/monsters.js';
 import { CLASSES } from '../data/classes.js';
@@ -37,10 +42,12 @@ import {
   OUTMATCHED_DC, OUTMATCHED_DAMAGE, GRUDGE_BONUS, WHAT_IF, grownDc, grownDamage,
   QUEST_STEP_SECONDS, QUEST_XP_PER_SECOND, QUEST_DONE_XP, QUEST_DAMAGE, QUEST_GOLD, questDoneGold, STORY_QUESTS,
   DELVE_XP_PER_SECOND, DELVE_GOLD, BOSS_SECONDS, BOSS_XP, BOSS_LOSS_SHARE, bossGold, DUNGEON_POTIONS, CONFIDENCE_LIMIT,
-  TRAVEL_SECONDS_PER_REGION, RETURN_SECONDS_PER_REGION,
+  TRAVEL_SECONDS_PER_REGION, RETURN_SECONDS_PER_REGION, LOOT,
 } from './rules.js';
 import { chronicle, gainXp, maxHp, regionOpen } from './hero.js';
 import { skillMods, SUBCLASS_LEVEL } from './skills.js';
+import { gearMods, rollItem, weakestSlot, legendItem, wearsLegend, receive, dropChance, startingCloak, describe, rarityName, flavorOf, SLOT_BY_ID } from './loot.js';
+import { LOOT_LINES, LEGENDARIES, MILESTONES, TITLES } from '../data/loot.js';
 
 export const FOCUSES = ['roam', 'quest', 'delve'];
 
@@ -53,6 +60,51 @@ const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 function emit(hero, events, type, text, data = {}, lineExtra = {}) {
   events.push({ type, at: hero.age, text, ...data });
   chronicle(hero, data.outcome ?? type, text, lineExtra);
+}
+
+// Skills and gear change the same numbers, so the rules read them together: `sk.n` is every
+// passive number from learned skills plus whatever the hero is wearing, and `sk.sigs` the
+// signature moves. Rebuilt only when a skill is learned or a slot's piece changes.
+const modsCache = new WeakMap();
+function modsOf(hero) {
+  const sk = skillMods(hero);
+  const g = gearMods(hero);
+  const hit = modsCache.get(hero);
+  if (hit && hit.sk === sk && hit.g === g) return hit.mods;
+  const n = { ...sk.n };
+  for (const [k, v] of Object.entries(g)) n[k] += v;
+  const mods = { n, sigs: sk.sigs };
+  modsCache.set(hero, { sk, g, mods });
+  return mods;
+}
+
+// ---------- loot: something was found ----------
+
+// Make a piece (or take the dungeon's named Legendary), hand it over, and write it down. A better
+// piece goes on at once; whichever piece loses is sold. Sticky Fingers and its kind may turn up
+// a second piece wherever one was given (never from a monster on the road, and never a third).
+//   opts: { level, source ('roam' | 'room' | 'chest' | 'quest' | 'odd' | 'boss'), slot, legend, second }
+function loot(state, hero, events, opts) {
+  const sk = modsOf(hero);
+  const { slot, item } = opts.legend ? legendItem(opts.legend) : rollItem(state, hero, { ...opts, quality: sk.n.quality });
+  const before = maxHp(hero);
+  const got = receive(hero, slot, item);
+  const gained = maxHp(hero) - before; // a better helm adds its hit points at once
+  if (gained > 0 && hero.knockedOutUntil == null) hero.hp += gained;
+  const values = { item: item.name, old: got.old?.name, gold: got.gold, slot: SLOT_BY_ID[slot].name, name: hero.name, flavor: flavorOf(item) };
+  const text = item.legend ? fill(LOOT_LINES.legend, values) + (got.old ? fill(LOOT_LINES.legendOver, values) : '')
+    : !got.equipped ? fill(pick(state, LOOT_LINES.sold), values)
+    : got.old ? fill(pick(state, LOOT_LINES.upgrade), values)
+    : fill(pick(state, LOOT_LINES.first), values);
+  const does = describe(slot, item);
+  events.push({ type: 'loot', at: hero.age, text, slot, tier: item.tier, level: item.level, name: item.name, equipped: got.equipped, gold: got.gold, source: opts.source, legend: item.legend });
+  chronicle(hero, got.equipped ? 'upgrade' : 'sold', text, { roll: `${rarityName(item)}, level ${item.level}. ${does[0].toUpperCase() + does.slice(1)}`, gain: got.gold ? `+${got.gold} gp` : undefined, tier: item.tier });
+  if (opts.second || opts.legend || opts.source === 'roam') return;
+  for (const s of sk.sigs.bonusLoot ?? []) {
+    if (random(state) >= s.chance) continue;
+    fire(hero, events, s);
+    loot(state, hero, events, { ...opts, slot: null, second: true });
+  }
 }
 
 // Humans learn 5% faster, Intelligence adds a little XP, retired legends (Phase 6) add theirs, and
@@ -179,14 +231,14 @@ export function nextTask(state, hero, events = []) {
     const from = hero.returning ? 0 : REGION_INDEX[hero.region];
     const hops = Math.max(1, Math.abs(REGION_INDEX[hero.travelTo] - from));
     hero.delve = null;
-    return { kind: 'travel', to: hero.travelTo, text: fill(pick(state, TRAVEL_TASKS), { place: REGION_BY_ID[hero.travelTo].name }), duration: quicker(hops * TRAVEL_SECONDS_PER_REGION, skillMods(hero).n.travel, 30), elapsed: 0 };
+    return { kind: 'travel', to: hero.travelTo, text: fill(pick(state, TRAVEL_TASKS), { place: REGION_BY_ID[hero.travelTo].name }), duration: quicker(hops * TRAVEL_SECONDS_PER_REGION, modsOf(hero).n.travel, 30), elapsed: 0 };
   }
   hero.travelTo = null;
 
   if (hero.returning) {
     const far = REGION_INDEX[hero.region];
     if (far === 0) hero.returning = false;
-    else return { kind: 'return', text: fill(RETURN_TASK, { place: REGION_BY_ID[hero.region].name }), duration: quicker(Math.min(600, far * RETURN_SECONDS_PER_REGION), skillMods(hero).n.travel, 30), elapsed: 0 };
+    else return { kind: 'return', text: fill(RETURN_TASK, { place: REGION_BY_ID[hero.region].name }), duration: quicker(Math.min(600, far * RETURN_SECONDS_PER_REGION), modsOf(hero).n.travel, 30), elapsed: 0 };
   }
 
   if (hero.focus !== 'delve' || hero.delve?.region !== hero.region) hero.delve = null;
@@ -201,7 +253,7 @@ function roamTask(state, hero) {
     const above = m.level - hero.level;
     return above <= 0 ? 3 : above === 1 ? 1.2 : 0.3;
   });
-  return { kind: 'roam', monster: monster.id, text: pick(state, monster.tasks), duration: quicker(randInt(state, monster.secs[0], monster.secs[1]), skillMods(hero).n.speedRoam), elapsed: 0 };
+  return { kind: 'roam', monster: monster.id, text: pick(state, monster.tasks), duration: quicker(randInt(state, monster.secs[0], monster.secs[1]), modsOf(hero).n.speedRoam), elapsed: 0 };
 }
 
 function questTask(state, hero, events) {
@@ -220,12 +272,12 @@ function questTask(state, hero, events) {
   const text = quest.story ? quest.q.steps[qp.step] : pick(state, ODD_JOBS.steps);
   // `worth` is the step's full length: XP is paid on it, so a faster step pays the same.
   const worth = randInt(state, QUEST_STEP_SECONDS[0], QUEST_STEP_SECONDS[1]);
-  return { kind: 'quest', text, worth, duration: quicker(worth, skillMods(hero).n.speedQuest), elapsed: 0 };
+  return { kind: 'quest', text, worth, duration: quicker(worth, modsOf(hero).n.speedQuest), elapsed: 0 };
 }
 
 function delveTask(state, hero, events) {
   const d = DUNGEONS[hero.region];
-  const sk = skillMods(hero);
+  const sk = modsOf(hero);
   if (!hero.delve) {
     // A run starts at full hit points: a hurt hero makes camp at the door first.
     const max = maxHp(hero);
@@ -302,7 +354,7 @@ function getUp(state, hero, events, text, data = {}) {
 // Returns { ok: the hero is still standing, outcome: 'crit' | 'hit' | 'miss' | 'fumble' }.
 function encounter(state, hero, foe, events, source, ctx = { source }) {
   const cls = CLASSES[hero.class];
-  const sk = skillMods(hero);
+  const sk = modsOf(hero);
   const gap = Math.max(0, foe.level - hero.level);
   const grudge = hero.race === 'dwarf' && foe.id && hero.grudges[foe.id] ? GRUDGE_BONUS : 0;
   const wisdom = source === 'quest' ? Math.floor(Math.max(0, mod(hero.abilities.wis)) / 2) : 0; // Wisdom: quest checks
@@ -410,12 +462,19 @@ function levelUps(state, hero, xp, events) {
     emit(hero, events, 'levelup', fill(pick(state, LEVEL_UP), { level, name: hero.name }), { level });
     if (level === SUBCLASS_LEVEL && !hero.subclass) emit(hero, events, 'growth', SUBCLASS_READY, { waiting: 'subclass' });
     if (ABILITY_LEVELS.includes(level)) emit(hero, events, 'growth', ABILITY_READY, { waiting: 'ability' });
+    // Milestones on the sprite: a cloak at 5, the class emblem at 10, a wisp at 15, a glow at 20.
+    if (level === LOOT.cloakLevel && !hero.gear.cloak) hero.gear.cloak = startingCloak();
+    if (MILESTONES[level]) emit(hero, events, 'milestone', fill(MILESTONES[level], { name: hero.name, title: TITLES[hero.class] }), { level });
   }
 }
 
 function resolveRoam(state, hero, m, events) {
   const foe = { ...m, monster: true, defeat: `Defeated by ${article(m.name)}. ${m.ko}` };
-  if (encounter(state, hero, foe, events, 'roam').ok) rest(state, hero, events);
+  const result = encounter(state, hero, foe, events, 'roam');
+  if (!result.ok) return;
+  // Monsters drop gear rarely. Wisdom spots more of it, and a natural 20 shakes more loose.
+  if (!failed(result) && random(state) < dropChance(hero, 'roam', result.outcome === 'crit')) loot(state, hero, events, { level: m.level, source: 'roam' });
+  rest(state, hero, events);
 }
 
 function resolveQuestStep(state, hero, task, events) {
@@ -437,14 +496,17 @@ function resolveQuestStep(state, hero, task, events) {
 }
 
 function finishQuest(state, hero, qp, quest, events) {
-  const sk = skillMods(hero);
+  const sk = modsOf(hero);
   const xp = Math.round(QUEST_DONE_XP * levelGapXp(quest.level - hero.level) * xpBonus(state, hero, sk, 'quest'));
   const gold = Math.round(questDoneGold(quest.level) * goldBonus(hero, sk, 'quest') * (1 + 0.05 * Math.max(0, mod(hero.abilities.cha)))); // Charisma: better quest rewards
   hero.gold += gold;
   const done = quest.story ? quest.q.done : pick(state, ODD_JOBS.done);
   emit(hero, events, 'questdone', fill(QUEST_DONE, { quest: quest.title, done }), { quest: quest.title, story: quest.story, xp, gold }, { gain: `+${xp} XP, ${gold} gp` });
-  // Moves that pay the fee again: a windfall, or a second purse.
-  for (const s of [...(sk.sigs.windfall ?? []), ...(sk.sigs.bonusLoot ?? [])]) {
+  // Every finished quest pays one piece of gear. A story quest's is chosen for the slot that
+  // needs it most; an odd job pays whatever the client had lying about.
+  loot(state, hero, events, quest.story ? { level: quest.level, source: 'quest', slot: weakestSlot(hero) } : { level: quest.level, source: 'odd' });
+  // A windfall pays the fee again.
+  for (const s of sk.sigs.windfall ?? []) {
     if (random(state) >= s.chance) continue;
     hero.gold += gold;
     fire(hero, events, s, { gold }, `+${gold} gp`);
@@ -471,13 +533,14 @@ function resolveRoom(state, hero, task, events) {
   const run = hero.delve;
   if (!run) return;
   const d = DUNGEONS[run.region];
-  const sk = skillMods(hero);
+  const sk = modsOf(hero);
   const ctx = { source: 'delve' };
   const purse = () => Math.round(randInt(state, d.gold[0], d.gold[1]) * DELVE_GOLD * goldBonus(hero, sk, 'delve'));
 
   // Slip Away and its kind: a hurt hero goes round a room instead of through it.
   const slip = (sk.sigs.skipRoom ?? []).find((s) => hero.hp < maxHp(hero) * s.below && ready(hero, s, ctx));
   let won = false;
+  let crit = false;
   if (slip) {
     spend(hero, slip, ctx);
     fire(hero, events, slip);
@@ -491,6 +554,7 @@ function resolveRoom(state, hero, task, events) {
     const result = encounter(state, hero, foe, events, 'delve', ctx);
     if (!result.ok) return; // knocked out: the run is lost
     won = !failed(result);
+    crit = result.outcome === 'crit';
   }
 
   if (run.hidden && run.hidden.room === run.room) {
@@ -499,16 +563,11 @@ function resolveRoom(state, hero, task, events) {
       const gold = purse() * finder.purses;
       hero.gold += gold;
       fire(hero, events, finder, { gold }, `+${gold} gp`);
+      loot(state, hero, events, { level: d.level, source: 'chest' }); // and the chest that was in it
     }
   }
-  if (won) {
-    for (const s of sk.sigs.bonusLoot ?? []) {
-      if (random(state) >= s.chance) continue;
-      const gold = purse();
-      hero.gold += gold;
-      fire(hero, events, s, { gold }, `+${gold} gp`);
-    }
-  }
+  // A room cleared cleanly sometimes has a chest in it.
+  if (won && random(state) < dropChance(hero, 'room', crit)) loot(state, hero, events, { level: d.level, source: 'room' });
   run.room += 1;
 
   // Between rooms: free healing from skills first, then a potion if it is still needed.
@@ -531,7 +590,7 @@ function resolveBoss(state, hero, task, events) {
   const d = DUNGEONS[run.region];
   const b = d.boss;
   const cls = CLASSES[hero.class];
-  const sk = skillMods(hero);
+  const sk = modsOf(hero);
   const ctx = { source: 'boss', fight: {} };
   const gap = Math.max(0, d.level - hero.level);
   const grudge = hero.race === 'dwarf' && hero.grudges[b.id] ? GRUDGE_BONUS : 0;
@@ -605,6 +664,14 @@ function resolveBoss(state, hero, task, events) {
     hero.gold += extra;
     fire(hero, events, s, { gold: extra }, `+${extra} gp`);
   }
+  if (won) {
+    // A beaten boss drops the best gear there is at its level, one more piece for each move like
+    // Hazard Pay, and now and then the dungeon's own named Legendary.
+    loot(state, hero, events, { level: d.level, source: 'boss' });
+    for (const s of purses) for (let i = 0; i < (s.items ?? 0); i++) loot(state, hero, events, { level: d.level, source: 'boss', second: true });
+    const open = LEGENDARIES[run.region].slot !== 'cloak' || hero.level >= LOOT.cloakLevel;
+    if (open && !wearsLegend(hero, run.region) && random(state) < LOOT.legend) loot(state, hero, events, { legend: run.region, source: 'boss' });
+  }
 
   if (won) {
     const first = !(hero.dungeonClears[run.region] > 0);
@@ -649,7 +716,7 @@ function knockOut(state, hero, foe, events, source) {
   // Constitution, the Elf quirk, and skills shorten the stay.
   let seconds = recoverySeconds(hero.level) * (1 - 0.03 * Math.max(0, mod(hero.abilities.con)));
   if (hero.race === 'elf') seconds *= 0.8;
-  seconds *= 1 - Math.min(0.6, skillMods(hero).n.recovery);
+  seconds *= 1 - Math.min(0.6, modsOf(hero).n.recovery);
   hero.knockedOutUntil = hero.age + Math.round(seconds);
 
   const inDungeon = source === 'delve' || source === 'boss';
@@ -673,7 +740,7 @@ function knockOut(state, hero, foe, events, source) {
 
 // A little HP comes back after every Roam or Quest task, and a potion is drunk if things look thin.
 function rest(state, hero, events) {
-  const sk = skillMods(hero);
+  const sk = modsOf(hero);
   const max = maxHp(hero);
   hero.hp = Math.min(max, hero.hp + Math.ceil(restHeal(max, hero.hp) * (1 + sk.n.rest)));
   for (const s of sk.sigs.shortRest ?? []) {
@@ -688,7 +755,7 @@ function rest(state, hero, events) {
 
 // Potions are bought and drunk on the spot when gold allows. A dungeon run carries a fixed number.
 function drinkPotion(state, hero, events) {
-  const sk = skillMods(hero);
+  const sk = modsOf(hero);
   const max = maxHp(hero);
   const cost = Math.max(1, Math.round(potionPrice(hero.level) * (1 - Math.min(0.75, sk.n.potionPrice))));
   if (hero.hp >= max * POTION_BELOW || hero.gold < cost) return;

@@ -14,6 +14,9 @@
 //    so the hero carries the cane and swings the club. The cane art is drawn in the shield hand,
 //    so it is mirrored into the weapon hand at bake time.
 //  - Closed helmets hide the hair layer.
+// Phase 5 swap: the Cleric's Uncommon and Rare weapons were the same mace. The Uncommon one is
+// now that mace recoloured to bronze by brightness at bake time (`force` with `ramp`), so every tier of
+// every visible slot is a different look.
 // A layer ref is { def, color, ... }:
 //   def     LPC sheet definition file name, without .json
 //   color   a recolor name from the definition's palettes, or one of its variants
@@ -22,6 +25,8 @@
 //   hideHair  skip the hair layer while this is worn
 //   mirror  flip a walk-only item into the other hand (its other animations are dropped)
 //   bodies  draw another body type's sheet where the item has none, e.g. { muscular: 'male' }
+//   force   recolour an item that ships in one fixed look, by material (with `variant`, the look to start
+//           from; `ramp: true` maps by brightness where the art is not drawn in that material's palette)
 // After editing, rerun: node tools/sprites.mjs bake
 
 export const SLOTS = [
@@ -245,7 +250,7 @@ export const GEAR = {
     ],
     weapon: [
       [L('weapon_polearm_cane', 'cane', { mirror: true }), L('weapon_blunt_club', 'club')],
-      [L('weapon_blunt_mace', 'mace')],
+      [L('weapon_blunt_mace', 'bronze', { force: 'metal', variant: 'mace', ramp: true })],
       [L('weapon_blunt_mace', 'mace')],
       [L('weapon_blunt_flail', 'flail')],
       [L('weapon_blunt_waraxe', 'waraxe')],
@@ -265,4 +270,14 @@ export const GEAR = {
       [L('cape_solid', 'white'), L('cape_trim', 'gold')],
     ],
   },
+};
+
+// Level 10 milestone: a class emblem, worn as a clip at the neck in the class's cloth and metal.
+// (Levels 15 and 20, the wisp and the golden glow, are drawn in code: see js/sprite.js.)
+export const EMBLEM_LEVEL = 10;
+export const EMBLEM = {
+  fighter: [L('neck_capeclip', 'red', { color2: 'steel' })],
+  wizard: [L('neck_capeclip', 'blue', { color2: 'silver' })],
+  rogue: [L('neck_capeclip', 'charcoal', { color2: 'brass' })],
+  cleric: [L('neck_capeclip', 'white', { color2: 'gold' })],
 };

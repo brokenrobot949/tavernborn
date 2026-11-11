@@ -100,7 +100,6 @@ h3.section { margin-top: 4px; }
   overflow: hidden;
   background: linear-gradient(var(--sky) 0 74%, var(--grass) 74% 100%);
 }
-.scene.tavern { background: linear-gradient(#4a3b2c 0 74%, #2f251b 74% 100%); min-height: 280px; }
 .scene canvas { display: block; margin: 0 auto; image-rendering: pixelated; image-rendering: crisp-edges; }
 .scene canvas.still { position: absolute; left: 50%; bottom: 32px; transform: translateX(-50%); }
 .scene .place {
@@ -176,7 +175,6 @@ h3.section { margin-top: 4px; }
 
 /* ===== Phase 3: map, standing orders, chapter cards, the cleric ===== */
 .btn.grow { flex: 1 1 0; }
-.scene.dungeon { background: linear-gradient(#3b3442 0 74%, #2a2622 74% 100%); }
 .task-ctx { font-size: 0.8rem; color: var(--ink-soft); margin-top: 2px; }
 .cleric .hint { margin-top: 6px; }
 .chronicle .k-boss .text, .chronicle .k-cleared .text, .chronicle .k-chapter .text, .chronicle .k-feat .text, .chronicle .k-unlock .text { font-family: var(--display); font-weight: 700; }
@@ -272,3 +270,25 @@ h3.section { margin-top: 4px; }
 .skill-state.learned { color: #35603a; font-weight: 700; }
 .skill-learn { justify-self: start; min-width: 120px; margin-top: 2px; }
 .tag.move { border-color: #2f5d62; color: #2f5d62; }
+
+/* ===== Phase 5: gear and loot ===== */
+/* Gear tab: one row per slot. The rarity colour is a bar down the left; names stay in ink so
+   they read on parchment. */
+.slots li.slot { display: block; padding: 8px 0 8px 10px; border-left: 6px solid var(--tier, var(--line)); margin-top: 6px; border-top: 0; background: #fff; border-radius: 0 6px 6px 0; }
+.slots li.slot:first-child { margin-top: 0; }
+.slots li.slot > :last-child { text-align: left; font-weight: 400; }
+.slot-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding-right: 8px; }
+.slot-name { font-size: 0.75rem; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.04em; }
+.slot-rarity { font-size: 0.75rem; color: var(--ink-soft); white-space: nowrap; }
+.slot-item { font: 700 1.02rem var(--display); margin: 1px 0; padding-right: 8px; overflow-wrap: anywhere; }
+.slot-does { font-size: 0.88rem; padding-right: 8px; }
+.slot-flavor { font-size: 0.85rem; font-style: italic; color: var(--ink-soft); padding-right: 8px; margin-top: 2px; }
+.slot.empty .slot-item { font-weight: 400; font-family: var(--body); font-size: 0.92rem; color: var(--ink-soft); }
+.rarity-key { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 10px; font-size: 0.78rem; color: var(--ink-soft); }
+.rarity-key span::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 4px; border-radius: 2px; background: var(--tier); border: 1px solid rgba(43, 33, 24, 0.35); vertical-align: -1px; }
+.gear-total { margin-top: 10px; font-size: 0.9rem; }
+/* Chronicle: a found piece carries its rarity colour down the side. */
+.chronicle li.loot { border-left: 5px solid var(--tier); padding-left: 8px; }
+.chronicle .k-upgrade .text { font-weight: 600; }
+.chronicle .k-sold .text { color: var(--ink-soft); }
+.chronicle .k-milestone .text { font-family: var(--display); font-weight: 700; color: #7a5600; }

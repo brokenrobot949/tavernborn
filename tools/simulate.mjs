@@ -7,7 +7,7 @@
 // Exits with an error if, on the standard run, the median hero does not reach level 20 in 28 to
 // 32 days or fewer than nine in ten heroes clear the last dungeon.
 
-import { prepareWorld, heroPlan, runHero, summarize, formatTime, subclassLabel, DAY, MAX_LEVEL } from './simulate-core.js';
+import { prepareWorld, heroPlan, runHero, summarize, formatTime, subclassLabel, TIER_NAMES, DAY, MAX_LEVEL } from './simulate-core.js';
 
 const heroes = Number(process.argv[2]) || 500;
 const mode = ['roam', 'vale', 'unspent'].includes(process.argv[3]) ? process.argv[3] : 'road';
@@ -39,6 +39,11 @@ if (road) {
   console.log('  dungeon                          built for  cleared    median time  at level  runs lost per hero');
   for (const d of s.dungeons) console.log(`  ${d.name.padEnd(32)} ${String(d.builtFor).padStart(9)}  ${`${d.cleared}/${heroes}`.padStart(7)}    ${formatTime(d.at).padEnd(11)}  ${String(d.level ?? '-').padStart(8)}  ${d.runsLost.toFixed(1).padStart(6)}`);
 }
+const tierWord = (t) => (t == null ? '-' : `${t.toFixed(2)} (${TIER_NAMES[Math.min(TIER_NAMES.length - 1, Math.round(t))]})`);
+console.log('\nGear: average rarity across the eight slots on reaching each level (0 Common, 1 Uncommon, 2 Rare, 3 Very Rare, 4 Legendary):');
+console.log('  ' + s.gearByLevel.filter((g) => [3, 5, 8, 10, 12, 15, 18, 20].includes(g.level)).map((g) => `L${g.level} ${tierWord(g.tier)}`).join('   '));
+console.log(`  At the end: ${s.endShare.map((e) => `${e.name} ${Math.round(e.share * 100)}%`).join(', ')} of slots. ${s.anyLegendary} of ${heroes} heroes wear a Legendary; ${s.allFive} wore all five rarities in one slot.`);
+console.log(`  Per hero: ${s.itemsFound.toFixed(0)} pieces found, ${s.upgrades.toFixed(0)} equipped, the rest sold for ${Math.round(s.soldFor)} gp in all; ${s.legends.toFixed(2)} named Legendaries.`);
 console.log(`\nPer hero: ${s.knockouts.toFixed(1)} knockouts (${s.koHours.toFixed(1)} h recovering): ${s.koBy.roam.toFixed(1)} roaming, ${s.koBy.quest.toFixed(1)} on quests, ${s.koBy.delve.toFixed(1)} in dungeon rooms, ${s.koBy.boss.toFixed(1)} to bosses.`);
 console.log(`          ${s.potions.toFixed(1)} potions, ${Math.round(s.tasks)} tasks, ${s.quests.toFixed(1)} story quests, ${s.feats.toFixed(1)} feats, ${s.runs.toFixed(1)} dungeon runs. ${s.knockoutFree} of ${heroes} were never knocked out.`);
 console.log(`          ${s.skills.toFixed(1)} skills learned, ${Math.round(s.moves)} signature moves fired, ${Math.round(s.gold)} gp in the purse at the end.`);

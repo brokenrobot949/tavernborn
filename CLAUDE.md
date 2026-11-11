@@ -27,13 +27,15 @@ Rob is the game designer and does not write code.
   The live game calls it once a second; on load it is called with the seconds since `lastSavedAt`.
   Long gaps run task by task, not second by second. Random numbers come from a seeded generator
   stored in the save. It returns a list of events; the Chronicle and "While you were away" use that list.
-- `js/rules.js`, `tasks.js`, `hero.js`, `skills.js`, `loot.js` the systems `sim.js` calls. `tasks.js` also holds
+- `js/rules.js`, `tasks.js`, `hero.js`, `skills.js`, `loot.js` the systems `sim.js` calls. `loot.js` makes,
+  judges, equips, and sells gear; `loot()` in `tasks.js` is the one place a piece arrives. `tasks.js` also holds
   the player's standing orders (`setFocus`, `orderTravel`, `payCleric`); `skills.js` and `hero.js` hold the
   growth choices (`learnSkill`, `chooseSubclass`, `respec`, `raiseAbility`)
 - `js/sprite.js` LPC layer compositing and animation
 - `js/ui/` one module per tab, plus `create.js` (creation), `away.js` (the summary card), `story.js` (chapter
   cards), `dom.js` (helpers);
-  `data/` all content; `tools/` dev-only
+  `data/` all content (`data/loot.js` holds gear names and the named Legendaries; `data/items.js` the
+  sprite look of each class, slot, and rarity); `css/backdrops.css` the scene backdrops; `tools/` dev-only
 
 ## Sprites
 - Asset list: `data/races.js` and `data/items.js`. A layer is `{ def, color }`, where `def` is an LPC
@@ -49,6 +51,8 @@ Rob is the game designer and does not write code.
 - Rerun `bake` whenever layers are added, so the credits stay exact. LPC licenses require credit.
 - Adding a body type, animation, or hair colour means editing the lists at the top of
   `data/races.js` or `tools/sprites.mjs` and rebaking.
+- The level 10 emblem is `EMBLEM` in `data/items.js` (LPC's neck clip, baked like any layer). The level 15
+  wisp and the level 20 glow are drawn in code by `sprite.js` (`fx` on a look); LPC has no art for either.
 
 ## Known art limits found in Phase 0
 - No LPC torso or leg armour has a muscular sheet; muscular bodies wear the male sheet.
@@ -58,6 +62,9 @@ Rob is the game designer and does not write code.
 - The cane is drawn in the shield hand and only has walk art; the club only has swing art. The Cleric
   Common weapon uses both: the cane, mirrored into the weapon hand at bake time (`mirror: true`), and
   the club for the slash. It is not drawn during thrust or hurt.
+- LPC has four blunt weapons, so the Cleric's Uncommon weapon is the mace recoloured to bronze at bake
+  time (`force: 'metal', ramp: true` maps the mace's greys onto the bronze palette by brightness).
+- Shields, the cane, and the club have no hurt art, so they vanish for the second and a half of a fall.
 
 ## Working rules
 - Build phase by phase. Finish a phase's "done when" before starting the next.
@@ -77,88 +84,115 @@ Rob is the game designer and does not write code.
 | 7. Polish | Writing pass, sound, credits screen, settings | Tone matches the Humor and voice section |
 
 ## Status
-- Current phase: 4 (Growth), built and waiting on Rob's phone test. Phases 1 to 3 are also still in his
-  phone test. Phase 0 is approved.
-- Built in Phase 4: the four class skill trees (144 skills in `data/skills-*.js`), the tree rules, subclass
-  choice, and respec (`js/skills.js`), ability score increases (`js/hero.js`), every skill's effect in the
-  simulation (`js/tasks.js`), the Skills tab with its badge, the respec panel on the Tavern tab, and a
-  simulator player that picks a subclass and spends every point.
-- The trees: each class has a Might, a Guard, and a Fortune branch (the three subclasses), twelve skills
-  each in four tiers of three. A tier opens after two skills in the tier above. The twelfth skill of a branch
-  is its capstone and needs that branch's subclass (chosen from level 3). At most 27 skills. Each branch has
-  eight passives and four signature moves (96 and 48 in all, 20 kinds of move).
+- Current phase: 5 (Gear and visuals), built and waiting on Rob's phone test. Phases 1 to 4 are also still
+  in his phone test. Phase 0 is approved.
+- Built in Phase 5: loot (`js/loot.js`, names in `data/loot.js`, numbers in `js/rules.js`), gear that changes
+  the rules, auto-equip and auto-sell, the eight named Legendaries, the cloak at level 5, the level 10, 15,
+  and 20 milestones on the sprite, a backdrop for each region plus the dungeon and the tavern
+  (`css/backdrops.css`), the knockout fall, the Gear tab, loot on the away card, the real effect of the six
+  loot skills, and gear in the simulator's report.
+- A piece of gear is `{ tier (0 Common to 4 Legendary), level, name }`, plus `legend` (a region id) on a named
+  Legendary. It sits in `hero.gear[slot]`; there is no inventory. "Better" is rarity first, then level
+  (`better` in `js/loot.js`), so the sprite, which shows each slot's rarity, only ever moves up. A better
+  piece goes on at once and whichever piece loses is sold (`sellPrice` in `js/rules.js`).
+- What gear does (`GEAR_STATS` in `js/rules.js`): one job per slot. Weapon: +1 to every roll per rarity step,
+  and criticals pay more with its level. Off-hand: chance to halve a hit. Head: hit points. Body: damage
+  taken. Hands: gold. Feet: travel and knockout recovery. Cloak: healing from rests and potions. Trinket: XP.
+  A slot's number is rarity steps plus a little per level; nineteen levels are worth just under one rarity
+  step. The starting kit (Common, level 1) is worth exactly nothing. A full Legendary level 20 kit: +4 to
+  rolls, 7.4% dodge, +9.9% hit points, 9.9% less damage, +15% gold, 25% quicker travel and recovery, +20%
+  healing, +5% XP. `gearMods(hero)` is the one door from gear into the rules; `modsOf(hero)` in `js/tasks.js`
+  adds it to the skill numbers, and `maxHp` reads it.
+- Where gear comes from (`LOOT` in `js/rules.js`): a monster beaten on the road 1% (Wisdom adds a tenth per
+  modifier point; a natural 20 doubles it), a dungeon room cleared cleanly 10%, every finished quest one
+  piece (a story quest's goes to the slot that needs it most, an odd job's to any slot), every beaten boss one
+  piece, and a 15% chance per clear of the dungeon's named Legendary while the hero is not wearing it. Rarity is
+  `level / 5 + the source's shift + luck`, so each source has a ceiling: monsters never drop Legendary, quests
+  run about a tier behind bosses, and Legendaries come from the level 18 and 20 bosses, level 20 quests,
+  and hidden chests.
+- The named Legendaries (`LEGENDARIES` in `data/loot.js`), one per dungeon and one per slot: Boots of Office
+  (Cellar, feet), Old Bramblewick's Mantle (Thornwarren, cloak), the Tide-Reeve's Counting Gloves
+  (Lighthouse, hands), the Under-King's Second-Best Crown (Hall, head), The Abbot's Last Word (Abbey,
+  off-hand), The Third Seal (Tomb, trinket), The Broker's Guarantee (Market, body), Vexaldrith's Spare Tooth
+  (Hoard, weapon). Each is tier 4 at its dungeon's level, so an early one is the best in its slot until a
+  higher-level Legendary turns up.
+- Events and Chronicle: a found piece is a `loot` event (`slot, tier, level, name, equipped, gold, source,
+  legend`) and a Chronicle line of kind `upgrade` or `sold` that carries `tier` for its colour. Levels 5, 10,
+  15, and 20 write a `milestone` line. `summarize` counts `found`, `upgrades`, and `soldFor`.
+- Measured, `node tools/simulate.mjs`, 500 heroes, every point spent, median (target): L2 10 min (10 min),
+  L3 66 min (1 h), L4 3.1 h (3 h), L5 6.2 h (6.5 h), L6 10.8 h (11 h), L8 30.1 h (30 h), L10 3.1 days (3),
+  L12 6.1 days (6), L15 13.1 days (13), L18 22.9 days (23), L20 29.8 days (30). Middle 80% reach level 20
+  between 27.8 and 32.3 days. All 500 clear The Hoard of Vexaldrith (median day 29.8).
+- Gear by level, as the average rarity across the eight slots (0 Common to 4 Legendary): L5 0.18, L8 0.76,
+  L10 1.30, L12 1.76, L15 2.27, L18 2.84, L20 3.31. After the last dungeon: 56% of slots Very Rare, 44%
+  Legendary; 496 of 500 heroes wear a Legendary and 466 wore all five rarities in one slot. Each hero finds
+  about 800 pieces, wears 75, and sells the rest for about 87,000 gp (gold at the end: about 1.6 million, still
+  with little to spend it on until Phase 6).
+- Knockouts per hero per month: 4.2 overall (0.3 roaming, 1.3 on quests, 1.0 in dungeon rooms, 1.6 to
+  bosses), down from 5.8 in Phase 4. By class: Fighter 2.6, Wizard 3.7, Rogue 4.0, Cleric 6.4. By subclass,
+  level 20 in days / knockouts: Vanguard 30.0 / 2.2, Bulwark 32.2 / 0.8, Sellsword 30.5 / 4.9, Evoker
+  28.4 / 5.5, Abjurer 30.5 / 0.7, Diviner 27.8 / 5.1, Duelist 29.3 / 5.1, Shadow 31.9 / 2.1, Treasure Hunter
+  29.7 / 4.9, Warpriest 29.6 / 6.3, Lifebinder 33.0 / 2.2, Pilgrim 28.5 / 10.9.
+- What changed in the rules to make room for gear (`js/rules.js`; rerun the simulator after touching any):
+  - `GROWN.dcFrom` is now `[5, 8, 10, 13, 15, 18]`: anything of those levels and up is +1 harder to roll
+    against for each step (three steps in Phase 4). This is what a weapon's bonus pays for.
+  - `GROWN.damagePerLevel` is 0.02 (was 0.015).
+  - `XP_RATE` is up about 6% from level 6 (0.51 at level 6, 0.57 at 7, rising to 0.74 at 19 and 20). Levels
+    2 to 5 cost what they did. `PAST_CURVES[3]` holds the Phase 4 curve.
+  - Still true from Phase 4: Intelligence gives 1% XP per modifier point, the Wizard's 15% ward stays, and
+    skills, wards, and armour together never turn aside more than 60% of a hit.
+- The trees (Phase 4): each class has a Might, a Guard, and a Fortune branch (the three subclasses), twelve
+  skills each in four tiers of three. A tier opens after two skills in the tier above. The twelfth skill of a
+  branch is its capstone and needs that branch's subclass (chosen from level 3). At most 27 skills.
 - How a skill works: `fx` is passive numbers, summed across learned skills (`FX_KEYS` in `js/skills.js`);
   `sig` is a signature move, looked up by type in `js/tasks.js` (`SIG_TYPES`), which fires on its own and
-  writes its `fire` line as a `skill` event. Learning writes the skill's `learn` line. `skillMods(hero)` is
-  the one door from skills into the rules. Moves with limited uses count in `hero.delve.used` (per run), the
+  writes its `fire` line as a `skill` event. Moves with limited uses count in `hero.delve.used` (per run), the
   quest's `used`, the boss fight, or `hero.cooldowns`. To add or change a skill, edit the data file; a new
   kind of effect needs a key or type in `js/skills.js` and its code in `js/tasks.js`.
+- The six loot skills now do what the doc says, and no card says "Not built yet": Hazard Pay and The Big
+  Score make a beaten boss drop a second piece (`items` on a `bossPurse` move); Sticky Fingers gives a 20%
+  chance of a second piece wherever a room, chest, boss, or quest gives one (`bonusLoot`; it no longer pays a
+  purse); Eye for Quality adds 0.3 of a rarity step to everything found (`quality`, a new `FX_KEYS` entry);
+  Locate Object and Treasure Map put a chest in the hidden room.
 - The player's growth choices are four functions that only change the save and write a Chronicle line:
-  `learnSkill`, `chooseSubclass`, `respec` (`js/skills.js`) and `raiseAbility` (`js/hero.js`). The UI and the
-  simulator call the same ones. Skill points (one per level and per Feat) and ability points (two at levels
-  4, 8, 12, 16, 19; each is +1 to a score, up to 20) bank until spent. Respec costs `respecPrice(level)` in
-  `js/rules.js` (450 gp at level 3, 3,250 at 10, 11,500 at 20), returns every skill point, reopens the
-  subclass, and keeps ability scores.
-- Measured, `node tools/simulate.mjs`, 500 heroes, every point spent, median (target): L2 10 min (10 min),
-  L3 66 min (1 h), L4 3.1 h (3 h), L5 6.3 h (6.5 h), L6 11.0 h (11 h), L8 29.7 h (30 h), L10 3.0 days (3),
-  L12 6.0 days (6), L15 13.0 days (13), L18 22.8 days (23), L20 29.7 days (30). Middle 80% reach level 20
-  between 28.1 and 32.1 days. All 500 clear The Hoard of Vexaldrith (median day 29.8).
-- By subclass, level 20 in days / knockouts in the month: Vanguard 29.6 / 3.1, Bulwark 31.8 / 1.1,
-  Sellsword 30.8 / 8.8, Evoker 28.4 / 6.8, Abjurer 30.3 / 1.1, Diviner 28.0 / 6.3, Duelist 29.5 / 5.9,
-  Shadow 32.1 / 2.7, Treasure Hunter 30.1 / 8.6, Warpriest 29.5 / 7.1, Lifebinder 32.5 / 1.7,
-  Pilgrim 28.7 / 16.4. By class: Fighter 4.3, Wizard 4.7, Rogue 5.7, Cleric 8.4 knockouts. Overall 5.8 per
-  hero per month (0.4 roaming, 1.8 on quests, 1.4 in dungeon rooms, 2.3 to bosses), down from 11.8 in
-  Phase 3; about 0.2 to 0.6 lost runs per dungeon before its first clear. No cliff: at 1.5x damage
-  every hero still reaches level 20 and clears the last dungeon (31.1 days, 33 knockouts).
-- What changed in the rules to make room for growth (`js/rules.js`, all tuned with the simulator; rerun it
-  after touching any of them):
-  - The XP curve is now `XP_RATE`, one rate per level: 0.5 a second up to level 6 (unchanged, so levels 2
-    to 6 land where they did), climbing to 0.7 by level 19, because a hero who spends points earns faster.
-  - `GROWN`: anything of level 5, 10, or 15 and up has +1, +2, or +3 on its DC, and damage rises 1.5% per
-    level above 3. The data files still hold the Phase 3 numbers; the Chronicle prints the DC rolled against.
-  - Dungeon room and boss damage in `data/dungeons.js` is up from the third dungeon on (x1.1 rising to
-    x1.55 at the last), so a dungeon is still a test for a grown hero.
-  - Intelligence gives 1% XP per modifier point (`INT_XP`), down from 2%: at Intelligence 20 the Wizard ran
-    a tenth ahead of every other class.
-  - The Wizard's 15% ward stays (`data/classes.js`). With it Wizards sit beside the other classes (4.7
-    knockouts); Guard skills stack on top of it, capped at 60% of a hit turned aside in all.
-- A hero whose points are never spent (`node tools/simulate.mjs 240 unspent`) still reaches level 20, at a
-  median of 46 days, and mostly cannot clear the last two dungeons until the points are spent. Banked
-  points are never lost, but the later game now expects them to be used.
-- Saves: version 3. `migrate` in `js/state.js` fills the growth fields, grants the ability points a hero's
-  level has already earned, never leaves fewer skill points than levels and Feats are worth, and moves XP
-  to the same place within the level on the new curve (`PAST_CURVES` holds the version 1 and 2 curves). No
-  hero loses a level, a skill point, or a Feat.
-- `node tools/check-sim.mjs` proves the sim: the Phase 1 and 3 checks, plus for Phase 4 the shape of the
-  trees, that each of the 144 skills changes what happens and each of the 48 moves fires with its own line,
-  that learning writes each skill's line, tier gating, the capstone rule, the 27 cap, ability increases,
-  respec, determinism with skills learned, and a Phase 3 save loading intact. Run it after any change to
-  `js/sim.js`, `tasks.js`, `rules.js`, `hero.js`, `skills.js`, `state.js`, or the data files.
-- Skills that touch things not built yet have a real effect now and say so on the card ("Not built yet"):
-  Hazard Pay and The Big Score pay extra boss purses (the extra item is Phase 5); Sticky Fingers pays a
-  second purse (a second item, Phase 5); Eye for Quality pays 25% more boss gold (better rarity odds,
-  Phase 5); Locate Object and Treasure Map find a hidden room of gold (a chest, Phase 5). No skill refers
-  to tavern upgrades.
-- Spec departures to raise with Rob: the three in Phase 3 still stand (the Dwarf grudge is +2 on the roll,
-  the Wizard ward, chapter cards do not change for later heroes). New in Phase 4: Fireball turns one failed
-  room per run into a clean success (a room is already one task, so "clears a room in one task" needed a
-  meaning). Slip Away skips a room only when the hero is below half hit points. Divine Favor gives advantage
-  on the first roll after arriving in a region and the first of each dungeon run (once per region ever would
-  be eight rolls a month). Healing Word heals between rooms up to three times a run. Second Wind is in the
-  Vanguard branch as the doc's table has it. Respec does not refund ability score increases. Strength's
-  "faster monster tasks for Fighters" and Dexterity's "critical chance" from the doc's ability table are
-  still not built; skills cover both for now (Drilled Footwork, Keen Edge).
-- Placeholders shown honestly in the UI: quests do not pay the guaranteed gear piece yet (Phase 5), Gear
-  shows the Common starting kit, the Tavern lists upgrades, roster, and retirement as still to come. The
-  scene backdrop is the same field everywhere except dungeons (dark) and the tavern; region backdrops are
-  Phase 5. The knockout "fall" animation is not played yet.
+  `learnSkill`, `chooseSubclass`, `respec` (`js/skills.js`) and `raiseAbility` (`js/hero.js`). Skill points (one
+  per level and per Feat) and ability points (two at levels 4, 8, 12, 16, 19) bank until spent. Respec costs
+  `respecPrice(level)`, returns every skill point, reopens the subclass, and keeps ability scores.
+- Saves: version 4. `migrate` in `js/state.js` turns a Phase 4 hero's bare `{ tier: 0 }` gear into the named
+  starting kit, hands the cloak to a hero already at level 5 or more, and moves XP to the same place within
+  the level on the new curve. No hero loses a level, a skill, a point, a Feat, or any gold.
+- `node tools/check-sim.mjs` proves the sim (131 checks): Phases 1, 3, and 4 as before, plus for Phase 5 five
+  different baked looks per visible slot, the starting kit, 4,000 random pieces through auto-equip and
+  auto-sell, drops from each source, the guaranteed quest piece, gear never going backwards, the named
+  Legendaries, the cloak at 5, the six loot skills, determinism with loot, a version 3 save loading intact,
+  and one simulated hero's gear climbing from Common to Legendary. Run it after any change to `js/sim.js`,
+  `tasks.js`, `rules.js`, `hero.js`, `skills.js`, `loot.js`, `state.js`, or the data files.
+- Spec departures to raise with Rob. From earlier phases, still standing: the Dwarf grudge is +2 on the roll,
+  the Wizard ward, chapter cards do not change for later heroes, Fireball turns one failed room per run into
+  a success, Slip Away skips a room only below half hit points, Divine Favor is the first roll after arriving
+  and the first of each dungeon run, Healing Word heals up to three times a run, Second Wind is in the Vanguard
+  branch, respec does not refund ability scores, and Strength's "faster monster tasks" and Dexterity's
+  "critical chance" are covered by skills. New in Phase 5:
+  - A lower-level piece of a higher rarity always wins, so the sprite never goes back to an older look.
+  - A story quest's guaranteed piece is aimed at the hero's weakest slot (the doc says only "one piece").
+  - Odd jobs also pay a piece, to a random slot.
+  - Wisdom's "extra loot" is a better drop chance from monsters and rooms.
+  - A natural 20's "bonus (extra loot or XP)" is the 1.5x reward it already was, plus a doubled drop chance.
+  - The named Legendary is a 15% chance per clear, not a certainty, so there is a reason to run a dungeon again.
+  - The level 10 emblem is LPC's neck clip, which comes with a short collar in the class colour; the title
+    that goes with it is shown after the hero's class on the Hero tab (`TITLES` in `data/loot.js`).
+  - Sticky Fingers no longer pays a second purse of gold; it pays in gear.
+- Placeholders shown honestly in the UI: the Tavern lists upgrades, roster, and retirement as still to come
+  (Phase 6). There is one dungeon backdrop for all eight dungeons. No Hall of Legends portrait yet.
 - `index.html` is the game. The Phase 0 sprite proof is `sprite-lab.html`; the simulator is
   `tools/simulate.html` (both linked from Tavern > Workshop).
 - Levels 3 to 6 were moved later than the design doc's table after Rob's play test (they came too fast);
   do not move them earlier. `LEVEL_TARGET_HOURS` in `js/rules.js` holds every target.
 - The Skills tab redraws only when something on it changes (a rebuild every second would swallow taps).
-  Learn, ability, and respec buttons ask for a second tap.
+  Learn, ability, and respec buttons ask for a second tap. The Gear tab has nothing to tap.
+- The knockout fall plays only for a knockout seen as it happens, for a second and a half, in the scene where
+  it happened; then the scene moves to the tavern.
 - "Create a new hero" replaces the current hero; the roster of three is Phase 6. No in-game credits screen yet (Phase 7).
 - `sprite.js` draws the front of every shield above hats (LPC puts it under them, which clipped wide brims).
-- Not baked yet: level milestone layers (cape clip), the other 18 hair colours.
-- Local preview: `.claude/launch.json` has four servers (ports 8771, 8773, 8779, 8784) so sessions do not collide.
+- Not baked yet: the other 18 hair colours.
+- Local preview: `.claude/launch.json` has five servers (ports 8771, 8773, 8779, 8784, 8792) so sessions do not collide.

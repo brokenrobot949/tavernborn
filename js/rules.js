@@ -48,7 +48,9 @@ export const LEVEL_TARGET_HOURS = [0, 0, 1 / 6, 1, 3, 6.5, 11, 18, 30, 48, 72, 1
 // player spends every point: the median simulated hero lands near every target and reaches
 // level 20 at about 30 days. Changing a rate moves every saved hero's XP bar; state.js keeps the
 // older curves (PAST_CURVES) so an older save keeps its place within its level.
-export const XP_RATE = [0, 0, 0.5, 0.5, 0.5, 0.5, 0.5, 0.54, 0.56, 0.58, 0.6, 0.63, 0.65, 0.675, 0.675, 0.675, 0.675, 0.675, 0.675, 0.7, 0.7];
+// Phase 5 raised every rate from level 6 by about 6%: gear adds to rolls, to XP, and to what a
+// critical pays, so a geared hero earns that much faster.
+export const XP_RATE = [0, 0, 0.5, 0.5, 0.5, 0.5, 0.51, 0.57, 0.595, 0.615, 0.635, 0.67, 0.69, 0.715, 0.715, 0.715, 0.715, 0.715, 0.715, 0.74, 0.74];
 export function curve(rates) {
   const total = [0, 0];
   for (let level = 2; level <= MAX_LEVEL; level++) total[level] = total[level - 1] + 3600 * (LEVEL_TARGET_HOURS[level] - LEVEL_TARGET_HOURS[level - 1]) * rates[level];
@@ -58,8 +60,10 @@ const XP_FOR_LEVEL = curve(XP_RATE);
 export const xpForLevel = (level) => XP_FOR_LEVEL[Math.min(level, MAX_LEVEL)];
 // Curves older saves were made on: [save version, XP rate per level]. Version 1 (Phases 1 and 2)
 // priced levels after 6 at 0.48 a second; version 2 (Phase 3) at 0.51.
+// Version 3 (Phase 4) is the rate list below.
 const flat = (late) => XP_RATE.map((_, level) => (level < 2 ? 0 : level <= 6 ? 0.5 : late));
-export const PAST_CURVES = { 1: curve(flat(0.48)), 2: curve(flat(0.51)) };
+const PHASE_4_RATE = [0, 0, 0.5, 0.5, 0.5, 0.5, 0.5, 0.54, 0.56, 0.58, 0.6, 0.63, 0.65, 0.675, 0.675, 0.675, 0.675, 0.675, 0.675, 0.7, 0.7];
+export const PAST_CURVES = { 1: curve(flat(0.48)), 2: curve(flat(0.51)), 3: curve(PHASE_4_RATE) };
 
 // One d20 check. `rerollOne` is the Goblin quirk: a natural 1 is rolled again, once.
 // `critFrom` is the lowest die that counts as a critical (skills lower it from 20).
@@ -116,7 +120,7 @@ export function levelGapXp(gap) {
 // level 4 or more is a little harder to roll against and hits a little harder than its entry
 // says, rising with its level. The Chronicle prints the DC actually rolled against.
 // Tuned with the simulator; rerun it after touching these.
-export const GROWN = { dcFrom: [5, 10, 15], damagePerLevel: 0.015, damageFrom: 3 };
+export const GROWN = { dcFrom: [5, 8, 10, 13, 15, 18], damagePerLevel: 0.02, damageFrom: 3 };
 export const grownDc = (level) => GROWN.dcFrom.filter((l) => level >= l).length;
 export const grownDamage = (level) => 1 + GROWN.damagePerLevel * Math.max(0, level - GROWN.damageFrom);
 
@@ -174,3 +178,39 @@ export const skipFee = (level, secondsLeft) => Math.max(5, Math.ceil((secondsLef
 // Respec at the tavern: all skill points back and the subclass open again. The price rises with
 // level: a few hours of a hero's earnings at that level (450 gp at 3, 3,250 at 10, 11,500 at 20).
 export const respecPrice = (level) => 25 * level * (level + 3);
+
+// ----- gear and loot (Phase 5) -----
+// Every slot does one job. A piece's number is `tier` steps of `perTier` (Common is tier 0,
+// Legendary tier 4) plus `perLevel` for every level of the piece above 1. Nineteen levels are
+// worth a little less than one rarity step, so a rarer piece always beats a commoner one and,
+// within a rarity, a higher-level piece beats a lower. The starting kit (Common, level 1) is
+// worth exactly nothing. `keys` are the same numbers skills change (FX_KEYS in js/skills.js).
+// The weapon is the one piece with two lines: rarity sets its bonus to rolls, level what a
+// critical pays.
+export const GEAR_STATS = {
+  weapon: { keys: ['roll'], perTier: 1, perLevel: 0, also: { keys: ['critReward'], perTier: 0, perLevel: 0.02 } },
+  offhand: { keys: ['dodge'], perTier: 0.015, perLevel: 0.00075 },
+  head: { keys: ['hp'], perTier: 0.02, perLevel: 0.001 },
+  body: { keys: ['dr'], perTier: 0.02, perLevel: 0.001 },
+  hands: { keys: ['gold'], perTier: 0.03, perLevel: 0.0015 },
+  feet: { keys: ['travel', 'recovery'], perTier: 0.05, perLevel: 0.0025 },
+  cloak: { keys: ['rest', 'potion'], perTier: 0.04, perLevel: 0.002 },
+  trinket: { keys: ['xp'], perTier: 0.01, perLevel: 0.0005 },
+};
+export const LOOT = {
+  cloakLevel: 5, // the Cloak slot opens, and a Common cloak is handed over
+  // Chance of a piece from a monster beaten on the road and from a dungeon room cleared cleanly.
+  // Quests and beaten bosses always give one.
+  drop: { roam: 0.01, room: 0.1 },
+  critDrop: 2, // a natural 20 multiplies the chance
+  wisdom: 0.1, // each point of Wisdom modifier adds this share to the chance
+  // Rarity: tier = level / 5 + the source's shift + luck (anything up to one tier), rounded down.
+  // So each source has a ceiling for its level. A monster on the road never has better than Very
+  // Rare on it, and that only near the end; quests run about a tier behind bosses; a boss of level
+  // 18 or 20 is where Legendaries come from.
+  shift: { roam: -1.6, odd: -1.1, room: -0.9, quest: -0.8, chest: -0.5, boss: -0.2 },
+  luck: 1,
+  legend: 0.15, // chance that a beaten boss also gives up its dungeon's named Legendary
+};
+// What a piece sells for: more with its level, doubling with each rarity step.
+export const sellPrice = (item) => (5 + 2 * item.level) * 2 ** item.tier;

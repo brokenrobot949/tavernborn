@@ -7,6 +7,7 @@ import { REGIONS, REGION_INDEX, START_REGION } from '../data/regions.js';
 import { ARRIVAL, ABILITY_RAISED } from '../data/chronicle.js';
 import { ABILITIES, ABILITY_NAMES, ABILITY_LEVELS, ABILITY_POINTS, ABILITY_MAX, MAX_LEVEL, mod, pick, roll, xpForLevel } from './rules.js';
 import { skillMods } from './skills.js';
+import { gearMods, startingGear } from './loot.js';
 
 export const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
 export const MAX_ROLLS = 3;
@@ -56,23 +57,20 @@ export function defaultAppearance(race) {
   return { build: r.builds[0].id, skin: r.skins[0], hairStyle: r.hair, hairColor: 'chestnut', beard: !!r.builds[0].beard };
 }
 
-// Hit points come from the class, the level, Constitution, and skills, so they are always recomputed.
+// Hit points come from the class, the level, Constitution, skills, and whatever is on the hero's
+// head, so they are always recomputed.
 export function maxHp(hero) {
   const die = CLASSES[hero.class].hitDie;
   const con = mod(hero.abilities.con);
   const base = Math.max(hero.level, die + (hero.level - 1) * (die / 2 + 1) + hero.level * con);
   const { n } = skillMods(hero);
-  return Math.floor(base * (1 + n.hp)) + hero.level * n.hpLevel;
+  return Math.floor(base * (1 + n.hp + (gearMods(hero).hp ?? 0))) + hero.level * n.hpLevel;
 }
 
 export const xpToNext = (hero) => (hero.level >= MAX_LEVEL ? null : xpForLevel(hero.level + 1));
 
-// Phase 1 has no loot: every hero wears the Common look in each slot. The Cloak slot unlocks at
-// level 5 (Phase 5) and the Trinket never shows on the sprite.
-const STARTING_GEAR = () => ({
-  weapon: { tier: 0 }, offhand: { tier: 0 }, head: { tier: 0 }, body: { tier: 0 },
-  hands: { tier: 0 }, feet: { tier: 0 }, cloak: null, trinket: null,
-});
+// Every hero starts in their class's Common kit (js/loot.js). The Cloak slot opens at level 5
+// and the Trinket, which never shows on the sprite, starts empty.
 
 // Everything Phase 3 keeps on a hero. state.js uses the same list to bring older saves up to date.
 //   travelTo        region the hero has been told to walk to, or null
@@ -95,7 +93,7 @@ export const GROWTH_FIELDS = () => ({ abilityPoints: 0, raised: {}, cooldowns: {
 // Ability points a hero of this level has been granted in all.
 export const abilityPointsBy = (level) => ABILITY_POINTS * ABILITY_LEVELS.filter((l) => l <= level).length;
 
-export const STATS = { knockouts: 0, mostEmbarrassingDefeat: null, natural20s: 0, natural1s: 0, tasks: 0, quests: 0, oddJobs: 0, dungeonRuns: 0, dungeonClears: 0 };
+export const STATS = { knockouts: 0, mostEmbarrassingDefeat: null, natural20s: 0, natural1s: 0, tasks: 0, quests: 0, oddJobs: 0, dungeonRuns: 0, dungeonClears: 0, itemsFound: 0, upgrades: 0, soldFor: 0 };
 
 // A region is open once the dungeon of the region before it has been cleared. The first always is.
 export function regionOpen(hero, regionId) {
@@ -119,7 +117,7 @@ export function createHero(state, { name, race, cls, appearance, baseScores }) {
     abilities: withRaceBonus(baseScores, race),
     skillPoints: 0,
     skills: [],
-    gear: STARTING_GEAR(),
+    gear: startingGear(cls),
     gold: 0,
     region: START_REGION,
     focus: 'roam',

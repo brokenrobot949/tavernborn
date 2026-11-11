@@ -37,6 +37,11 @@ node tools/sprites.mjs bake
 - `bake` recolors with the generator's palettes, writes `assets/lpc/`, `data/sprite-layers.js`,
   `data/credits.js`, and `CREDITS.md`. It refuses to run while any check fails.
 
+The asset list also takes in `EMBLEM` in `data/items.js` (the level 10 neck clip). A layer that ships
+in one fixed look can be recoloured with `force: '<material>'`; add `ramp: true` when its art is not
+drawn in that material's palette (the mace is plain greys), and the tool maps every pixel but the
+outline onto the target colours by brightness. The Cleric's bronze mace is made this way.
+
 Draw order, body-type paths, recolor palettes, and credits are all read from the generator's
 `sheet_definitions/` and `palette_definitions/`. Nothing is hard-coded here except the four
 animations the game uses and the oversize weapon animations that map onto them.
@@ -74,7 +79,18 @@ writes its own Chronicle line; learning writes each skill's line; a tier opens a
 the tier above; only the chosen subclass's capstone can be learned; 27 skills at most; ability
 points bank at levels 4, 8, 12, 16, and 19 and stop at a score of 20; respec refunds every point
 for a price that rises with level; a hero with skills is still deterministic; and a Phase 3 save
-loads with every level, skill point, and Feat. It also prints the median time to each early level
+loads with every level, skill point, and Feat. Then Phase 5, gear: every class has five different
+baked looks in each of the seven visible slots, and the four emblems are baked; the starting kit is
+worth nothing and a rarer piece always beats a commoner one; 4,000 random pieces go through
+auto-equip and auto-sell without one worse piece being worn or one sale going unpaid; monsters,
+rooms, quests, odd jobs, and bosses each drop as they should, with bosses dropping the best; every
+finished quest pays its piece on the next Chronicle line; no slot goes backwards over 33 hours; the
+eight named Legendaries exist, drop, and are not dropped twice; the Cloak slot is shut until level
+5 and then comes with a cloak; Hazard Pay, The Big Score, Sticky Fingers, Eye for Quality, Locate
+Object, and Treasure Map each do what their card says and no card says "Not built yet"; loot is
+deterministic and survives the save string; a Phase 4 save (version 3) loads with its level, place
+within the level, gold, skills, points, and Feats, and is given the named starting kit and its
+cloak; and one simulated hero's gear climbs from Common to Legendary over the month. It also prints the median time to each early level
 against the targets (for heroes whose points are left unspent).
 
 ## simulate.html and simulate.mjs: the pacing simulator
@@ -88,8 +104,9 @@ node tools/simulate.mjs
 Both run 500 heroes through the real `advance(state, seconds)` in the real eight regions, from
 level 1 until they are level 20 and have cleared the last dungeon. They report the time to each
 level (10th percentile, median, 90th) against `LEVEL_TARGET_HOURS`, a breakdown by class and race,
-each dungeon's first clear (how many heroes, when, at what level, runs lost), and where the
-knockouts happened. The terminal version exits with an error unless the median hero reaches level
+each dungeon's first clear (how many heroes, when, at what level, runs lost), where the
+knockouts happened, and gear: the average rarity across the eight slots on reaching each level,
+what is worn at the end, and how much was found, worn, and sold. The terminal version exits with an error unless the median hero reaches level
 20 in 28 to 32 days and at least nine in ten heroes clear The Hoard of Vexaldrith.
 
 Arguments: `node tools/simulate.mjs [heroes] [road|roam|vale|unspent] [damageTimes]`.
@@ -108,6 +125,8 @@ Arguments: `node tools/simulate.mjs [heroes] [road|roam|vale|unspent] [damageTim
   a table by subclass.
 - `road` is that player (the judged run). `roam` never quests. `vale` never leaves Mugwick Vale.
   `unspent` is the road played by someone who never spends a skill or ability point.
+- **Gear.** Nothing is played: loot equips and sells itself inside `advance`. The simulator only
+  watches (`tierAt`, `worn`, `gear` on each result).
 - `damageTimes` (the page's "What if monsters hit harder?") multiplies all damage for that run only,
   through `WHAT_IF` in `js/rules.js`. Nothing is written to the game's files.
 - Rerun after any change to pacing, monsters, quests, dungeons, damage, healing, or skills.

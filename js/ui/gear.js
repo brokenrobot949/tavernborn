@@ -1,5 +1,5 @@
-// Gear tab: the eight slots, ability scores, lifetime stats, and the Bestiary.
-// Loot arrives in Phase 5; until then every hero wears the Common starting kit.
+// Gear tab: the eight slots (what is worn, its rarity, and what it does), ability scores,
+// lifetime stats, and the Bestiary. There is nothing to manage here: gear equips and sells itself.
 
 import { TIERS } from '../../data/items.js';
 import { MONSTERS } from '../../data/monsters.js';
@@ -8,19 +8,38 @@ import { foeName } from '../tasks.js';
 import { RACES, RACE_TRAITS } from '../../data/races.js';
 import { CLASSES } from '../../data/classes.js';
 import { ABILITIES, ABILITY_NAMES, mod } from '../rules.js';
+import { GEAR_SLOTS } from '../../data/loot.js';
+import { describe, describeAll, flavorOf } from '../loot.js';
+import { LOOT } from '../rules.js';
 import { el, num, signed, duration } from './dom.js';
 
-const SLOT_NAMES = [['weapon', 'Weapon'], ['offhand', 'Off-hand'], ['head', 'Head'], ['body', 'Body'], ['hands', 'Hands'], ['feet', 'Feet'], ['cloak', 'Cloak'], ['trinket', 'Trinket']];
+
+// 'travel 21% quicker' -> 'Travel 21% quicker.'
+const sentence = (text) => text[0].toUpperCase() + text.slice(1) + (text.endsWith('.') ? '' : '.');
 
 export function mountGear(root) {
   function update(state, hero) {
-    const slots = SLOT_NAMES.map(([id, label]) => {
-      const item = hero.gear[id];
-      const tier = item ? TIERS[item.tier] : null;
-      const value = el('span', { className: 'slot-value', textContent: tier ? `${tier.name} starting kit` : id === 'cloak' ? 'Unlocks at level 5' : 'Empty' });
-      if (tier) value.style.setProperty('--tier', tier.color);
-      return el('li', { className: tier ? 'slot filled' : 'slot' }, el('span', { className: 'slot-name', textContent: label }), value);
+    const slots = GEAR_SLOTS.map((slot) => {
+      const item = hero.gear[slot.id];
+      if (!item) {
+        const why = slot.id === 'cloak' && hero.level < LOOT.cloakLevel ? `Opens at level ${LOOT.cloakLevel}, and comes with a cloak.` : 'Empty. The first one found goes straight in.';
+        return el('li', { className: 'slot empty' },
+          el('div', { className: 'slot-top' }, el('span', { className: 'slot-name', textContent: slot.name })),
+          el('p', { className: 'slot-item', textContent: why }),
+          el('p', { className: 'slot-does', textContent: `${slot.does}.` }));
+      }
+      const tier = TIERS[item.tier];
+      const flavor = flavorOf(item);
+      const row = el('li', { className: 'slot filled' },
+        el('div', { className: 'slot-top' }, el('span', { className: 'slot-name', textContent: slot.name }), el('span', { className: 'slot-rarity', textContent: `${tier.name}, level ${item.level}` })),
+        el('p', { className: 'slot-item', textContent: item.name }),
+        el('p', { className: 'slot-does', textContent: sentence(describe(slot.id, item)) }),
+        flavor ? el('p', { className: 'slot-flavor', textContent: flavor }) : null);
+      row.style.setProperty('--tier', tier.color);
+      return row;
     });
+    const total = describeAll(hero);
+    const key = el('div', { className: 'rarity-key' }, ...TIERS.map((t) => { const s = el('span', { textContent: t.name }); s.style.setProperty('--tier', t.color); return s; }));
 
     const main = CLASSES[hero.class].main;
     const abilities = ABILITIES.map((a) => el('div', { className: 'ability' + (a === main ? ' main' : '') },
@@ -43,7 +62,9 @@ export function mountGear(root) {
     root.replaceChildren(
       el('h2', { className: 'view-title', textContent: 'Gear and records' }),
       el('section', { className: 'panel' }, el('h3', { textContent: 'Gear' }), el('ul', { className: 'slots' }, ...slots),
-        el('p', { className: 'hint', textContent: 'Gear will equip itself when loot arrives in a later build.' })),
+        key,
+        el('p', { className: 'gear-total', textContent: total.length ? `All told: ${total.join(', ')}.` : 'All told: nothing yet. The starting kit is worth what was paid for it.' }),
+        el('p', { className: 'hint', textContent: 'Gear looks after itself. A better piece goes on the moment it is found and everything else is sold. Better means rarer, or the same rarity at a higher level. Rarity sets the size of a piece\'s bonus and its look on the hero; level adds a little on top. Monsters drop gear rarely, every finished quest pays one piece, and dungeon bosses drop the best. Each dungeon also has one named Legendary.' })),
       el('section', { className: 'panel' }, el('h3', { textContent: 'Ability scores' }), el('div', { className: 'abilities' }, ...abilities),
         el('p', { className: 'hint', textContent: `${RACES[hero.race].name} quirk, ${trait.quirk}: ${trait.effect[0].toLowerCase() + trait.effect.slice(1)}.${trait.built ? '' : ' (Wakes up in a later build.)'}` })),
       el('section', { className: 'panel' }, el('h3', { textContent: 'Lifetime' }), el('ul', { className: 'stats' },
@@ -55,6 +76,8 @@ export function mountGear(root) {
         stat('Odd jobs done', num(hero.stats.oddJobs)),
         stat('Feats', num(hero.feats.length)),
         stat('Dungeons cleared', `${num(hero.stats.dungeonClears)} of ${num(hero.stats.dungeonRuns)} runs`),
+        stat('Gear found', `${num(hero.stats.itemsFound)}, ${num(hero.stats.upgrades)} worn`),
+        stat('Gold from selling the rest', `${num(hero.stats.soldFor)} gp`),
         stat('Knockouts', num(hero.stats.knockouts)),
         stat('Most Embarrassing Defeat', worst ?? 'None yet'))),
       el('section', { className: 'panel' }, el('h3', { textContent: `Bestiary: ${REGION_BY_ID[hero.region].name} (${monsters.filter((m) => hero.bestiary[m.id]).length} of ${monsters.length})` }), el('ul', { className: 'bestiary' }, ...bestiary)),

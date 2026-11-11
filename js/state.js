@@ -6,10 +6,12 @@ import { RACES } from '../data/races.js';
 import { CLASSES } from '../data/classes.js';
 import { REGION_BY_ID, START_REGION } from '../data/regions.js';
 import { ADVENTURE_FIELDS, GROWTH_FIELDS, STATS, abilityPointsBy } from './hero.js';
+import { startingGear, startingCloak, SLOT_IDS, MAX_TIER } from './loot.js';
+import { LEGENDARIES } from '../data/loot.js';
 import { SKILL_BY_ID, BRANCH_BY_ID, MAX_SKILLS } from './skills.js';
-import { MAX_LEVEL, PAST_CURVES, xpForLevel } from './rules.js';
+import { MAX_LEVEL, PAST_CURVES, LOOT, xpForLevel } from './rules.js';
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 const SAVE_KEY = 'tavernborn.save.v1';
 const EXPORT_PREFIX = 'TVB1.';
 
@@ -49,6 +51,25 @@ function growthFields(h, version) {
   h.skillPoints = Math.max(Number(h.skillPoints) || 0, earned - h.skills.length);
 }
 
+// Phase 5 (version 4): gear is real. Before it, every slot held a bare `{ tier: 0 }`; each becomes
+// the named piece of the class's starting kit, a hero already past level 5 is handed the cloak
+// that level now comes with, and anything unreadable is put back to the starting piece. Nothing
+// is taken away: gold, levels, skills, and points are not touched.
+function gearFields(h) {
+  const start = startingGear(h.class);
+  const old = h.gear && typeof h.gear === 'object' ? h.gear : {};
+  h.gear = {};
+  for (const id of SLOT_IDS) {
+    const it = old[id];
+    const good = it && typeof it === 'object' && Number.isInteger(it.tier) && it.tier >= 0 && it.tier <= MAX_TIER;
+    if (!good) { h.gear[id] = start[id]; continue; }
+    const named = typeof it.name === 'string' && it.name;
+    h.gear[id] = { tier: it.tier, level: Math.max(1, Math.min(MAX_LEVEL, Math.floor(it.level) || 1)), name: named ? it.name : start[id]?.name ?? 'Unlabelled Piece' };
+    if (LEGENDARIES[it.legend]?.slot === id) h.gear[id].legend = it.legend;
+  }
+  if (!h.gear.cloak && h.level >= LOOT.cloakLevel) h.gear.cloak = startingCloak();
+}
+
 // Bring an older or partial save up to the current shape, or throw if it is not a save at all.
 export function migrate(save) {
   if (!save || typeof save !== 'object' || !Array.isArray(save.heroes)) throw new Error('That is not a Tavernborn save.');
@@ -63,6 +84,7 @@ export function migrate(save) {
     if (!['roam', 'quest', 'delve'].includes(h.focus)) h.focus = 'roam';
     h.feats ??= [];
     growthFields(h, save.version);
+    gearFields(h);
     // XP never sits below the hero's own level, whatever happened to the curve.
     h.xp = Math.max(Number(h.xp) || 0, xpForLevel(Math.min(h.level, MAX_LEVEL)));
     h.chronicle ??= [];

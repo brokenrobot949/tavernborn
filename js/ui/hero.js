@@ -5,7 +5,8 @@ import { RACES } from '../../data/races.js';
 import { CLASSES } from '../../data/classes.js';
 import { REGION_BY_ID } from '../../data/regions.js';
 import { DUNGEONS } from '../../data/dungeons.js';
-import { SLOTS } from '../../data/items.js';
+import { SLOTS, TIERS, EMBLEM_LEVEL } from '../../data/items.js';
+import { TITLES } from '../../data/loot.js';
 import { SpriteView, heroLook, drawStill } from '../sprite.js';
 import { maxHp, xpToNext } from '../hero.js';
 import { xpForLevel } from '../rules.js';
@@ -16,10 +17,17 @@ import { el, num, heroClock } from './dom.js';
 const STAGE_H = 70; // sprite pixels; the scene is this tall times 4
 const SHOWN_LINES = 80;
 
-// The sprite layers for a hero: appearance plus the look of whatever is in each gear slot.
+// Level milestones: the class emblem at 10, a wisp in the class colour at 15, a golden glow at 20.
+// (The cloak at 5 is a real piece of gear and arrives through the Cloak slot.)
+const WISP_LEVEL = 15, GLOW_LEVEL = 20;
+const WISP_COLOR = { fighter: 'rgba(255, 150, 90, 0.85)', wizard: 'rgba(120, 180, 255, 0.85)', rogue: 'rgba(150, 225, 120, 0.85)', cleric: 'rgba(255, 232, 150, 0.85)' };
+
+// The sprite layers for a hero: appearance, the look of whatever is in each gear slot (its
+// rarity picks one of five looks), and the milestones their level has earned.
 export function heroSpriteLook(hero) {
   const tiers = Object.fromEntries(SLOTS.map((s) => [s.id, hero.gear[s.id]?.tier ?? null]));
-  return heroLook({ race: hero.race, cls: hero.class, ...hero.appearance, tiers });
+  const fx = hero.level >= WISP_LEVEL ? { wisp: WISP_COLOR[hero.class], glow: hero.level >= GLOW_LEVEL } : null;
+  return heroLook({ race: hero.race, cls: hero.class, ...hero.appearance, tiers, emblem: hero.level >= EMBLEM_LEVEL, fx });
 }
 
 // One line above the task bar saying what the task is part of.
@@ -96,27 +104,48 @@ export function mountHero(root, app) {
   let sceneKey = '';
   let lastLine = 0;
   let taskKey = '';
+  let wasTavern = null; // whether the last update found the hero in the tavern (null: not seen yet)
+  let lastUpdate = 0;
+  let fallUntil = 0; // while a knockout's fall is playing, the scene stays where it happened
 
-  const lineNode = (line) => el('li', { className: 'k-' + line.k },
-    el('span', { className: 'when', textContent: heroClock(line.t) }),
-    el('span', { className: 'text', textContent: line.text }),
-    line.roll ? el('span', { className: 'roll', textContent: line.roll + (line.gain ? '  ·  ' + line.gain : '') }) : null);
+  const lineNode = (line) => {
+    const li = el('li', { className: 'k-' + line.k },
+      el('span', { className: 'when', textContent: heroClock(line.t) }),
+      el('span', { className: 'text', textContent: line.text }),
+      line.roll ? el('span', { className: 'roll', textContent: line.roll + (line.gain ? '  ·  ' + line.gain : '') }) : null);
+    if (line.tier != null) { li.classList.add('loot'); li.style.setProperty('--tier', TIERS[line.tier].color); }
+    return li;
+  };
 
   function update(state, hero) {
     current = { state, hero };
-    if (hero.id !== heroId) { heroId = hero.id; lookKey = sceneKey = taskKey = ''; lastLine = 0; list.replaceChildren(); }
+    if (hero.id !== heroId) { heroId = hero.id; lookKey = sceneKey = taskKey = ''; lastLine = 0; wasTavern = null; fallUntil = 0; list.replaceChildren(); }
 
     // sprite: walk up to the monster, then attack; stand in the tavern while recovering
     const t = hero.currentTask;
     const look = heroSpriteLook(hero);
     const key = JSON.stringify(look);
-    const inTavern = t?.kind === 'tavern';
+    const now = performance.now();
+    const knockedOut = t?.kind === 'tavern';
+    // A knockout seen as it happens (not one found on coming back) plays the fall where the hero
+    // stood before the scene moves to the tavern.
+    if (knockedOut && wasTavern === false && now - lastUpdate < 3000) {
+      fallUntil = now + 1600;
+      sceneKey = 'fall';
+      view.set({ look: heroSpriteLook(hero), anim: 'hurt' });
+      setTimeout(() => { if (current) update(current.state, current.hero); }, 1620);
+    }
+    wasTavern = knockedOut;
+    lastUpdate = now;
+    const falling = now < fallUntil && knockedOut;
+    const inTavern = knockedOut && !falling;
     const walking = !t || ['travel', 'return', 'camp'].includes(t.kind);
     const inDungeon = !!t && ['delve', 'boss', 'camp'].includes(t.kind);
     const anim = inTavern || walking ? 'walk' : t.elapsed / t.duration >= 0.3 ? CLASSES[hero.class].attack : 'walk';
     const nextScene = (inTavern ? 'tavern' : anim) + key;
-    scene.classList.toggle('dungeon', inDungeon && !inTavern);
-    if (nextScene !== sceneKey) {
+    // The backdrop: the tavern, the region's dungeon, or the region itself. All drawn in CSS.
+    if (!falling) scene.dataset.bg = inTavern ? 'tavern' : inDungeon ? 'dungeon' : hero.region;
+    if (!falling && nextScene !== sceneKey) {
       sceneKey = nextScene;
       scene.classList.toggle('tavern', inTavern);
       canvas.hidden = inTavern;
@@ -125,16 +154,16 @@ export function mountHero(root, app) {
       else view.set({ look, anim, facing: 'right' });
       lookKey = key;
     }
-    place.textContent = inTavern ? 'The Wobbly Griffin' : t?.kind === 'travel' || t?.kind === 'return' ? 'On the road' : inDungeon ? DUNGEONS[hero.region].name : REGION_BY_ID[hero.region].name;
+    if (!falling) place.textContent = inTavern ? 'The Wobbly Griffin' : t?.kind === 'travel' || t?.kind === 'return' ? 'On the road' : inDungeon ? DUNGEONS[hero.region].name : REGION_BY_ID[hero.region].name;
 
     name.textContent = hero.name;
     const subclass = subclassName(hero);
-    sub.textContent = `Level ${hero.level} ${RACES[hero.race].name} ${CLASSES[hero.class].name}${subclass ? ', ' + subclass : ''}`;
+    sub.textContent = `Level ${hero.level} ${RACES[hero.race].name} ${CLASSES[hero.class].name}${subclass ? ', ' + subclass : ''}${hero.level >= EMBLEM_LEVEL ? '. ' + TITLES[hero.class] : ''}`;
     gold.textContent = `${num(hero.gold)} gp`;
 
     const max = maxHp(hero);
     hp.fill.style.width = (100 * hero.hp) / max + '%';
-    hp.text.textContent = inTavern ? `${hero.hp} / ${max} (recovering)` : `${hero.hp} / ${max}`;
+    hp.text.textContent = knockedOut ? `${hero.hp} / ${max} (recovering)` : `${hero.hp} / ${max}`;
     const next = xpToNext(hero);
     const floor = xpForLevel(hero.level);
     xp.fill.style.width = next == null ? '100%' : Math.max(0, (100 * (hero.xp - floor)) / (next - floor)) + '%';

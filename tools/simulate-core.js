@@ -22,6 +22,10 @@
 // subclass's own branch first (capstone included), then the other two branches a tier at a time.
 // Each class's three subclasses take turns, so all twelve get an equal share of heroes.
 // `growth: false` plays a player who never opens the Skills tab: every point stays banked.
+//
+// GEAR. Nothing to play: loot equips and sells itself inside `advance`. The simulator only watches,
+// recording the average rarity across the eight slots at each level (an empty slot counts as
+// Common), which rarities each slot has worn, and what was found and sold.
 
 import { advance } from '../js/sim.js';
 import { newSave } from '../js/state.js';
@@ -35,6 +39,8 @@ import { RACES } from '../data/races.js';
 import { REGIONS, REGION_INDEX } from '../data/regions.js';
 import { MONSTERS } from '../data/monsters.js';
 import { DUNGEONS } from '../data/dungeons.js';
+import { TIERS } from '../data/items.js';
+import { SLOT_IDS } from '../js/loot.js';
 
 export { MAX_LEVEL, LEVEL_TARGET_HOURS, CLASSES, RACES, REGIONS };
 export const CLASS_IDS = Object.keys(CLASSES);
@@ -42,6 +48,8 @@ export const RACE_IDS = Object.keys(RACES);
 export const DAY = 86400;
 export const LAST_REGION = REGIONS[REGIONS.length - 1].id;
 export const SUBCLASS_IDS = Object.values(TREES).flatMap((t) => t.branches.map((b) => b.id));
+export const TIER_NAMES = TIERS.map((t) => t.name);
+const meanTier = (hero) => SLOT_IDS.reduce((sum, id) => sum + (hero.gear[id]?.tier ?? 0), 0) / SLOT_IDS.length;
 export const subclassLabel = (id) => `${BRANCH_BY_ID[id].name} (${CLASSES[BRANCH_BY_ID[id].cls].name}, ${BRANCH_BY_ID[id].kind})`;
 
 // Set the "what if monsters hit harder" multiplier (1 = the game as built) and describe the world.
@@ -104,6 +112,7 @@ export function runHero({ seed, cls, race, subclass = TREES[cls].branches[0].id 
   const out = {
     cls, race, subclass, moves: 0, reach: new Array(MAX_LEVEL + 1).fill(null), knockouts: 0, potions: 0, koSeconds: 0, koAtLevel: new Array(MAX_LEVEL + 1).fill(0),
     koBy: { roam: 0, quest: 0, delve: 0, boss: 0 }, clears: {}, runsLost: {}, quests: 0, feats: 0, tasks: 0, level: 1,
+    tierAt: new Array(MAX_LEVEL + 1).fill(null), worn: Object.fromEntries(SLOT_IDS.map((id) => [id, new Set([0])])), legends: [], worse: 0,
   };
   const sim = { retryAt: {}, early }; // `early`: levels below the dungeon's own at which to first try it
   const road = world === 'road';
@@ -112,7 +121,11 @@ export function runHero({ seed, cls, race, subclass = TREES[cls].branches[0].id 
   if (road) steer(hero, sim, style);
   while (!finished() && hero.age < limit) {
     for (const e of advance(save, chunk)) {
-      if (e.type === 'levelup') out.reach[e.level] = e.at;
+      if (e.type === 'levelup') { out.reach[e.level] = e.at; out.tierAt[e.level] = meanTier(hero); }
+      else if (e.type === 'loot') {
+        if (e.equipped) out.worn[e.slot].add(e.tier);
+        if (e.legend) out.legends.push(e.legend);
+      }
       else if (e.type === 'knockout') {
         out.knockouts += 1; out.koSeconds += e.seconds; out.koAtLevel[hero.level] += 1; out.koBy[e.source] += 1;
         if (e.lost === 'run') out.runsLost[e.region] = (out.runsLost[e.region] ?? 0) + 1;
@@ -130,6 +143,11 @@ export function runHero({ seed, cls, race, subclass = TREES[cls].branches[0].id 
   out.runs = hero.stats.dungeonRuns;
   out.level = hero.level;
   out.gold = hero.gold;
+  out.gear = Object.fromEntries(SLOT_IDS.map((id) => [id, hero.gear[id]?.tier ?? null]));
+  out.endTier = meanTier(hero);
+  out.itemsFound = hero.stats.itemsFound;
+  out.upgrades = hero.stats.upgrades;
+  out.soldFor = hero.stats.soldFor;
   out.skills = hero.skills.length;
   out.banked = hero.skillPoints;
   out.abilityPoints = hero.abilityPoints;
@@ -155,7 +173,7 @@ export function summarize(results) {
     return {
       id, heroes: rs.length,
       l5: spread(rs, 5).median, l10: spread(rs, 10).median, l20: spread(rs, MAX_LEVEL).median,
-      knockouts: mean(rs.map((r) => r.knockouts)), potions: mean(rs.map((r) => r.potions)),
+      knockouts: mean(rs.map((r) => r.knockouts)), potions: mean(rs.map((r) => r.potions)), endTier: mean(rs.map((r) => r.endTier)),
       clearedLast: rs.filter((r) => r.clears[LAST_REGION]).length,
     };
   });
@@ -171,6 +189,14 @@ export function summarize(results) {
       runsLost: mean(results.map((x) => x.runsLost[r.id] ?? 0)),
     };
   });
+  // Gear: average rarity across the eight slots on reaching each level, and what is worn at the end.
+  const gearByLevel = [];
+  for (let level = 2; level <= MAX_LEVEL; level++) {
+    const at = results.map((r) => r.tierAt[level]).filter((v) => v != null);
+    gearByLevel.push({ level, tier: at.length ? mean(at) : null });
+  }
+  const slotsAtEnd = results.flatMap((r) => Object.values(r.gear));
+  const endShare = TIER_NAMES.map((name, t) => ({ name, share: slotsAtEnd.filter((v) => (v ?? 0) === t).length / Math.max(1, slotsAtEnd.length) }));
   const koBy = {};
   for (const k of ['roam', 'quest', 'delve', 'boss']) koBy[k] = mean(results.map((r) => r.koBy[k]));
   return {
@@ -185,6 +211,15 @@ export function summarize(results) {
     gold: mean(results.map((r) => r.gold)),
     koByLevel,
     koBy,
+    gearByLevel,
+    endShare,
+    endTier: mean(results.map((r) => r.endTier)),
+    allFive: results.filter((r) => Object.values(r.worn).some((w) => w.size === TIER_NAMES.length)).length,
+    anyLegendary: results.filter((r) => Object.values(r.gear).some((t) => t === TIER_NAMES.length - 1)).length,
+    itemsFound: mean(results.map((r) => r.itemsFound)),
+    upgrades: mean(results.map((r) => r.upgrades)),
+    soldFor: mean(results.map((r) => r.soldFor)),
+    legends: mean(results.map((r) => r.legends.length)),
     dungeons,
     clearedLast: results.filter((r) => r.clears[LAST_REGION]).length,
     knockouts: mean(results.map((r) => r.knockouts)),

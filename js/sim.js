@@ -37,6 +37,7 @@ export function summarize(events) {
   const s = {
     tasks: 0, xp: 0, gold: 0, natural20s: 0, natural1s: 0, knockouts: 0, potions: 0, levels: [], newMonsters: [], knockedOutBy: [],
     quests: [], oddJobs: 0, feats: [], clears: [], chapters: [], opened: [], arrived: [], runsLost: 0, confidence: [], moves: 0,
+    found: 0, upgrades: [], soldFor: 0,
   };
   for (const e of events) {
     if (e.xp) s.xp += e.xp;
@@ -57,6 +58,7 @@ export function summarize(events) {
     else if (e.type === 'arrive') s.arrived.push(e.region);
     else if (e.type === 'confidence') s.confidence.push(e.region);
     else if (e.type === 'skill') s.moves += 1;
+    else if (e.type === 'loot') { s.found += 1; s.soldFor += e.gold; if (e.equipped) s.upgrades.push({ slot: e.slot, tier: e.tier, name: e.name }); }
   }
   return s;
 }

@@ -4,7 +4,7 @@
 
 import { LAYERS, CUSTOM_ANIMS } from '../data/sprite-layers.js';
 import { RACES, HAIR_STYLES } from '../data/races.js';
-import { GEAR, SLOTS } from '../data/items.js';
+import { GEAR, SLOTS, EMBLEM } from '../data/items.js';
 import { layerKey } from './layer-key.js';
 
 export const FRAME = 64;
@@ -34,8 +34,10 @@ function loadImage(file) {
 }
 
 // The layer refs for a hero: body, head, race extras, hair, beard, then one look per gear slot.
-// `tiers` maps slot id -> 0..4, or null for an empty slot.
-export function heroLook({ race, build, skin, hairStyle, hairColor, beard, cls, tiers }) {
+// `tiers` maps slot id -> 0..4, or null for an empty slot. The level milestones ride along:
+// `emblem` adds the class's neck clip (level 10), and `fx` is what is drawn in code around the
+// sprite: { wisp: a colour (level 15), glow: true (level 20) }. LPC has no familiar and no aura.
+export function heroLook({ race, build, skin, hairStyle, hairColor, beard, cls, tiers, emblem = false, fx = null }) {
   const r = RACES[race];
   const b = r.builds.find((x) => x.id === build) ?? r.builds[0];
   const fill = (ref) => ({ ...ref, color: ref.color === '$skin' ? skin : ref.color === '$hair' ? hairColor : ref.color });
@@ -49,7 +51,8 @@ export function heroLook({ race, build, skin, hairStyle, hairColor, beard, cls, 
   if (style && !gear.some((g) => g.hideHair)) refs.push({ def: style.def, color: hairColor });
   if (beard && r.beard) refs.push(...r.beard.map(fill));
   refs.push(...gear);
-  return { body: b.body, refs };
+  if (emblem) refs.push(...EMBLEM[cls]);
+  return { body: b.body, refs, fx };
 }
 
 // LPC draws the front of a shield (110 to 115) over the head but under hats (120 to 139), so a
@@ -98,6 +101,36 @@ function drawFrame(ctx, prep, step, row) {
   }
 }
 
+// The milestones drawn in code, in canvas pixels. `cx, cy` is the middle of the body frame and
+// `unit` one sprite pixel. The glow goes behind the hero; the wisp floats in front, by the
+// shoulder, and bobs with `t` (milliseconds).
+function drawGlow(ctx, fx, cx, cy, unit, t = 0) {
+  if (!fx?.glow) return;
+  const r = unit * (34 + 2 * Math.sin(t / 900));
+  const g = ctx.createRadialGradient(cx, cy + unit * 6, unit * 4, cx, cy + unit * 6, r);
+  g.addColorStop(0, 'rgba(255, 222, 120, 0.55)');
+  g.addColorStop(0.55, 'rgba(255, 205, 90, 0.22)');
+  g.addColorStop(1, 'rgba(255, 200, 80, 0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(cx - r, cy + unit * 6 - r, 2 * r, 2 * r);
+}
+function drawWisp(ctx, fx, cx, cy, unit, t = 0) {
+  if (!fx?.wisp) return;
+  const x = cx - unit * (21 + 2 * Math.sin(t / 1300)), y = cy - unit * (9 + 3 * Math.sin(t / 520));
+  const r = unit * 7;
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+  g.addColorStop(0.25, fx.wisp);
+  g.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.save();
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = g;
+  ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(Math.round(x - unit), Math.round(y - unit), unit * 2, unit * 2); // a hard pixel core, to sit with the art
+  ctx.restore();
+}
+
 // Draw one still frame of a hero onto a canvas. Used for the tier line-up and, later, portraits.
 export async function drawStill(canvas, look, { anim = 'walk', facing = 'down', scale = 2, step = 0, wide = false } = {}) {
   const prep = await prepare(look, anim);
@@ -113,7 +146,9 @@ export async function drawStill(canvas, look, { anim = 'walk', facing = 'down', 
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
   const off = (prep.size - view) / 2;
+  drawGlow(ctx, look.fx, canvas.width / 2, canvas.height / 2, scale);
   ctx.drawImage(buf, off, off, view, view, 0, 0, view * scale, view * scale);
+  drawWisp(ctx, look.fx, canvas.width / 2, canvas.height / 2, scale);
 }
 
 // An animated hero on a stage canvas. The stage is wider and taller than one 64 px frame so
@@ -133,6 +168,7 @@ export class SpriteView {
     this.prep = null;
     this.step = 0;
     this.nextAt = 0;
+    this.fxAt = 0;
     this.token = 0;
     this.resize(stageW);
     this.frameReq = requestAnimationFrame((t) => this.tick(t));
@@ -165,15 +201,18 @@ export class SpriteView {
     this.frameReq = requestAnimationFrame((n) => this.tick(n));
     if (!this.prep) return;
     const a = ANIMS[this.anim];
+    // a wisp or a glow moves on its own, a little smoother than the walk cycle
+    if (this.look?.fx && t < this.nextAt && t - this.fxAt > 60) { this.fxAt = t; this.render(t); }
     if (t < this.nextAt) return;
     this.step = (this.step + 1) % this.prep.cycle.length;
     // hold the last frame of an attack or a fall for a moment before looping
     const hold = this.step === this.prep.cycle.length - 1 ? a.rest ?? 0 : 0;
     this.nextAt = t + 1000 / a.fps + hold;
-    this.render();
+    this.fxAt = t;
+    this.render(t);
   }
 
-  render() {
+  render(t = performance.now()) {
     const { ctx, bctx, prep } = this;
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     if (!prep) return;
@@ -184,6 +223,9 @@ export class SpriteView {
     // place the 64 px body frame centred, feet near the ground line
     const frameX = (this.stageW - FRAME) / 2, frameY = this.stageH - this.ground - FRAME;
     const off = (prep.size - FRAME) / 2;
+    const cx = (frameX + FRAME / 2) * SCALE, cy = (frameY + FRAME / 2) * SCALE;
+    drawGlow(ctx, this.look?.fx, cx, cy, SCALE, t);
     ctx.drawImage(this.buf, 0, 0, prep.size, prep.size, (frameX - off) * SCALE, (frameY - off) * SCALE, prep.size * SCALE, prep.size * SCALE);
+    drawWisp(ctx, this.look?.fx, cx, cy, SCALE, t);
   }
 }

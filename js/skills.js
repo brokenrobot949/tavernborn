@@ -40,6 +40,7 @@ export const FX_KEYS = {
   dodge: 'chance to halve a hit', hp: 'maximum hit points', hpLevel: 'maximum hit points per level (whole number)',
   rest: 'healing between tasks', potion: 'healing from a potion', potionPrice: 'off the price of a potion', potions: 'extra potions per dungeon run (whole number)',
   speedRoam: 'off the length of monster tasks', speedQuest: 'off the length of quest steps', speedDelve: 'off the length of dungeon rooms',
+  quality: 'added to the rarity of everything found, in rarity steps',
   travel: 'off travel time', recovery: 'off knockout recovery', rooms: 'fewer rooms per dungeon run (whole number)',
 };
 
@@ -52,7 +53,7 @@ export const SIG_TYPES = {
   clearRoom: 'once per dungeon run, a failed room is cleared anyway',
   skipRoom: 'once per dungeon run, a room is skipped',
   shortcut: 'dungeon runs lose rooms',
-  hiddenRoom: 'a chance of a hidden room of gold on each dungeon run',
+  hiddenRoom: 'a chance of a hidden room on each dungeon run, with gold and a chest in it',
   negate: 'a chance that a failed roll costs no hit points',
   cheatDeath: 'drops to 1 hit point (or better) instead of 0',
   secondWind: 'recovers hit points in a dungeon when low',
@@ -61,9 +62,9 @@ export const SIG_TYPES = {
   freeBossHit: 'opens a boss fight with a blow already landed',
   smite: 'criticals count for more against a boss',
   bossShield: 'the first exchanges of a boss fight cost no hit points',
-  bossPurse: 'a beaten boss pays more',
+  bossPurse: 'a beaten boss pays more gold and drops more gear',
   windfall: 'a chance of double gold for a finished quest',
-  bonusLoot: 'a chance of a second purse from a room or a quest',
+  bonusLoot: 'a chance of a second piece of gear whenever a room, a chest, a boss, or a quest gives one',
   onCrit: 'a natural 20 pays or heals more',
 };
 
