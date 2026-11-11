@@ -3,6 +3,7 @@
 import { REGION_BY_ID } from '../../data/regions.js';
 import { DUNGEONS } from '../../data/dungeons.js';
 import { foeName } from '../tasks.js';
+import { pending } from '../skills.js';
 import { el, num, duration } from './dom.js';
 
 export function showAway(root, { seconds, summary: s, hero }) {
@@ -12,6 +13,7 @@ export function showAway(root, { seconds, summary: s, hero }) {
   const places = (ids) => [...new Set(ids)].map((id) => REGION_BY_ID[id].name).join(', ');
   const dungeons = (ids) => [...new Set(ids)].map((id) => DUNGEONS[id].name).join(', ');
   const item = (label, value) => el('li', {}, el('span', { textContent: label }), el('span', { textContent: value }));
+  const waiting = pending(hero);
   const rows = [
     s.levels.length ? item('Levels gained', `${s.levels.length} (now level ${hero.level})`) : item('Level', `${hero.level}, no change`),
     item('Tasks finished', num(s.tasks)),
@@ -31,7 +33,10 @@ export function showAway(root, { seconds, summary: s, hero }) {
     s.confidence.length ? item('Change of plan', `Roaming to rebuild confidence after ${dungeons(s.confidence)}`) : null,
     s.potions ? item('Potions drunk', num(s.potions)) : null,
     s.newMonsters.length ? item('New in the Bestiary', names(s.newMonsters)) : null,
-    hero.skillPoints ? item('Skill points banked', num(hero.skillPoints)) : null,
+    s.moves ? item('Signature moves used', num(s.moves)) : null,
+    waiting.points ? item('Skill points to spend', num(waiting.points)) : null,
+    waiting.subclass ? item('Subclass', 'Ready to choose') : null,
+    waiting.abilities ? item('Ability points to place', num(waiting.abilities)) : null,
   ];
   const close = el('button', { className: 'btn primary', type: 'button', textContent: 'Carry on' });
   const overlay = el('div', { className: 'overlay', attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'away-title' } },

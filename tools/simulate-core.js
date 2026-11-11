@@ -15,10 +15,19 @@
 //   - otherwise: 'balanced' does the region's six story quests and then roams;
 //                'roam' only ever roams
 // 'vale' keeps the hero roaming in Mugwick Vale for all 20 levels, to show what staying put costs.
+//
+// GROWTH. The same player spends what the hero earns, through the functions the Skills tab uses
+// (chooseSubclass, learnSkill, raiseAbility): `grow` picks the planned subclass at level 3, puts
+// ability points into the class's main ability and then Constitution, and buys skills down the
+// subclass's own branch first (capstone included), then the other two branches a tier at a time.
+// Each class's three subclasses take turns, so all twelve get an equal share of heroes.
+// `growth: false` plays a player who never opens the Skills tab: every point stays banked.
 
 import { advance } from '../js/sim.js';
 import { newSave } from '../js/state.js';
-import { createHero, assignScores, defaultAppearance, STANDARD_ARRAY } from '../js/hero.js';
+import { createHero, assignScores, defaultAppearance, raiseAbility, STANDARD_ARRAY } from '../js/hero.js';
+import { TREES, BRANCH_BY_ID, canChooseSubclass, chooseSubclass, canLearn, learnSkill } from '../js/skills.js';
+import { ABILITY_MAX } from '../js/rules.js';
 import { setFocus, orderTravel } from '../js/tasks.js';
 import { MAX_LEVEL, LEVEL_TARGET_HOURS, STORY_QUESTS, WHAT_IF } from '../js/rules.js';
 import { CLASSES } from '../data/classes.js';
@@ -32,6 +41,8 @@ export const CLASS_IDS = Object.keys(CLASSES);
 export const RACE_IDS = Object.keys(RACES);
 export const DAY = 86400;
 export const LAST_REGION = REGIONS[REGIONS.length - 1].id;
+export const SUBCLASS_IDS = Object.values(TREES).flatMap((t) => t.branches.map((b) => b.id));
+export const subclassLabel = (id) => `${BRANCH_BY_ID[id].name} (${CLASSES[BRANCH_BY_ID[id].cls].name}, ${BRANCH_BY_ID[id].kind})`;
 
 // Set the "what if monsters hit harder" multiplier (1 = the game as built) and describe the world.
 export function prepareWorld({ damageTimes = 1 } = {}) {
@@ -41,7 +52,33 @@ export function prepareWorld({ damageTimes = 1 } = {}) {
 
 // Hero number `i` of a run: classes and races take turns so all 24 pairs get an equal share.
 export function heroPlan(i, seedBase = 1) {
-  return { seed: (seedBase * 100003 + i * 7919) >>> 0, cls: CLASS_IDS[i % CLASS_IDS.length], race: RACE_IDS[Math.floor(i / CLASS_IDS.length) % RACE_IDS.length] };
+  const cls = CLASS_IDS[i % CLASS_IDS.length];
+  const race = RACE_IDS[Math.floor(i / CLASS_IDS.length) % RACE_IDS.length];
+  const subclass = TREES[cls].branches[Math.floor(i / (CLASS_IDS.length * RACE_IDS.length)) % 3].id;
+  return { seed: (seedBase * 100003 + i * 7919) >>> 0, cls, race, subclass };
+}
+
+// The simulated player on the Skills tab: subclass, ability points, then skill points.
+export function grow(hero, subclass) {
+  if (canChooseSubclass(hero)) chooseSubclass(hero, subclass);
+  const order = [CLASSES[hero.class].main, 'con', ...CLASSES[hero.class].priority];
+  while (hero.abilityPoints > 0) {
+    const pickOne = order.find((a) => hero.abilities[a] < ABILITY_MAX);
+    if (!pickOne || !raiseAbility(hero, pickOne)) break;
+  }
+  const branches = TREES[hero.class].branches;
+  const own = branches.find((b) => b.id === subclass);
+  const others = branches.filter((b) => b !== own);
+  while (hero.skillPoints > 0) {
+    let next = own.skills.find((s) => canLearn(hero, s.id));
+    // Outside the subclass's branch: the lowest open tier first, taking turns between the two branches.
+    for (let i = 0; !next && i < 12; i++) {
+      const pair = [others[0].skills[i], others[1].skills[i]];
+      if (hero.skills.length % 2) pair.reverse();
+      next = pair.find((s) => canLearn(hero, s.id));
+    }
+    if (!next || !learnSkill(hero, next.id)) break;
+  }
 }
 
 // The simulated player's standing orders, re-read every few minutes of game time.
@@ -59,13 +96,13 @@ function steer(hero, sim, style) {
 
 // Run one hero from creation until they are level 20 and have cleared the last dungeon (or
 // `maxDays`). `world` is 'road' or 'vale'; `style` is 'balanced' or 'roam'.
-export function runHero({ seed, cls, race }, { world = 'road', style = 'balanced', early = 0, maxDays = 60, chunk = 300 } = {}) {
+export function runHero({ seed, cls, race, subclass = TREES[cls].branches[0].id }, { world = 'road', style = 'balanced', early = 0, maxDays = 60, chunk = 300, growth = true } = {}) {
   const save = newSave(seed, 0);
   const hero = createHero(save, { name: 'Sim', race, cls, appearance: defaultAppearance(race), baseScores: assignScores(cls, STANDARD_ARRAY) });
   save.heroes.push(hero);
   save.activeHeroId = hero.id;
   const out = {
-    cls, race, reach: new Array(MAX_LEVEL + 1).fill(null), knockouts: 0, potions: 0, koSeconds: 0, koAtLevel: new Array(MAX_LEVEL + 1).fill(0),
+    cls, race, subclass, moves: 0, reach: new Array(MAX_LEVEL + 1).fill(null), knockouts: 0, potions: 0, koSeconds: 0, koAtLevel: new Array(MAX_LEVEL + 1).fill(0),
     koBy: { roam: 0, quest: 0, delve: 0, boss: 0 }, clears: {}, runsLost: {}, quests: 0, feats: 0, tasks: 0, level: 1,
   };
   const sim = { retryAt: {}, early }; // `early`: levels below the dungeon's own at which to first try it
@@ -84,13 +121,18 @@ export function runHero({ seed, cls, race }, { world = 'road', style = 'balanced
       else if (e.type === 'confidence') sim.retryAt[e.region] = Math.min(MAX_LEVEL, hero.level + 1);
       else if (e.type === 'questdone' && e.story) out.quests += 1;
       else if (e.type === 'feat') out.feats += 1;
+      else if (e.type === 'skill') out.moves += 1;
     }
+    if (growth) grow(hero, subclass);
     if (road) steer(hero, sim, style);
   }
   out.tasks = hero.stats.tasks;
   out.runs = hero.stats.dungeonRuns;
   out.level = hero.level;
   out.gold = hero.gold;
+  out.skills = hero.skills.length;
+  out.banked = hero.skillPoints;
+  out.abilityPoints = hero.abilityPoints;
   out.age = hero.age;
   return out;
 }
@@ -137,6 +179,10 @@ export function summarize(results) {
     levels,
     byClass: group('cls', CLASS_IDS),
     byRace: group('race', RACE_IDS),
+    bySubclass: group('subclass', SUBCLASS_IDS).filter((g) => g.heroes),
+    moves: mean(results.map((r) => r.moves)),
+    skills: mean(results.map((r) => r.skills)),
+    gold: mean(results.map((r) => r.gold)),
     koByLevel,
     koBy,
     dungeons,

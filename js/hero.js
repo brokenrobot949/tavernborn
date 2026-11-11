@@ -4,8 +4,9 @@ import { RACES, RACE_TRAITS, HAIR_COLORS, HAIR_STYLES } from '../data/races.js';
 import { CLASSES } from '../data/classes.js';
 import { NAMES } from '../data/names.js';
 import { REGIONS, REGION_INDEX, START_REGION } from '../data/regions.js';
-import { ARRIVAL } from '../data/chronicle.js';
-import { ABILITIES, MAX_LEVEL, mod, pick, roll, xpForLevel } from './rules.js';
+import { ARRIVAL, ABILITY_RAISED } from '../data/chronicle.js';
+import { ABILITIES, ABILITY_NAMES, ABILITY_LEVELS, ABILITY_POINTS, ABILITY_MAX, MAX_LEVEL, mod, pick, roll, xpForLevel } from './rules.js';
+import { skillMods } from './skills.js';
 
 export const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
 export const MAX_ROLLS = 3;
@@ -55,11 +56,13 @@ export function defaultAppearance(race) {
   return { build: r.builds[0].id, skin: r.skins[0], hairStyle: r.hair, hairColor: 'chestnut', beard: !!r.builds[0].beard };
 }
 
-// Hit points come from the class, the level, and Constitution, so they are always recomputed.
+// Hit points come from the class, the level, Constitution, and skills, so they are always recomputed.
 export function maxHp(hero) {
   const die = CLASSES[hero.class].hitDie;
   const con = mod(hero.abilities.con);
-  return Math.max(hero.level, die + (hero.level - 1) * (die / 2 + 1) + hero.level * con);
+  const base = Math.max(hero.level, die + (hero.level - 1) * (die / 2 + 1) + hero.level * con);
+  const { n } = skillMods(hero);
+  return Math.floor(base * (1 + n.hp)) + hero.level * n.hpLevel;
 }
 
 export const xpToNext = (hero) => (hero.level >= MAX_LEVEL ? null : xpForLevel(hero.level + 1));
@@ -83,6 +86,15 @@ const STARTING_GEAR = () => ({
 export const ADVENTURE_FIELDS = () => ({
   travelTo: null, returning: false, questProgress: {}, dungeonClears: {}, delve: null, delveFails: {}, grudges: {}, unread: [],
 });
+// What Phase 4 keeps on a hero.
+//   abilityPoints   ability score points waiting to be spent (two arrive at levels 4, 8, 12, 16, 19)
+//   raised          points already put into each ability, for the record
+//   cooldowns       per signature move: the hero's age at which it can fire again
+//   fresh           true until the first roll after arriving somewhere (Divine Favor reads it)
+export const GROWTH_FIELDS = () => ({ abilityPoints: 0, raised: {}, cooldowns: {}, fresh: false });
+// Ability points a hero of this level has been granted in all.
+export const abilityPointsBy = (level) => ABILITY_POINTS * ABILITY_LEVELS.filter((l) => l <= level).length;
+
 export const STATS = { knockouts: 0, mostEmbarrassingDefeat: null, natural20s: 0, natural1s: 0, tasks: 0, quests: 0, oddJobs: 0, dungeonRuns: 0, dungeonClears: 0 };
 
 // A region is open once the dungeon of the region before it has been cleared. The first always is.
@@ -114,6 +126,7 @@ export function createHero(state, { name, race, cls, appearance, baseScores }) {
     currentTask: null,
     knockedOutUntil: null,
     ...ADVENTURE_FIELDS(),
+    ...GROWTH_FIELDS(),
     bestiary: {},
     feats: [],
     stats: { ...STATS },
@@ -134,16 +147,31 @@ export function chronicle(hero, kind, text, extra = {}) {
   return line;
 }
 
-// Add XP and return the levels reached, lowest first. Each level gives a skill point, which
-// banks until the skill tree exists. A conscious hero is healed to full by a level-up.
+// Add XP and return the levels reached, lowest first. Each level gives a skill point, and levels
+// 4, 8, 12, 16, and 19 give two ability score points. Both bank until the player spends them, so
+// time away costs nothing. A conscious hero is healed to full by a level-up.
 export function gainXp(hero, amount) {
   const reached = [];
   hero.xp += amount;
   while (hero.level < MAX_LEVEL && hero.xp >= xpForLevel(hero.level + 1)) {
     hero.level += 1;
     hero.skillPoints += 1;
+    if (ABILITY_LEVELS.includes(hero.level)) hero.abilityPoints += ABILITY_POINTS;
     reached.push(hero.level);
   }
   if (reached.length && hero.knockedOutUntil == null) hero.hp = maxHp(hero);
   return reached;
+}
+
+// Spend one banked ability point: +1 to one score, up to 20. Returns true if it was spent.
+export function raiseAbility(hero, ability) {
+  if (!ABILITIES.includes(ability) || !(hero.abilityPoints > 0) || hero.abilities[ability] >= ABILITY_MAX) return false;
+  const before = maxHp(hero);
+  hero.abilities[ability] += 1;
+  hero.abilityPoints -= 1;
+  hero.raised[ability] = (hero.raised[ability] ?? 0) + 1;
+  const gained = maxHp(hero) - before; // Constitution adds its hit points at once
+  if (gained > 0 && hero.knockedOutUntil == null) hero.hp += gained;
+  chronicle(hero, 'growth', `${ABILITY_NAMES[ability]} rises to ${hero.abilities[ability]}. ${ABILITY_RAISED[ability]}`, { ability });
+  return true;
 }

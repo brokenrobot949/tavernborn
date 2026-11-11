@@ -5,6 +5,9 @@
 export const ABILITIES = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 export const ABILITY_NAMES = { str: 'Strength', dex: 'Dexterity', con: 'Constitution', int: 'Intelligence', wis: 'Wisdom', cha: 'Charisma' };
 export const MAX_LEVEL = 20;
+export const ABILITY_LEVELS = [4, 8, 12, 16, 19]; // levels that grant an ability score increase
+export const ABILITY_POINTS = 2; // each increase is two points: +2 to one score or +1 to two
+export const ABILITY_MAX = 20;
 
 // ----- random numbers (mulberry32; the generator's whole state is one 32-bit number) -----
 export function random(state) {
@@ -32,34 +35,52 @@ export const mod = (score) => Math.floor((score - 10) / 2);
 export const proficiency = (level) => 2 + Math.floor((level - 1) / 4); // +2 at level 1, +6 at 17
 
 // Pacing: hours since creation at which each level should land (design doc, "Leveling and
-// pacing"; levels the doc does not list are filled in between). A hero fighting at their own
-// level earns about XP_PER_SECOND, so the XP needed is just the target time times that rate.
+// pacing"; levels the doc does not list are filled in between).
 // Levels 3 to 6 sit later than the doc's first table (40 min, 2 h, 5 h, 10 h): in Rob's play test
 // they came too fast to feel earned.
-// Tuned with the simulator (tools/simulate.html, or `node tools/simulate.mjs`). The hours after
-// level 6 are priced at XP_PER_SECOND_LATE. Phase 3 retuned it from 0.48 to 0.51 for the real
-// regions, quests, and dungeons: with both rates the median simulated hero lands within a few
-// percent of every target and reaches level 20 at about 29.5 days. Changing either rate moves
-// every saved hero's XP bar; state.js rescales version 1 saves and would need the same again.
 export const LEVEL_TARGET_HOURS = [0, 0, 1 / 6, 1, 3, 6.5, 11, 18, 30, 48, 72, 105, 144, 192, 247, 312, 384, 468, 552, 636, 720];
-export const XP_PER_SECOND = 0.5;
-export const XP_PER_SECOND_LATE = 0.51;
-const LATE_FROM_HOURS = LEVEL_TARGET_HOURS[6];
-export function xpForLevel(level) {
-  const hours = LEVEL_TARGET_HOURS[Math.min(level, MAX_LEVEL)];
-  const early = Math.min(hours, LATE_FROM_HOURS);
-  return Math.round(3600 * (early * XP_PER_SECOND + (hours - early) * XP_PER_SECOND_LATE));
+
+// XP_RATE[level] is the XP per second a hero is expected to earn while working toward that level,
+// so the XP a level costs is its share of the target hours times that rate. A new hero fighting
+// at their own level earns about 0.5 a second. From level 7 the rate climbs, because a hero who
+// spends their skill points and ability increases earns faster the more of them they have.
+// Tuned with the simulator (tools/simulate.html, or `node tools/simulate.mjs`), whose stand-in
+// player spends every point: the median simulated hero lands near every target and reaches
+// level 20 at about 30 days. Changing a rate moves every saved hero's XP bar; state.js keeps the
+// older curves (PAST_CURVES) so an older save keeps its place within its level.
+export const XP_RATE = [0, 0, 0.5, 0.5, 0.5, 0.5, 0.5, 0.54, 0.56, 0.58, 0.6, 0.63, 0.65, 0.675, 0.675, 0.675, 0.675, 0.675, 0.675, 0.7, 0.7];
+export function curve(rates) {
+  const total = [0, 0];
+  for (let level = 2; level <= MAX_LEVEL; level++) total[level] = total[level - 1] + 3600 * (LEVEL_TARGET_HOURS[level] - LEVEL_TARGET_HOURS[level - 1]) * rates[level];
+  return total.map(Math.round);
 }
+const XP_FOR_LEVEL = curve(XP_RATE);
+export const xpForLevel = (level) => XP_FOR_LEVEL[Math.min(level, MAX_LEVEL)];
+// Curves older saves were made on: [save version, XP rate per level]. Version 1 (Phases 1 and 2)
+// priced levels after 6 at 0.48 a second; version 2 (Phase 3) at 0.51.
+const flat = (late) => XP_RATE.map((_, level) => (level < 2 ? 0 : level <= 6 ? 0.5 : late));
+export const PAST_CURVES = { 1: curve(flat(0.48)), 2: curve(flat(0.51)) };
 
 // One d20 check. `rerollOne` is the Goblin quirk: a natural 1 is rolled again, once.
-export function check(state, bonus, dc, { rerollOne = false } = {}) {
+// `critFrom` is the lowest die that counts as a critical (skills lower it from 20).
+// `advantage` rolls two dice and keeps the better; `dropped` is the other one.
+export function check(state, bonus, dc, { rerollOne = false, critFrom = 20, advantage = false } = {}) {
   let die = roll(state, 20);
+  let dropped = null;
+  if (advantage) {
+    dropped = roll(state, 20);
+    if (dropped > die) [die, dropped] = [dropped, die];
+  }
   let rerolled = false;
   if (die === 1 && rerollOne) { die = roll(state, 20); rerolled = true; }
   const total = die + bonus;
-  const outcome = die === 20 ? 'crit' : die === 1 ? 'fumble' : total >= dc ? 'hit' : 'miss';
-  return { die, bonus, total, dc, outcome, rerolled };
+  const outcome = die >= critFrom ? 'crit' : die === 1 ? 'fumble' : total >= dc ? 'hit' : 'miss';
+  return { die, bonus, total, dc, outcome, rerolled, dropped };
 }
+
+// Intelligence: XP added per point of modifier. It was 2% before ability scores could rise; at
+// that rate a Wizard with Intelligence 20 ran a tenth ahead of every other class.
+export const INT_XP = 0.01;
 
 // What each roll result is worth, as a share of the full reward.
 export const REWARD = { crit: 1.5, hit: 1, miss: 0.5, fumble: 0.4 };
@@ -88,6 +109,16 @@ const XP_PER_LEVEL_BELOW = 0.06;
 export function levelGapXp(gap) {
   return gap >= 0 ? 1 + Math.min(5, gap) * XP_PER_LEVEL_ABOVE : Math.max(0.4, 1 + gap * XP_PER_LEVEL_BELOW);
 }
+
+// ----- a world that expects the hero to grow (Phase 4) -----
+// Ability score increases and skills add to every roll and take the edge off every hit. The DCs
+// and damage dice written in data/ were tuned in Phase 3 for a hero with neither, so anything of
+// level 4 or more is a little harder to roll against and hits a little harder than its entry
+// says, rising with its level. The Chronicle prints the DC actually rolled against.
+// Tuned with the simulator; rerun it after touching these.
+export const GROWN = { dcFrom: [5, 10, 15], damagePerLevel: 0.015, damageFrom: 3 };
+export const grownDc = (level) => GROWN.dcFrom.filter((l) => level >= l).length;
+export const grownDamage = (level) => 1 + GROWN.damagePerLevel * Math.max(0, level - GROWN.damageFrom);
 
 // Numbers for tasks that are not one written monster: quest steps and dungeon bosses' purses.
 // A hero at the task's level needs about an 8 on the die.
@@ -138,3 +169,8 @@ export const potionPrice = (level) => 8 + 4 * level;
 // The tavern cleric ends a knockout at once for a fee that grows with the time left and the
 // hero's level. It costs roughly an hour or two of earnings: handy in a session, pointless overnight.
 export const skipFee = (level, secondsLeft) => Math.max(5, Math.ceil((secondsLeft / 60) * (4 + 2 * level)));
+
+// ----- growth -----
+// Respec at the tavern: all skill points back and the subclass open again. The price rises with
+// level: a few hours of a hero's earnings at that level (450 gp at 3, 3,250 at 10, 11,500 at 20).
+export const respecPrice = (level) => 25 * level * (level + 3);

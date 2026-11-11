@@ -10,6 +10,7 @@ import { SpriteView, heroLook, drawStill } from '../sprite.js';
 import { maxHp, xpToNext } from '../hero.js';
 import { xpForLevel } from '../rules.js';
 import { currentQuest, clericFee, payCleric } from '../tasks.js';
+import { subclassName } from '../skills.js';
 import { el, num, heroClock } from './dom.js';
 
 const STAGE_H = 70; // sprite pixels; the scene is this tall times 4
@@ -127,7 +128,8 @@ export function mountHero(root, app) {
     place.textContent = inTavern ? 'The Wobbly Griffin' : t?.kind === 'travel' || t?.kind === 'return' ? 'On the road' : inDungeon ? DUNGEONS[hero.region].name : REGION_BY_ID[hero.region].name;
 
     name.textContent = hero.name;
-    sub.textContent = `Level ${hero.level} ${RACES[hero.race].name} ${CLASSES[hero.class].name}`;
+    const subclass = subclassName(hero);
+    sub.textContent = `Level ${hero.level} ${RACES[hero.race].name} ${CLASSES[hero.class].name}${subclass ? ', ' + subclass : ''}`;
     gold.textContent = `${num(hero.gold)} gp`;
 
     const max = maxHp(hero);

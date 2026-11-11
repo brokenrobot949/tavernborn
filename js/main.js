@@ -6,6 +6,7 @@
 import { advance, summarize } from './sim.js';
 import { loadSave, newSave, storeSave } from './state.js';
 import { activeHero } from './hero.js';
+import { pending } from './skills.js';
 import { el } from './ui/dom.js';
 import { mountCreate } from './ui/create.js';
 import { mountHero } from './ui/hero.js';
@@ -32,7 +33,7 @@ const app = {
   currentSave: () => save,
   replaceSave(next) { save = next; storeSave(save); start(); },
   newHero() { save.heroes = save.heroes.filter((h) => h.id !== save.activeHeroId); save.activeHeroId = null; storeSave(save); start(); },
-  // A standing order was given (focus, travel, the cleric): keep it and redraw.
+  // A standing order was given or a choice made (focus, travel, the cleric, a skill, a respec): keep it and redraw.
   changed() { storeSave(save); render(); },
 };
 
@@ -58,7 +59,7 @@ function start() {
     el('nav', { className: 'tabbar', attrs: { role: 'tablist', 'aria-label': 'Sections' } }, ...Object.values(buttons)));
   screen = {
     sections, buttons,
-    views: { hero: mountHero(sections.hero, app), map: mountMap(sections.map, app), skills: mountSkills(sections.skills), gear: mountGear(sections.gear), tavern: mountTavern(sections.tavern, app) },
+    views: { hero: mountHero(sections.hero, app), map: mountMap(sections.map, app), skills: mountSkills(sections.skills, app), gear: mountGear(sections.gear), tavern: mountTavern(sections.tavern, app) },
   };
   tab = 'hero';
   showTab(tab);
@@ -86,6 +87,13 @@ function render() {
   const hero = activeHero(save);
   if (!screen || !hero) return;
   for (const id of shownTabs()) screen.views[id].update(save, hero);
+  // The badge on the Skills tab: skill points, a subclass, or ability points waiting to be spent.
+  const waiting = pending(hero).total;
+  const skills = screen.buttons.skills;
+  if (skills.dataset.badge !== String(waiting || '')) {
+    skills.dataset.badge = waiting || '';
+    skills.setAttribute('aria-label', waiting ? `Skills, ${waiting} waiting` : 'Skills');
+  }
 }
 
 function tick() {

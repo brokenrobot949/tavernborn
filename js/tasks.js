@@ -12,6 +12,12 @@
 //
 // The player's standing orders (focus, travel, paying the cleric) are the three functions at the
 // bottom. They only change the save; the simulator calls the same ones.
+//
+// Skills (Phase 4) reach in here through `skillMods(hero)` from skills.js: `sk.n` holds the passive
+// numbers, already added up, and `sk.sigs` the signature moves by type. A move that fires writes
+// its own Chronicle line through `fire`. Moves that can only be used so often keep count in the
+// dungeon run (`hero.delve.used`), the quest (`used` in its progress), the boss fight, or a
+// cooldown clock (`hero.cooldowns`).
 
 import { MONSTERS, MONSTER_BY_ID } from '../data/monsters.js';
 import { CLASSES } from '../data/classes.js';
@@ -22,17 +28,19 @@ import { CHAPTERS } from '../data/story.js';
 import {
   LEVEL_UP, TAVERN_TASKS, RECOVERED, POTION, BESTIARY_NEW, TRAVEL_TASKS, RETURN_TASK, CAMP_TASKS,
   QUEST_TAKEN, ODD_JOB_TAKEN, QUEST_DONE, FEAT, RUN_LOST, STEP_LOST, DUNGEON_CLEARED, REGION_OPEN,
-  CONFIDENCE, STUBBORN, BREATH, CLERIC_PAID,
+  CONFIDENCE, STUBBORN, BREATH, CLERIC_PAID, SUBCLASS_READY, ABILITY_READY,
 } from '../data/chronicle.js';
 import {
+  ABILITY_LEVELS, INT_XP, random,
   check, mod, pick, pickWeighted, proficiency, randInt, taskDamage, recoverySeconds, levelGapXp, restHeal,
   REWARD, POTION_BELOW, POTION_HEAL, potionPrice, skipFee, baseDc, baseDamage, baseGold,
-  OUTMATCHED_DC, OUTMATCHED_DAMAGE, GRUDGE_BONUS, WHAT_IF,
+  OUTMATCHED_DC, OUTMATCHED_DAMAGE, GRUDGE_BONUS, WHAT_IF, grownDc, grownDamage,
   QUEST_STEP_SECONDS, QUEST_XP_PER_SECOND, QUEST_DONE_XP, QUEST_DAMAGE, QUEST_GOLD, questDoneGold, STORY_QUESTS,
   DELVE_XP_PER_SECOND, DELVE_GOLD, BOSS_SECONDS, BOSS_XP, BOSS_LOSS_SHARE, bossGold, DUNGEON_POTIONS, CONFIDENCE_LIMIT,
   TRAVEL_SECONDS_PER_REGION, RETURN_SECONDS_PER_REGION,
 } from './rules.js';
 import { chronicle, gainXp, maxHp, regionOpen } from './hero.js';
+import { skillMods, SUBCLASS_LEVEL } from './skills.js';
 
 export const FOCUSES = ['roam', 'quest', 'delve'];
 
@@ -47,9 +55,98 @@ function emit(hero, events, type, text, data = {}, lineExtra = {}) {
   chronicle(hero, data.outcome ?? type, text, lineExtra);
 }
 
-// Humans learn 5% faster, Intelligence adds a little XP, and retired legends (Phase 6) add theirs.
-const xpBonus = (state, hero) => 1 + (hero.race === 'human' ? 0.05 : 0) + 0.02 * Math.max(0, mod(hero.abilities.int)) + (state.tavern.legacyBonus ?? 0);
-const goldBonus = (hero) => 1 + 0.05 * mod(hero.abilities.cha);
+// Humans learn 5% faster, Intelligence adds a little XP, retired legends (Phase 6) add theirs, and
+// skills add theirs: `source` is 'roam', 'quest', 'delve', or 'boss'.
+const KEY = { roam: 'Roam', quest: 'Quest', delve: 'Delve', boss: 'Boss' };
+const xpBonus = (state, hero, sk, source) => 1 + (hero.race === 'human' ? 0.05 : 0) + INT_XP * Math.max(0, mod(hero.abilities.int)) + (state.tavern.legacyBonus ?? 0) + sk.n.xp + sk.n['xp' + KEY[source]];
+const goldBonus = (hero, sk, source) => (1 + 0.05 * mod(hero.abilities.cha)) * (1 + sk.n.gold + sk.n['gold' + KEY[source]]);
+const quicker = (seconds, share, least = 5) => Math.max(least, Math.round(seconds * (1 - Math.min(0.75, share))));
+
+// ---------- signature moves: how often, and the line they write ----------
+
+const MOVE_SCOPE = { clearRoom: 'run', skipRoom: 'run', roomHeal: 'run' }; // moves that are always per dungeon run
+const MAX_DAMAGE_CUT = 0.6; // skills and wards together never turn aside more than this share of a hit
+const MIN_ROOMS = 4;
+
+// `ctx` says what the hero is in the middle of: { source, qp (quest progress), fight (per boss fight counts) }.
+function ready(hero, s, ctx) {
+  const uses = s.uses ?? 1;
+  switch (s.scope ?? MOVE_SCOPE[s.type]) {
+    case 'run': return !!hero.delve && (hero.delve.used?.[s.id] ?? 0) < uses;
+    case 'boss': return !!ctx.fight && (ctx.fight[s.id] ?? 0) < uses;
+    case 'quest': return !!ctx.qp && (ctx.qp.used?.[s.id] ?? 0) < uses;
+    case 'cooldown': return (hero.cooldowns[s.id] ?? 0) <= hero.age;
+    default: return true;
+  }
+}
+function spend(hero, s, ctx) {
+  const bump = (counts) => { counts[s.id] = (counts[s.id] ?? 0) + 1; };
+  switch (s.scope ?? MOVE_SCOPE[s.type]) {
+    case 'run': bump(hero.delve.used ??= {}); break;
+    case 'boss': bump(ctx.fight); break;
+    case 'quest': bump(ctx.qp.used ??= {}); break;
+    case 'cooldown': hero.cooldowns[s.id] = hero.age + s.seconds; break;
+    default:
+  }
+}
+// A signature move fired: its own Chronicle line, and an event the summary can count.
+function fire(hero, events, s, data = {}, gain) {
+  emit(hero, events, 'skill', fill(s.fire, { name: hero.name }), { skill: s.id, ...data }, gain ? { gain } : {});
+}
+const failed = (r) => r.outcome === 'miss' || r.outcome === 'fumble';
+
+// One d20 roll with everything skills can do to it: advantage, a second try, a failure overruled.
+function rollCheck(state, hero, sk, ctx, bonus, dc, events, rerollOne) {
+  const critFrom = 20 - sk.n.crit;
+  const adv = (sk.sigs.advantage ?? []).find((s) => (s.scope === 'arrive' ? hero.fresh : s.scope === 'quest' ? ctx.qp?.step === 0 && ready(hero, s, ctx) : ready(hero, s, ctx)));
+  hero.fresh = false;
+  if (adv) {
+    if (adv.scope !== 'arrive') spend(hero, adv, ctx);
+    fire(hero, events, adv);
+  }
+  let r = check(state, bonus, dc, { rerollOne, critFrom, advantage: !!adv });
+  if (failed(r)) {
+    const again = (sk.sigs.reroll ?? []).find((s) => (s.on !== 'fumble' || r.outcome === 'fumble') && ready(hero, s, ctx));
+    if (again) {
+      spend(hero, again, ctx);
+      fire(hero, events, again);
+      const first = r.die;
+      r = check(state, bonus, dc, { critFrom });
+      r.first = first;
+    }
+  }
+  if (failed(r)) {
+    const turn = (sk.sigs.turn ?? []).find((s) => random(state) < s.chance);
+    if (turn) {
+      r.outcome = 'hit';
+      r.turned = true;
+      fire(hero, events, turn);
+    }
+  }
+  return r;
+}
+const rollNotes = (r) => (r.rerolled ? ' (rerolled a 1)' : '') + (r.dropped != null ? ` (advantage, over a ${r.dropped})` : '') + (r.first != null ? ` (second try, after a ${r.first})` : '') + (r.turned ? ' (overruled)' : '');
+
+// Wards and skills turn aside a share of a hit. `trap` marks a dungeon room with no monster in it.
+function soften(cls, sk, source, trap, damage) {
+  const cut = Math.min(MAX_DAMAGE_CUT, (cls.ward ?? 0) + sk.n.dr + sk.n['dr' + KEY[source]] + (trap ? sk.n.drTrap : 0));
+  return cut ? Math.round(damage * (1 - cut)) : damage;
+}
+// The move, if any, that makes a failed roll cost no hit points.
+const negated = (state, sk, r) => (sk.sigs.negate ?? []).find((s) => (s.on !== 'fumble' || r.outcome === 'fumble') && (s.chance >= 1 || random(state) < s.chance)) ?? null;
+const dodgeChance = (hero, sk) => Math.min(0.5, Math.min(0.25, 0.05 * Math.max(0, mod(hero.abilities.dex))) + sk.n.dodge);
+
+// Second Wind and its kind: hit points back in a dungeon when things look thin.
+function secondWinds(hero, sk, ctx, events) {
+  const max = maxHp(hero);
+  for (const s of sk.sigs.secondWind ?? []) {
+    if (hero.hp >= max * s.below || !ready(hero, s, ctx)) continue;
+    spend(hero, s, ctx);
+    const before = hero.hp;
+    hero.hp = Math.min(max, hero.hp + Math.ceil(max * s.heal));
+    fire(hero, events, s, { heal: hero.hp - before }, `+${hero.hp - before} HP`);
+  }
+}
 
 // ---------- quests: where the hero is on the region's board ----------
 
@@ -82,14 +179,14 @@ export function nextTask(state, hero, events = []) {
     const from = hero.returning ? 0 : REGION_INDEX[hero.region];
     const hops = Math.max(1, Math.abs(REGION_INDEX[hero.travelTo] - from));
     hero.delve = null;
-    return { kind: 'travel', to: hero.travelTo, text: fill(pick(state, TRAVEL_TASKS), { place: REGION_BY_ID[hero.travelTo].name }), duration: hops * TRAVEL_SECONDS_PER_REGION, elapsed: 0 };
+    return { kind: 'travel', to: hero.travelTo, text: fill(pick(state, TRAVEL_TASKS), { place: REGION_BY_ID[hero.travelTo].name }), duration: quicker(hops * TRAVEL_SECONDS_PER_REGION, skillMods(hero).n.travel, 30), elapsed: 0 };
   }
   hero.travelTo = null;
 
   if (hero.returning) {
     const far = REGION_INDEX[hero.region];
     if (far === 0) hero.returning = false;
-    else return { kind: 'return', text: fill(RETURN_TASK, { place: REGION_BY_ID[hero.region].name }), duration: Math.min(600, far * RETURN_SECONDS_PER_REGION), elapsed: 0 };
+    else return { kind: 'return', text: fill(RETURN_TASK, { place: REGION_BY_ID[hero.region].name }), duration: quicker(Math.min(600, far * RETURN_SECONDS_PER_REGION), skillMods(hero).n.travel, 30), elapsed: 0 };
   }
 
   if (hero.focus !== 'delve' || hero.delve?.region !== hero.region) hero.delve = null;
@@ -104,7 +201,7 @@ function roamTask(state, hero) {
     const above = m.level - hero.level;
     return above <= 0 ? 3 : above === 1 ? 1.2 : 0.3;
   });
-  return { kind: 'roam', monster: monster.id, text: pick(state, monster.tasks), duration: randInt(state, monster.secs[0], monster.secs[1]), elapsed: 0 };
+  return { kind: 'roam', monster: monster.id, text: pick(state, monster.tasks), duration: quicker(randInt(state, monster.secs[0], monster.secs[1]), skillMods(hero).n.speedRoam), elapsed: 0 };
 }
 
 function questTask(state, hero, events) {
@@ -116,15 +213,19 @@ function questTask(state, hero, events) {
   if (!qp.started) {
     qp.started = true;
     qp.step = 0;
+    qp.used = {};
     const text = quest.story ? fill(QUEST_TAKEN, { quest: quest.title, notice: quest.notice }) : fill(ODD_JOB_TAKEN, { quest: quest.title });
     emit(hero, events, 'story', text);
   }
   const text = quest.story ? quest.q.steps[qp.step] : pick(state, ODD_JOBS.steps);
-  return { kind: 'quest', text, duration: randInt(state, QUEST_STEP_SECONDS[0], QUEST_STEP_SECONDS[1]), elapsed: 0 };
+  // `worth` is the step's full length: XP is paid on it, so a faster step pays the same.
+  const worth = randInt(state, QUEST_STEP_SECONDS[0], QUEST_STEP_SECONDS[1]);
+  return { kind: 'quest', text, worth, duration: quicker(worth, skillMods(hero).n.speedQuest), elapsed: 0 };
 }
 
 function delveTask(state, hero, events) {
   const d = DUNGEONS[hero.region];
+  const sk = skillMods(hero);
   if (!hero.delve) {
     // A run starts at full hit points: a hurt hero makes camp at the door first.
     const max = maxHp(hero);
@@ -132,20 +233,28 @@ function delveTask(state, hero, events) {
       const missing = (max - hero.hp) / max;
       return { kind: 'camp', text: fill(pick(state, CAMP_TASKS), { dungeon: d.name }), duration: Math.round(60 + 240 * missing), elapsed: 0 };
     }
-    hero.delve = { region: hero.region, room: 0, rooms: randInt(state, d.rooms[0], d.rooms[1]), potions: DUNGEON_POTIONS, stubborn: false };
+    const cut = sk.sigs.shortcut?.[0];
+    const rooms = Math.max(MIN_ROOMS, randInt(state, d.rooms[0], d.rooms[1]) - sk.n.rooms - (cut?.rooms ?? 0));
+    hero.delve = { region: hero.region, room: 0, rooms, potions: DUNGEON_POTIONS + sk.n.potions, stubborn: false, used: {}, hidden: null };
+    // A hidden room, if a skill finds one this run, is paid out when the hero reaches it.
+    const finder = (sk.sigs.hiddenRoom ?? []).find((s) => random(state) < s.chance);
+    if (finder) hero.delve.hidden = { room: randInt(state, 0, rooms - 1), by: finder.id };
+    hero.fresh = true;
     hero.stats.dungeonRuns += 1;
     emit(hero, events, 'story', `${d.name}. ${d.enter}`);
+    if (cut) fire(hero, events, cut);
   }
   if (hero.delve.room >= hero.delve.rooms) {
     return { kind: 'boss', text: pick(state, d.boss.tasks), duration: randInt(state, BOSS_SECONDS[0], BOSS_SECONDS[1]), elapsed: 0 };
   }
-  const duration = randInt(state, d.secs[0], d.secs[1]);
+  const worth = randInt(state, d.secs[0], d.secs[1]);
+  const duration = quicker(worth, sk.n.speedDelve);
   if (random50(state)) {
     const m = pick(state, MONSTERS[hero.region]);
-    return { kind: 'delve', monster: m.id, text: pick(state, m.tasks), duration, elapsed: 0 };
+    return { kind: 'delve', monster: m.id, text: pick(state, m.tasks), worth, duration, elapsed: 0 };
   }
   const i = randInt(state, 0, d.roomTasks.length - 1);
-  return { kind: 'delve', roomTask: i, text: d.roomTasks[i].text, duration, elapsed: 0 };
+  return { kind: 'delve', roomTask: i, text: d.roomTasks[i].text, worth, duration, elapsed: 0 };
 }
 const random50 = (state) => randInt(state, 0, 1) === 1;
 
@@ -161,11 +270,13 @@ export function resolveTask(state, hero, task, events) {
       hero.travelTo = null;
       hero.returning = false;
       hero.delve = null;
+      hero.fresh = true;
       emit(hero, events, 'arrive', REGION_BY_ID[task.to].arrive, { region: task.to });
       return;
     }
     case 'return':
       hero.returning = false;
+      hero.fresh = true;
       return;
     case 'camp':
       hero.hp = maxHp(hero);
@@ -181,77 +292,130 @@ function getUp(state, hero, events, text, data = {}) {
   hero.knockedOutUntil = null;
   hero.hp = maxHp(hero);
   hero.returning = hero.region !== START_REGION;
+  hero.fresh = !hero.returning;
   emit(hero, events, 'recovered', text, data);
 }
 
 // One roll against one thing. `foe` carries the numbers and the lines:
 //   { id, name, level, dc, dmg, xp, gold: [min, max], check, hit[], miss[], crit, fumble,
-//     monster (counts for the Bestiary), defeat (the knockout line) }
-// Returns true if the hero is still standing.
-function encounter(state, hero, foe, events, source) {
+//     monster (counts for the Bestiary), trap (a dungeon room with no monster), defeat (the knockout line) }
+// Returns { ok: the hero is still standing, outcome: 'crit' | 'hit' | 'miss' | 'fumble' }.
+function encounter(state, hero, foe, events, source, ctx = { source }) {
   const cls = CLASSES[hero.class];
+  const sk = skillMods(hero);
   const gap = Math.max(0, foe.level - hero.level);
   const grudge = hero.race === 'dwarf' && foe.id && hero.grudges[foe.id] ? GRUDGE_BONUS : 0;
   const wisdom = source === 'quest' ? Math.floor(Math.max(0, mod(hero.abilities.wis)) / 2) : 0; // Wisdom: quest checks
-  const bonus = mod(hero.abilities[cls.main]) + proficiency(hero.level) + grudge + wisdom;
-  const r = check(state, bonus, foe.dc + gap * OUTMATCHED_DC, { rerollOne: hero.race === 'goblin' });
-  hero.stats.tasks += 1;
-  if (r.outcome === 'crit') hero.stats.natural20s += 1;
-  if (r.outcome === 'fumble') hero.stats.natural1s += 1;
+  const bonus = mod(hero.abilities[cls.main]) + proficiency(hero.level) + grudge + wisdom + sk.n.roll + sk.n['roll' + KEY[source]];
+  const dc = foe.dc + grownDc(foe.level) + gap * OUTMATCHED_DC;
 
-  const share = REWARD[r.outcome];
-  const xp = Math.max(1, Math.round(foe.xp * share * levelGapXp(foe.level - hero.level) * xpBonus(state, hero)));
-  const gold = Math.max(0, Math.round(randInt(state, foe.gold[0], foe.gold[1]) * share * goldBonus(hero)));
+  // The roll, unless a move settles the matter first.
+  let r;
+  let unhurt = false;
+  const auto = (sk.sigs.autoWin ?? []).find((s) => s.source === source && random(state) < s.chance);
+  if (auto) {
+    r = { die: null, bonus, total: null, dc, outcome: 'hit', auto: true };
+    unhurt = true;
+    fire(hero, events, auto);
+  } else {
+    r = rollCheck(state, hero, sk, ctx, bonus, dc, events, hero.race === 'goblin');
+    if (failed(r) && source === 'delve') {
+      const blast = (sk.sigs.clearRoom ?? []).find((s) => ready(hero, s, ctx));
+      if (blast) {
+        spend(hero, blast, ctx);
+        r.outcome = 'hit';
+        r.cleared = true;
+        unhurt = true;
+        fire(hero, events, blast);
+      }
+    }
+  }
+  hero.stats.tasks += 1;
+  if (r.die === 20) hero.stats.natural20s += 1;
+  if (r.die === 1) hero.stats.natural1s += 1;
+
+  const after = []; // moves that fire on the result; their lines follow the task's own
+  const share = REWARD[r.outcome] + (r.outcome === 'crit' ? sk.n.critReward : failed(r) ? sk.n.missReward : 0);
+  let xp = Math.max(1, Math.round(foe.xp * share * levelGapXp(foe.level - hero.level) * xpBonus(state, hero, sk, source)));
+  let gold = Math.max(0, Math.round(randInt(state, foe.gold[0], foe.gold[1]) * share * goldBonus(hero, sk, source)));
+  let mend = 0;
+  if (r.outcome === 'crit') {
+    for (const s of sk.sigs.onCrit ?? []) {
+      xp += Math.round(xp * (s.xp ?? 0));
+      gold += Math.round(gold * (s.gold ?? 0));
+      mend += s.heal ?? 0;
+      after.push(s);
+    }
+  }
   hero.gold += gold;
 
   const won = r.outcome === 'crit' || r.outcome === 'hit';
   const firstWin = foe.monster && won && !hero.bestiary[foe.id];
   if (foe.monster && won) hero.bestiary[foe.id] = (hero.bestiary[foe.id] ?? 0) + 1;
 
-  const dodge = Math.min(0.25, 0.05 * Math.max(0, mod(hero.abilities.dex)));
-  const die = Math.max(1, Math.round(foe.dmg * (1 + gap * OUTMATCHED_DAMAGE) * WHAT_IF.damage));
-  const hurt = takeDamage(hero, warded(cls, taskDamage(state, r.outcome, die, dodge)));
+  let dealt = 0;
+  if (!unhurt) {
+    const die = Math.max(1, Math.round(foe.dmg * grownDamage(foe.level) * (1 + gap * OUTMATCHED_DAMAGE) * WHAT_IF.damage));
+    dealt = soften(cls, sk, source, !!foe.trap, taskDamage(state, r.outcome, die, dodgeChance(hero, sk)));
+    if (dealt > 0 && failed(r)) {
+      const block = negated(state, sk, r);
+      if (block) { dealt = 0; after.push(block); }
+    }
+  }
+  const hurt = takeDamage(hero, dealt, sk, ctx);
+  if (hurt.saved) after.push(hurt.saved);
+  if (mend && hero.hp > 0) hero.hp = Math.min(maxHp(hero), hero.hp + Math.ceil(maxHp(hero) * mend));
 
-  const line = r.outcome === 'crit' ? `Natural 20 on ${foe.check}. ${foe.crit}`
+  const line = r.outcome === 'crit' ? `Natural ${r.die} on ${foe.check}. ${foe.crit}`
     : r.outcome === 'fumble' ? `Natural 1 on ${foe.check}. ${foe.fumble}`
     : pick(state, r.outcome === 'hit' ? foe.hit : foe.miss);
-  const notes = (r.rerolled ? ' (rerolled a 1)' : '');
-  const rollText = `${foe.name}: d20 ${r.die}${notes} + ${r.bonus}${grudge ? ' (grudge)' : ''} = ${r.total} vs DC ${r.dc}${gap ? ` (outmatched by ${gap})` : ''}`;
+  const rollText = r.auto ? `${foe.name}: no roll needed`
+    : `${foe.name}: d20 ${r.die}${rollNotes(r)} + ${r.bonus}${grudge ? ' (grudge)' : ''} = ${r.total} vs DC ${r.dc}${gap ? ` (outmatched by ${gap})` : ''}${r.cleared ? ' (cleared anyway)' : ''}`;
   const gain = `+${xp} XP` + (gold ? `, ${gold} gp` : '') + (hurt.damage ? `, -${hurt.damage} HP` : '');
   emit(hero, events, 'task', line, { outcome: r.outcome, source, monster: foe.monster ? foe.id : undefined, roll: r, xp, gold, damage: hurt.damage }, { roll: rollText, gain });
   if (firstWin) emit(hero, events, 'bestiary', fill(BESTIARY_NEW, { monster: foe.name }), { monster: foe.id });
   if (hurt.stubborn) emit(hero, events, 'story', fill(STUBBORN, { name: hero.name }));
+  for (const s of after) fire(hero, events, s);
 
   if (hero.hp <= 0) knockOut(state, hero, foe, events, source);
   levelUps(state, hero, xp, events);
-  return hero.knockedOutUntil == null;
+  return { ok: hero.knockedOutUntil == null, outcome: r.outcome };
 }
 
-// A class ward (the Wizard's) turns aside a share of every hit.
-const warded = (cls, damage) => (cls.ward ? Math.round(damage * (1 - cls.ward)) : damage);
-
-// Take damage. The Half-Orc quirk: once per dungeon run, drop to 1 HP instead of 0.
-function takeDamage(hero, amount) {
+// Take damage. Two things can keep a hero up at the last moment: the Half-Orc quirk (once per
+// dungeon run, 1 HP instead of 0) and a skill of the same kind, which may leave more than 1.
+function takeDamage(hero, amount, sk, ctx) {
   let damage = Math.min(hero.hp, amount);
   let stubborn = false;
-  if (damage >= hero.hp && damage > 0 && hero.race === 'halforc' && hero.delve && !hero.delve.stubborn) {
-    hero.delve.stubborn = true;
-    stubborn = true;
-    damage = hero.hp - 1;
+  let saved = null;
+  if (damage >= hero.hp && damage > 0) {
+    if (hero.race === 'halforc' && hero.delve && !hero.delve.stubborn) {
+      hero.delve.stubborn = true;
+      stubborn = true;
+      damage = hero.hp - 1;
+    } else {
+      saved = (sk.sigs.cheatDeath ?? []).find((s) => ready(hero, s, ctx)) ?? null;
+      if (saved) {
+        spend(hero, saved, ctx);
+        damage = hero.hp - Math.max(1, Math.ceil(maxHp(hero) * (saved.heal ?? 0))); // may be negative: the move leaves the hero better off
+      }
+    }
   }
   hero.hp -= damage;
-  return { damage, stubborn };
+  return { damage: Math.max(0, damage), stubborn, saved };
 }
 
 function levelUps(state, hero, xp, events) {
   for (const level of gainXp(hero, xp)) {
     emit(hero, events, 'levelup', fill(pick(state, LEVEL_UP), { level, name: hero.name }), { level });
+    if (level === SUBCLASS_LEVEL && !hero.subclass) emit(hero, events, 'growth', SUBCLASS_READY, { waiting: 'subclass' });
+    if (ABILITY_LEVELS.includes(level)) emit(hero, events, 'growth', ABILITY_READY, { waiting: 'ability' });
   }
 }
 
 function resolveRoam(state, hero, m, events) {
   const foe = { ...m, monster: true, defeat: `Defeated by ${article(m.name)}. ${m.ko}` };
-  if (encounter(state, hero, foe, events, 'roam')) rest(state, hero, events);
+  if (encounter(state, hero, foe, events, 'roam').ok) rest(state, hero, events);
 }
 
 function resolveQuestStep(state, hero, task, events) {
@@ -262,22 +426,29 @@ function resolveQuestStep(state, hero, task, events) {
   const foe = {
     name: quest.title, level: quest.level, check: quest.check,
     dc: baseDc(quest.level), dmg: Math.round(baseDamage(quest.level) * QUEST_DAMAGE),
-    xp: Math.round(task.duration * QUEST_XP_PER_SECOND), gold: [lo * QUEST_GOLD, hi * QUEST_GOLD],
+    xp: Math.round((task.worth ?? task.duration) * QUEST_XP_PER_SECOND), gold: [lo * QUEST_GOLD, hi * QUEST_GOLD],
     hit: QUEST_LINES.hit, miss: QUEST_LINES.miss, crit: pick(state, QUEST_LINES.crit), fumble: pick(state, QUEST_LINES.fumble),
     defeat: `Knocked out on a job, ${quest.title}. ${pick(state, QUEST_LINES.ko)}`,
   };
-  if (!encounter(state, hero, foe, events, 'quest')) return; // knocked out: the step is lost
+  if (!encounter(state, hero, foe, events, 'quest', { source: 'quest', qp }).ok) return; // knocked out: the step is lost
   qp.step += 1;
   if (qp.step >= quest.steps) finishQuest(state, hero, qp, quest, events);
   if (hero.knockedOutUntil == null) rest(state, hero, events);
 }
 
 function finishQuest(state, hero, qp, quest, events) {
-  const xp = Math.round(QUEST_DONE_XP * levelGapXp(quest.level - hero.level) * xpBonus(state, hero));
-  const gold = Math.round(questDoneGold(quest.level) * goldBonus(hero) * (1 + 0.05 * Math.max(0, mod(hero.abilities.cha)))); // Charisma: better quest rewards
+  const sk = skillMods(hero);
+  const xp = Math.round(QUEST_DONE_XP * levelGapXp(quest.level - hero.level) * xpBonus(state, hero, sk, 'quest'));
+  const gold = Math.round(questDoneGold(quest.level) * goldBonus(hero, sk, 'quest') * (1 + 0.05 * Math.max(0, mod(hero.abilities.cha)))); // Charisma: better quest rewards
   hero.gold += gold;
   const done = quest.story ? quest.q.done : pick(state, ODD_JOBS.done);
   emit(hero, events, 'questdone', fill(QUEST_DONE, { quest: quest.title, done }), { quest: quest.title, story: quest.story, xp, gold }, { gain: `+${xp} XP, ${gold} gp` });
+  // Moves that pay the fee again: a windfall, or a second purse.
+  for (const s of [...(sk.sigs.windfall ?? []), ...(sk.sigs.bonusLoot ?? [])]) {
+    if (random(state) >= s.chance) continue;
+    hero.gold += gold;
+    fire(hero, events, s, { gold }, `+${gold} gp`);
+  }
   qp.step = 0;
   qp.started = false;
   if (quest.story) {
@@ -300,14 +471,56 @@ function resolveRoom(state, hero, task, events) {
   const run = hero.delve;
   if (!run) return;
   const d = DUNGEONS[run.region];
-  const m = task.monster ? MONSTER_BY_ID[task.monster] : null;
-  const room = m ? null : d.roomTasks[task.roomTask];
-  const numbers = { level: d.level, dc: d.dc, dmg: d.dmg, xp: Math.round(task.duration * DELVE_XP_PER_SECOND), gold: [d.gold[0] * DELVE_GOLD, d.gold[1] * DELVE_GOLD] };
-  const foe = m
-    ? { ...m, ...numbers, monster: true, defeat: `Defeated by ${article(m.name)} in ${d.name}. ${m.ko}` }
-    : { name: d.name, check: 'the dungeon', ...numbers, hit: [room.hit], miss: [room.miss], crit: d.crit, fumble: d.fumble, defeat: `Knocked out in ${d.name}. ${d.ko}` };
-  if (!encounter(state, hero, foe, events, 'delve')) return; // knocked out: the run is lost
+  const sk = skillMods(hero);
+  const ctx = { source: 'delve' };
+  const purse = () => Math.round(randInt(state, d.gold[0], d.gold[1]) * DELVE_GOLD * goldBonus(hero, sk, 'delve'));
+
+  // Slip Away and its kind: a hurt hero goes round a room instead of through it.
+  const slip = (sk.sigs.skipRoom ?? []).find((s) => hero.hp < maxHp(hero) * s.below && ready(hero, s, ctx));
+  let won = false;
+  if (slip) {
+    spend(hero, slip, ctx);
+    fire(hero, events, slip);
+  } else {
+    const m = task.monster ? MONSTER_BY_ID[task.monster] : null;
+    const room = m ? null : d.roomTasks[task.roomTask];
+    const numbers = { level: d.level, dc: d.dc, dmg: d.dmg, xp: Math.round((task.worth ?? task.duration) * DELVE_XP_PER_SECOND), gold: [d.gold[0] * DELVE_GOLD, d.gold[1] * DELVE_GOLD] };
+    const foe = m
+      ? { ...m, ...numbers, monster: true, defeat: `Defeated by ${article(m.name)} in ${d.name}. ${m.ko}` }
+      : { name: d.name, check: 'the dungeon', ...numbers, trap: true, hit: [room.hit], miss: [room.miss], crit: d.crit, fumble: d.fumble, defeat: `Knocked out in ${d.name}. ${d.ko}` };
+    const result = encounter(state, hero, foe, events, 'delve', ctx);
+    if (!result.ok) return; // knocked out: the run is lost
+    won = !failed(result);
+  }
+
+  if (run.hidden && run.hidden.room === run.room) {
+    const finder = (sk.sigs.hiddenRoom ?? []).find((s) => s.id === run.hidden.by);
+    if (finder) {
+      const gold = purse() * finder.purses;
+      hero.gold += gold;
+      fire(hero, events, finder, { gold }, `+${gold} gp`);
+    }
+  }
+  if (won) {
+    for (const s of sk.sigs.bonusLoot ?? []) {
+      if (random(state) >= s.chance) continue;
+      const gold = purse();
+      hero.gold += gold;
+      fire(hero, events, s, { gold }, `+${gold} gp`);
+    }
+  }
   run.room += 1;
+
+  // Between rooms: free healing from skills first, then a potion if it is still needed.
+  secondWinds(hero, sk, ctx, events);
+  const max = maxHp(hero);
+  for (const s of sk.sigs.roomHeal ?? []) {
+    if (hero.hp >= max * s.below || !ready(hero, s, ctx)) continue;
+    spend(hero, s, ctx);
+    const before = hero.hp;
+    hero.hp = Math.min(max, hero.hp + Math.ceil(max * s.heal));
+    fire(hero, events, s, { heal: hero.hp - before }, `+${hero.hp - before} HP`);
+  }
   drinkPotion(state, hero, events);
 }
 
@@ -318,12 +531,14 @@ function resolveBoss(state, hero, task, events) {
   const d = DUNGEONS[run.region];
   const b = d.boss;
   const cls = CLASSES[hero.class];
+  const sk = skillMods(hero);
+  const ctx = { source: 'boss', fight: {} };
   const gap = Math.max(0, d.level - hero.level);
   const grudge = hero.race === 'dwarf' && hero.grudges[b.id] ? GRUDGE_BONUS : 0;
-  const bonus = mod(hero.abilities[cls.main]) + proficiency(hero.level) + grudge;
-  const dc = b.dc + gap * OUTMATCHED_DC;
-  const die = Math.max(1, Math.round(b.dmg * (1 + gap * OUTMATCHED_DAMAGE) * WHAT_IF.damage));
-  const dodge = Math.min(0.25, 0.05 * Math.max(0, mod(hero.abilities.dex)));
+  const bonus = mod(hero.abilities[cls.main]) + proficiency(hero.level) + grudge + sk.n.roll + sk.n.rollBoss;
+  const dc = b.dc + grownDc(d.level) + gap * OUTMATCHED_DC;
+  const die = Math.max(1, Math.round(b.dmg * grownDamage(d.level) * (1 + gap * OUTMATCHED_DAMAGE) * WHAT_IF.damage));
+  const dodge = dodgeChance(hero, sk);
 
   let landed = 0;
   let damage = 0;
@@ -334,30 +549,62 @@ function resolveBoss(state, hero, task, events) {
     landed = 1; // Breath Weapon: a free hit to open
     emit(hero, events, 'story', fill(BREATH, { name: hero.name, breath: pick(state, BREATHS) }));
   }
+  for (const s of sk.sigs.freeBossHit ?? []) {
+    if (landed >= b.hits - 1) break; // the last blow is always fought for
+    landed += 1;
+    fire(hero, events, s);
+  }
+  const globe = sk.sigs.bossShield?.[0];
+  let shielded = globe?.rolls ?? 0;
+  if (globe) fire(hero, events, globe);
+  const smite = sk.sigs.smite?.[0];
+
   while (landed < b.hits && hero.hp > 0) {
-    const r = check(state, bonus, dc, { rerollOne: hero.race === 'goblin' && !rerolled });
+    const r = rollCheck(state, hero, sk, ctx, bonus, dc, events, hero.race === 'goblin' && !rerolled);
     rerolled ||= r.rerolled;
     dice.push(r.die);
-    if (r.outcome === 'crit') hero.stats.natural20s += 1;
-    if (r.outcome === 'fumble') hero.stats.natural1s += 1;
-    landed += r.outcome === 'crit' ? 2 : r.outcome === 'hit' ? 1 : 0;
-    let dealt = warded(cls, taskDamage(state, r.outcome, die, dodge));
+    if (r.die === 20) hero.stats.natural20s += 1;
+    if (r.die === 1) hero.stats.natural1s += 1;
+    if (r.outcome === 'crit') {
+      landed += smite?.crit ?? 2;
+      if (smite) fire(hero, events, smite);
+    } else if (r.outcome === 'hit') landed += 1;
+    let dealt = 0;
+    if (shielded > 0) shielded -= 1;
+    else {
+      dealt = soften(cls, sk, 'boss', false, taskDamage(state, r.outcome, die, dodge));
+      if (dealt > 0 && failed(r)) {
+        const block = negated(state, sk, r);
+        if (block) { dealt = 0; fire(hero, events, block); }
+      }
+    }
     if (landed >= b.hits) dealt = Math.min(dealt, hero.hp - 1); // the winning blow is never also the losing one
-    const hurt = takeDamage(hero, dealt);
+    const hurt = takeDamage(hero, dealt, sk, ctx);
     damage += hurt.damage;
     stubborn ||= hurt.stubborn;
-    if (hero.hp > 0 && landed < b.hits) drinkPotion(state, hero, events);
+    if (hurt.saved) fire(hero, events, hurt.saved);
+    if (hero.hp > 0 && landed < b.hits) {
+      secondWinds(hero, sk, ctx, events);
+      drinkPotion(state, hero, events);
+    }
   }
   hero.stats.tasks += 1;
   const won = landed >= b.hits;
-  const xp = Math.max(1, Math.round(BOSS_XP * (won ? 1 : BOSS_LOSS_SHARE) * levelGapXp(d.level - hero.level) * xpBonus(state, hero)));
-  const gold = won ? Math.round(bossGold(d.level) * goldBonus(hero)) : 0;
+  let xp = Math.max(1, Math.round(BOSS_XP * (won ? 1 : BOSS_LOSS_SHARE) * levelGapXp(d.level - hero.level) * xpBonus(state, hero, sk, 'boss')));
+  const gold = won ? Math.round(bossGold(d.level) * goldBonus(hero, sk, 'boss')) : 0;
+  const purses = won ? sk.sigs.bossPurse ?? [] : []; // Hazard Pay and its kind
+  for (const s of purses) xp += Math.round(xp * (s.xp ?? 0));
   hero.gold += gold;
   const rollText = `${b.name}: ${dice.length} roll${dice.length === 1 ? '' : 's'} (${dice.join(', ')}) + ${bonus}${grudge ? ' (grudge)' : ''} vs DC ${dc}${gap ? ` (outmatched by ${gap})` : ''}, ${Math.min(landed, b.hits)} of ${b.hits} blows landed`;
   const gain = `+${xp} XP` + (gold ? `, ${gold} gp` : '') + (damage ? `, -${damage} HP` : '');
   const line = won ? b.win : `${midSentence(b.name)[0].toUpperCase() + midSentence(b.name).slice(1)} is still standing, and the hero is not.`;
   emit(hero, events, 'task', line, { outcome: won ? 'boss' : 'miss', source: 'boss', boss: b.id, won, xp, gold, damage }, { roll: rollText, gain });
   if (stubborn) emit(hero, events, 'story', fill(STUBBORN, { name: hero.name }));
+  for (const s of purses) {
+    const extra = gold * s.gold;
+    hero.gold += extra;
+    fire(hero, events, s, { gold: extra }, `+${extra} gp`);
+  }
 
   if (won) {
     const first = !(hero.dungeonClears[run.region] > 0);
@@ -399,9 +646,10 @@ function knockOut(state, hero, foe, events, source) {
     const worst = hero.stats.mostEmbarrassingDefeat && foeRank(hero.stats.mostEmbarrassingDefeat);
     if (mine && (!worst || mine[0] < worst[0] || (mine[0] === worst[0] && mine[1] < worst[1]))) hero.stats.mostEmbarrassingDefeat = foe.id;
   }
-  // Constitution and the Elf quirk shorten the stay.
+  // Constitution, the Elf quirk, and skills shorten the stay.
   let seconds = recoverySeconds(hero.level) * (1 - 0.03 * Math.max(0, mod(hero.abilities.con)));
   if (hero.race === 'elf') seconds *= 0.8;
+  seconds *= 1 - Math.min(0.6, skillMods(hero).n.recovery);
   hero.knockedOutUntil = hero.age + Math.round(seconds);
 
   const inDungeon = source === 'delve' || source === 'boss';
@@ -425,22 +673,31 @@ function knockOut(state, hero, foe, events, source) {
 
 // A little HP comes back after every Roam or Quest task, and a potion is drunk if things look thin.
 function rest(state, hero, events) {
+  const sk = skillMods(hero);
   const max = maxHp(hero);
-  hero.hp = Math.min(max, hero.hp + restHeal(max, hero.hp));
+  hero.hp = Math.min(max, hero.hp + Math.ceil(restHeal(max, hero.hp) * (1 + sk.n.rest)));
+  for (const s of sk.sigs.shortRest ?? []) {
+    if (hero.hp >= max * s.below || (hero.cooldowns[s.id] ?? 0) > hero.age) continue;
+    hero.cooldowns[s.id] = hero.age + s.seconds;
+    const before = hero.hp;
+    hero.hp = Math.min(max, hero.hp + Math.ceil(max * s.heal));
+    fire(hero, events, s, { heal: hero.hp - before }, `+${hero.hp - before} HP`);
+  }
   drinkPotion(state, hero, events);
 }
 
 // Potions are bought and drunk on the spot when gold allows. A dungeon run carries a fixed number.
 function drinkPotion(state, hero, events) {
+  const sk = skillMods(hero);
   const max = maxHp(hero);
-  const cost = potionPrice(hero.level);
+  const cost = Math.max(1, Math.round(potionPrice(hero.level) * (1 - Math.min(0.75, sk.n.potionPrice))));
   if (hero.hp >= max * POTION_BELOW || hero.gold < cost) return;
   if (hero.delve) {
     if (hero.delve.potions <= 0) return;
     hero.delve.potions -= 1;
   }
   hero.gold -= cost;
-  hero.hp = Math.min(max, hero.hp + Math.ceil(max * POTION_HEAL));
+  hero.hp = Math.min(max, hero.hp + Math.ceil(max * POTION_HEAL * (1 + sk.n.potion)));
   emit(hero, events, 'potion', fill(pick(state, POTION), { cost }), { cost });
 }
 

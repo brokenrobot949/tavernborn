@@ -78,3 +78,16 @@ export const CLERIC_PAID = [
   'Paid the cleric {cost} gp. On their feet at once, with a short lecture included in the price.',
   'The cleric took {cost} gp and did in a moment what rest would have done for free.',
 ];
+
+// ----- growth (Phase 4) -----
+export const SUBCLASS_READY = 'Level 3 brings a choice of subclass. It is waiting on the Skills tab and will keep.';
+export const ABILITY_READY = 'An ability score increase has been earned: two points, waiting on the Skills tab.';
+export const ABILITY_RAISED = {
+  str: 'The tavern door now opens the first time.',
+  dex: 'A dropped mug is caught before anyone can remark on it.',
+  con: 'The stew at The Wobbly Griffin is finished without incident.',
+  int: 'The small print is read, and understood, and resented.',
+  wis: 'The hero thinks better of something, and is right to.',
+  cha: 'A stranger laughs at the joke. It was not a good joke.',
+};
+export const RESPEC_DONE = 'Paid {cost} gp to forget everything at The Wobbly Griffin. The barkeep calls it a respec and pours it from an unlabelled bottle. {points} skill points are back in hand.';

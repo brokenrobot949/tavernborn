@@ -1,9 +1,12 @@
-// Tavern tab: the cleric (pay to end a knockout now), then Settings: the save string (export and
-// import), starting over, and the workshop links. Upgrades, respec, the roster, and the Hall of
-// Legends arrive in Phases 4 and 6.
+// Tavern tab: the cleric (pay to end a knockout now), the barkeep's respec (gold for every skill
+// point back and a fresh choice of subclass), then Settings: the save string (export and import),
+// starting over, and the workshop links. Upgrades, the roster, and the Hall of Legends arrive in
+// Phase 6.
 
 import { exportSave, importSave } from '../state.js';
 import { clericFee, payCleric } from '../tasks.js';
+import { respec, respecCost, subclassName } from '../skills.js';
+import { respecPrice } from '../rules.js';
 import { el, confirmBtn, num } from './dom.js';
 
 // `app.replaceSave(save)` swaps in an imported save; `app.newHero()` goes back to creation.
@@ -18,6 +21,11 @@ export function mountTavern(root, app) {
   const clericBtn = el('button', { className: 'btn primary', type: 'button', textContent: 'Pay the cleric' });
   let current = null;
   clericBtn.onclick = () => { if (current && payCleric(current.state, current.hero) != null) app.changed(); };
+
+  // Respec. The button is rebuilt only when its price or the purse's verdict changes.
+  const respecText = el('p', {});
+  const respecRow = el('div', { className: 'row' });
+  let respecKey = '';
 
   const makeString = () => {
     out.value = exportSave(app.currentSave());
@@ -53,6 +61,11 @@ export function mountTavern(root, app) {
       el('div', { className: 'row' }, clericBtn),
       el('p', { className: 'hint', textContent: 'A knocked-out hero gets up unaided after a rest, 15 minutes at level 1 up to about 2 hours at level 20, and loses nothing but the dungeon run or quest step they were on. The cleric ends the rest at once for a fee that grows with the time left and with level.' })),
     el('section', { className: 'panel' },
+      el('h3', { textContent: 'Respec' }),
+      respecText,
+      respecRow,
+      el('p', { className: 'hint', textContent: 'The barkeep keeps an unlabelled bottle for heroes with second thoughts. One glass returns every skill point and leaves the subclass open to choose again. The price rises with level. Ability score increases are kept.' })),
+    el('section', { className: 'panel' },
       el('h3', { textContent: 'Still to come' }),
       el('p', { className: 'hint', textContent: 'Tavern upgrades, the roster of three heroes, retirement, and the Hall of Legends are not built yet. Gold keeps; nothing is lost by saving it.' })),
     el('section', { className: 'panel' },
@@ -81,6 +94,22 @@ export function mountTavern(root, app) {
 
   function update(state, hero) {
     current = { state, hero };
+    const cost = respecCost(hero);
+    const short = cost != null && hero.gold < cost;
+    const key = [hero.id, cost, short, hero.skills.length, hero.subclass].join('|');
+    if (key !== respecKey) {
+      respecKey = key;
+      const sub = subclassName(hero);
+      if (cost == null) {
+        respecText.textContent = `${hero.name} has learned nothing yet and chosen no subclass, so there is nothing to take back. At level ${hero.level} it would cost ${num(respecPrice(hero.level))} gp.`;
+        respecRow.replaceChildren();
+      } else {
+        respecText.textContent = `${hero.skills.length} skill${hero.skills.length === 1 ? '' : 's'} learned${sub ? `, subclass ${sub}` : ', no subclass'}. Forgetting it all costs ${num(cost)} gp at level ${hero.level}.${short ? ' That is more gold than there is.' : ''}`;
+        const b = confirmBtn(`Respec for ${num(cost)} gp`, 'Tap again: every skill is forgotten', () => { if (current && respec(current.hero) != null) app.changed(); }, 'btn primary');
+        b.disabled = short;
+        respecRow.replaceChildren(b);
+      }
+    }
     const fee = clericFee(hero);
     clericBtn.hidden = fee == null;
     if (fee == null) { clericText.textContent = `${hero.name} is on their feet. The cleric is reading and would like it to stay that way.`; return; }

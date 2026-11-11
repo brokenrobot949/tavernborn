@@ -5,10 +5,11 @@
 import { RACES } from '../data/races.js';
 import { CLASSES } from '../data/classes.js';
 import { REGION_BY_ID, START_REGION } from '../data/regions.js';
-import { ADVENTURE_FIELDS, STATS } from './hero.js';
-import { MAX_LEVEL, LEVEL_TARGET_HOURS, xpForLevel } from './rules.js';
+import { ADVENTURE_FIELDS, GROWTH_FIELDS, STATS, abilityPointsBy } from './hero.js';
+import { SKILL_BY_ID, BRANCH_BY_ID, MAX_SKILLS } from './skills.js';
+import { MAX_LEVEL, PAST_CURVES, xpForLevel } from './rules.js';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 const SAVE_KEY = 'tavernborn.save.v1';
 const EXPORT_PREFIX = 'TVB1.';
 
@@ -23,22 +24,29 @@ export function newSave(seed = (Date.now() ^ Math.floor(Math.random() * 0x100000
   };
 }
 
-// Version 1 (Phases 1 and 2) priced levels with these two rates. Phase 3 retuned the curve, so a
-// version 1 hero's XP is moved to the same place within their level on the new curve. Levels are
+// The XP curve has been retuned twice (Phase 3, then Phase 4 when skills arrived). A hero from an
+// older save is moved to the same place within their level on the current curve. Levels are
 // never taken away.
-const V1_RATE = 0.5, V1_RATE_LATE = 0.48, V1_LATE_FROM = LEVEL_TARGET_HOURS[6];
-function v1XpForLevel(level) {
-  const hours = LEVEL_TARGET_HOURS[Math.min(level, MAX_LEVEL)];
-  const early = Math.min(hours, V1_LATE_FROM);
-  return Math.round(3600 * (early * V1_RATE + (hours - early) * V1_RATE_LATE));
-}
-function rescaleXp(h) {
+function rescaleXp(h, old) {
   const level = Math.max(1, Math.min(MAX_LEVEL, Math.floor(h.level) || 1));
   h.level = level;
   if (level >= MAX_LEVEL) { h.xp = Math.max(Number(h.xp) || 0, xpForLevel(MAX_LEVEL)); return; }
-  const from = v1XpForLevel(level), to = v1XpForLevel(level + 1);
+  const from = old[level], to = old[level + 1];
   const part = Math.max(0, Math.min(0.999, ((Number(h.xp) || 0) - from) / (to - from)));
   h.xp = Math.round(xpForLevel(level) + part * (xpForLevel(level + 1) - xpForLevel(level)));
+}
+
+// Phase 4 (version 3): skills, the subclass, and ability score increases. A hero from an older
+// save gets the ability points their level has already earned, and never fewer skill points than
+// their levels and Feats are worth.
+function growthFields(h, version) {
+  h.skills = Array.isArray(h.skills) ? [...new Set(h.skills)].filter((id) => SKILL_BY_ID[id]?.cls === h.class).slice(0, MAX_SKILLS) : [];
+  if (BRANCH_BY_ID[h.subclass]?.cls !== h.class) h.subclass = null;
+  const fields = GROWTH_FIELDS();
+  if (version < 3) h.abilityPoints = abilityPointsBy(h.level);
+  for (const [key, value] of Object.entries(fields)) h[key] ??= value;
+  const earned = (h.level - 1) + h.feats.length;
+  h.skillPoints = Math.max(Number(h.skillPoints) || 0, earned - h.skills.length);
 }
 
 // Bring an older or partial save up to the current shape, or throw if it is not a save at all.
@@ -48,12 +56,13 @@ export function migrate(save) {
   for (const h of save.heroes) {
     if (!RACES[h.race] || !CLASSES[h.class] || !h.abilities || !h.appearance) throw new Error('That save has a hero this version cannot read.');
     h.stats = { ...STATS, ...h.stats };
-    if (save.version < 2) rescaleXp(h);
+    if (PAST_CURVES[save.version]) rescaleXp(h, PAST_CURVES[save.version]);
     // Phase 3 fields: travel, quests, dungeon runs, grudges, unread chapter cards.
     for (const [key, value] of Object.entries(ADVENTURE_FIELDS())) h[key] ??= value;
     if (!REGION_BY_ID[h.region]) h.region = START_REGION;
     if (!['roam', 'quest', 'delve'].includes(h.focus)) h.focus = 'roam';
     h.feats ??= [];
+    growthFields(h, save.version);
     // XP never sits below the hero's own level, whatever happened to the curve.
     h.xp = Math.max(Number(h.xp) || 0, xpForLevel(Math.min(h.level, MAX_LEVEL)));
     h.chronicle ??= [];

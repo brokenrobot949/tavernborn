@@ -89,6 +89,7 @@
       <p class="hint">Median time to levels 5, 10, and 20, and the average number of knockouts and potions per hero over the whole climb.</p>
       <div class="scroll" id="class-table"></div>
       <div class="scroll" id="race-table"></div>
+      <div class="scroll" id="subclass-table"></div>
     </section>
 
     <section class="panel" id="dungeon-panel" hidden>
@@ -108,12 +109,12 @@
   <noscript>The simulator needs JavaScript.</noscript>
 
   <script type="module">
-    import { prepareWorld, heroPlan, runHero, summarize, formatTime, DAY, MAX_LEVEL, CLASSES, RACES } from './simulate-core.js';
+    import { prepareWorld, heroPlan, runHero, summarize, formatTime, subclassLabel, DAY, MAX_LEVEL, CLASSES, RACES } from './simulate-core.js';
 
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const options = { heroes: 500, mode: 'road', damageTimes: 1, zoom: 'month' };
-    const runOptions = () => ({ world: options.mode === 'vale' ? 'vale' : 'road', style: options.mode === 'roam' ? 'roam' : 'balanced', damageTimes: options.damageTimes });
+    const runOptions = () => ({ world: options.mode === 'vale' ? 'vale' : 'road', style: options.mode === 'roam' ? 'roam' : 'balanced', growth: options.mode !== 'unspent', damageTimes: options.damageTimes });
     let summary = null;
     let workers = [];
     let runId = 0;
@@ -134,7 +135,7 @@
       }
     }
     choice('opt-heroes', 'heroes', [[100, '100'], [500, '500'], [1000, '1,000']]);
-    choice('opt-world', 'mode', [['road', 'Quests and dungeons'], ['roam', 'Roam and dungeons'], ['vale', 'Mugwick Vale only']], describeWorld);
+    choice('opt-world', 'mode', [['road', 'Quests and dungeons'], ['roam', 'Roam and dungeons'], ['vale', 'Mugwick Vale only'], ['unspent', 'Points never spent']], describeWorld);
     choice('opt-damage', 'damageTimes', [[1, 'As built'], [1.25, 'x1.25'], [1.5, 'x1.5'], [2, 'x2']], describeWorld);
     choice('opt-zoom', 'zoom', [['month', 'Whole month'], ['day', 'First day']], () => summary && drawLevels());
 
@@ -147,11 +148,13 @@
         road: 'does each region\'s six story quests, then roams. On reaching the level a dungeon is built for, the hero delves until it is cleared, then walks to the next region. If the hero loses confidence in a dungeon (three knockouts running), the player waits a level before trying again.',
         roam: 'only ever roams between dungeon attempts, and otherwise does the same: delve on reaching the dungeon\'s level, then walk on.',
         vale: 'never leaves Mugwick Vale and only roams. Monsters far below the hero pay less XP, so this shows what staying put costs.',
+        unspent: 'plays the standard road and never opens the Skills tab: every skill point and ability point stays banked. This shows what leaving them unspent costs.',
       }[options.mode];
       $('standin').innerHTML = `
         <h2>What is real and what is made up</h2>
         <p class="hint"><b>Real:</b> everything in the game. Every roll, XP award, hit, potion, quest step, dungeon room, boss fight, journey, knockout, and level-up comes from the game's own engine, in the real eight regions. There are no stand-in monsters any more.</p>
         <p class="hint"><b>Made up:</b> the player. Somebody has to choose a focus and say when to travel, so the simulator plays one who ${player}</p>
+        ${options.mode === 'unspent' ? '' : `<p class="hint"><b>Growth:</b> the same player spends every point the hero earns, using the Skills tab's own functions: the subclass at level 3 (each class's three take turns), ability points into the class's main ability and then Constitution, and skills down the subclass's own branch first, then the other two.</p>`}
         ${options.damageTimes !== 1 ? `<p class="hint"><b>What if:</b> everything hits ${options.damageTimes} times as hard for this run only. The game's files are not changed.</p>` : ''}
         <details><summary>Show the numbers used</summary><div class="scroll"><table>
           <tr><th>Region</th><th>Levels</th><th>Monsters</th><th>DC</th><th>Damage</th><th>Dungeon level</th><th>Room</th><th>Boss</th></tr>${rows}
@@ -316,6 +319,8 @@
         `<tr><td>${esc(names[g.id].name)}</td><td>${formatTime(g.l5)}</td><td>${formatTime(g.l10)}</td><td>${formatTime(g.l20)}</td><td>${g.knockouts.toFixed(1)}</td><td>${g.potions.toFixed(1)}</td><td>${g.clearedLast} of ${g.heroes}</td></tr>`).join('')}</table>`;
       $('class-table').innerHTML = table('Class', summary.byClass, CLASSES);
       $('race-table').innerHTML = table('Race', summary.byRace, RACES);
+      // The stand-in player picks each class's three subclasses in turn and spends every point.
+      $('subclass-table').innerHTML = table('Subclass', summary.bySubclass, Object.fromEntries(summary.bySubclass.map((g) => [g.id, { name: subclassLabel(g.id) }])));
     }
 
     function drawKnockouts() {
