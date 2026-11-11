@@ -40,9 +40,9 @@ export const BESTIARY_NEW = 'New Bestiary entry: {monster}.';
 // ----- travel -----
 export const TRAVEL_TASKS = [
   'Walking to {place} behind a cart that will not be passed',
-  'On the road to {place}, being told a shortcut by a man going the other way',
+  'On the road to {place}, on a shortcut from a man going the other way',
   'Travelling to {place} and regretting the newer boots',
-  'On the way to {place}, sharing the road with a funeral that is in no hurry',
+  'On the way to {place}, behind a funeral that is in no hurry',
   'Walking to {place} in rain that was not forecast',
   'On the road to {place}, paying a toll at a bridge with no river',
   'Travelling to {place} beside a pedlar with opinions',

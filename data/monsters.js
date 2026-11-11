@@ -61,7 +61,7 @@ export const MONSTERS = {
     {
       id: 'hedge_bandit', name: 'Hedge Bandit', level: 2, dc: 12, dmg: 5, xp: 24, gold: [3, 7], secs: [30, 50],
       check: 'Deception',
-      about: 'Robs travelers on the Vale road. New to the work and still using notes.',
+      about: 'Robs travellers on the Vale road. New to the work and still using notes.',
       tasks: ['Being robbed by someone reading from a card', 'Waiting for a bandit to find the right page', 'Correcting a bandit on the going rate'],
       hit: ['The bandit hands over the takings and asks for feedback.', 'The bandit retires to the hedge to think about other trades.'],
       miss: ['The bandit keeps a few coins and, somehow, the moral high ground.', 'The hero is robbed, though of less than was requested.'],
@@ -234,7 +234,7 @@ export const MONSTERS = {
     {
       id: 'quartermaster', name: 'Pirate Quartermaster', level: 7, dc: 14, dmg: 14, xp: 35, gold: [5, 13], secs: [40, 60],
       check: 'Intimidation',
-      about: 'Counts everything aboard twice and everything ashore once. Regards a traveler as stock.',
+      about: 'Counts everything aboard twice and everything ashore once. Regards a traveller as stock.',
       tasks: ['Being counted by a pirate', 'Objecting to an entry in a ship\'s inventory', 'Standing still for a valuation at cutlass point'],
       hit: ['The quartermaster writes the hero off as a loss.', 'The quartermaster is disarmed and, worse, loses his place in the ledger.'],
       miss: ['The quartermaster corrects the hero with the flat of a cutlass.', 'The hero is entered under sundries and treated accordingly.'],
@@ -411,7 +411,7 @@ export const MONSTERS = {
     {
       id: 'dust_auditor', name: 'Dust Devil Auditor', level: 12, dc: 15, dmg: 22, xp: 16, gold: [7, 20], secs: [20, 40],
       check: 'Investigation',
-      about: 'Goes through everything a traveler owns and returns it in a different order, some of it elsewhere.',
+      about: 'Goes through everything a traveller owns and returns it in a different order, some of it elsewhere.',
       tasks: ['Having a pack audited by the wind', 'Holding on to a hat during an inspection', 'Asking a whirlwind what it is looking for'],
       hit: ['The auditor finds nothing of interest and blows itself out.', 'The dust devil is waited out behind a rock.'],
       miss: ['The audit is thorough and abrasive.', 'Everything is returned, at speed, from several directions.'],
@@ -455,7 +455,7 @@ export const MONSTERS = {
     {
       id: 'sphinx_registrar', name: 'Sphinx Registrar', level: 15, dc: 16, dmg: 28, xp: 36, gold: [9, 24], secs: [40, 60],
       check: 'History',
-      about: 'Asks three questions of every traveler. Two of them concern date and place of birth.',
+      about: 'Asks three questions of every traveller. Two of them concern date and place of birth.',
       tasks: ['Answering three questions from a sphinx', 'Spelling a surname for something with claws', 'Being asked for a second form of identification in a desert'],
       hit: ['The sphinx is satisfied and enters the hero in the register.', 'The sphinx is given an answer it had not heard and needs time with it.'],
       miss: ['The answer was wrong. The sphinx corrects it with a paw.', 'The third question was the riddle, and it went badly.'],
@@ -470,7 +470,7 @@ export const MONSTERS = {
     {
       id: 'ochre_ooze', name: 'Ochre Ooze', level: 15, dc: 15, dmg: 28, xp: 16, gold: [9, 24], secs: [20, 40],
       check: 'Acrobatics',
-      about: 'Has absorbed several travelers and one filing cabinet. It has kept the cabinet\'s habits.',
+      about: 'Has absorbed several travellers and one filing cabinet. It has kept the cabinet\'s habits.',
       tasks: ['Stepping over an ooze that is sorting something', 'Retrieving a boot from a slow puddle', 'Being filed'],
       hit: ['The ooze is scraped back into its crevice.', 'The ooze gives up the boot, alphabetized.'],
       miss: ['The ooze takes a sample.', 'The hero is engulfed to the knee and classified.'],

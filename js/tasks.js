@@ -101,7 +101,7 @@ function loot(state, hero, events, opts) {
   const gained = maxHp(hero) - before; // a better helm adds its hit points at once
   if (gained > 0 && hero.knockedOutUntil == null) hero.hp += gained;
   const values = { item: item.name, old: got.old?.name, gold: got.gold, slot: SLOT_BY_ID[slot].name, name: hero.name, flavor: flavorOf(item) };
-  const text = item.legend ? fill(LOOT_LINES.legend, values) + (got.old ? fill(LOOT_LINES.legendOver, values) : '')
+  const text = item.legend ? fill(LOOT_LINES.legend, values) + (got.old ? ' ' + fill(LOOT_LINES.legendOver, values) : '')
     : !got.equipped ? fill(pick(state, LOOT_LINES.sold), values)
     : got.old ? fill(pick(state, LOOT_LINES.upgrade), values)
     : fill(pick(state, LOOT_LINES.first), values);

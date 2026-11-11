@@ -136,7 +136,7 @@ export const LOOT_LINES = {
     'Found: {item}. It is weighed against {old}, loses, and is sold for {gold} gp.',
   ],
   legend: 'Found: {item}. {flavor}',
-  legendOver: ' {old} is sold for {gold} gp and not missed.',
+  legendOver: '{old} is sold for {gold} gp and not missed.',
 };
 
 // Level milestones on the sprite (design doc, "Hero visuals"). {name} is the hero, {title} the

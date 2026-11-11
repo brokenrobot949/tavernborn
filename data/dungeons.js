@@ -141,7 +141,7 @@ export const DUNGEONS = {
     enter: 'Through three layers of sand and three sealed doors. The third has scratches on the inside.',
     roomTasks: [
       { text: 'Crossing a corridor that fills with sand', hit: 'Out the far door at a run.', miss: 'Out the far door, eventually, by digging.' },
-      { text: 'Reading curses carved in three different hands', hit: 'The hero finds the one that is only a parking notice.', miss: 'The second curse was current.' },
+      { text: 'Reading curses carved in three different hands', hit: 'The hero finds the one that is only a notice about where not to leave carts.', miss: 'The second curse was current.' },
       { text: 'Passing a rank of embalmed guards', hit: 'They have orders about people leaving, not arriving.', miss: 'They have orders about both.' },
       { text: 'Weighing a heart against a feather under supervision', hit: 'Near enough.', miss: 'The scales were not in the hero\'s favour, and neither was the supervisor.' },
       { text: 'Prising the lid off the second burial', hit: 'It lifts. There is a third inside, as advertised.', miss: 'The lid had been weighted against exactly this.' },

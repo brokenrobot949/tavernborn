@@ -101,9 +101,24 @@ retirement only at level 20, freeing the slot and keeping the portrait look (it 
 and the record; a new hero after one retirement earns 2% more XP, capped at 10%; the Rifts open at
 level 20, get harder each floor, restart at floor 1 after a knockout, and have Wardens; Paragon
 ranks come from XP past level 20, are announced once, and change no roll; determinism and the save
-string with two heroes, upgrades, and the Rifts; and a Phase 5 save (version 4) loading intact. It
+string with two heroes, upgrades, and the Rifts; and a Phase 5 save (version 4) loading intact. Then
+Phase 7: the writing check above, which sound plays when several things happen at once, that every sound
+exists, that the tavern tune's passes are eight bars, the default sound settings, and the credits data. It
 also prints the median time to each early level against the targets (for heroes whose points are
 left unspent).
+
+## check-text.mjs: the writing check
+
+```bash
+node tools/check-text.mjs
+```
+
+Gathers every line of player-facing text (the data files and the string literals in `js/`) and holds it to
+the design doc's "Humor and voice" rules: no exclamation marks, emoji, internet or pop-culture words,
+mocking words, or fourth-wall words in story text; British spelling (Oxford -ize allowed); only
+placeholders the game fills in; task lines of 70 characters at most; Chronicle sentences that end; no line
+twice in one list. Exits with an error and lists each problem. `--list` prints the whole script, one line
+each with where it lives. `check-sim.mjs` runs it too.
 
 ## simulate.html and simulate.mjs: the pacing simulator
 

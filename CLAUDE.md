@@ -34,8 +34,11 @@ Rob is the game designer and does not write code.
 - `js/tavern.js` the tavern and legacy: upgrades (`buyUpgrade`, `tavernMods`), the trophy wall, the roster
   (`switchHero`, `dismissHero`), retirement and the Hall (`retire`, `portraitOf`), Paragon ranks. Text in `data/tavern.js`
 - `js/sprite.js` LPC layer compositing and animation
+- `js/audio.js` sound: effects and the tavern tune, synthesised with the Web Audio API (no audio files), and the
+  sound settings, kept in localStorage under `tavernborn.settings`, apart from the save
 - `js/ui/` one module per tab, plus `create.js` (creation), `away.js` (the summary card), `story.js` (chapter
-  cards), `legacy.js` (the retirement card and Hall portraits), `dom.js` (helpers);
+  cards), `legacy.js` (the retirement card and Hall portraits), `settings.js` (sound switches, volume, credits
+  button), `credits.js` (the credits screen), `dom.js` (helpers);
   `data/` all content (`data/loot.js` holds gear names and the named Legendaries; `data/items.js` the
   sprite look of each class, slot, and rarity); `css/backdrops.css` the scene backdrops; `tools/` dev-only
 
@@ -86,8 +89,49 @@ Rob is the game designer and does not write code.
 | 7. Polish | Writing pass, sound, credits screen, settings | Tone matches the Humor and voice section |
 
 ## Status
-- Current phase: 6 (Tavern and legacy), built and waiting on Rob's phone test. Phases 1 to 5 are also still
-  in his phone test. Phase 0 is approved.
+- Current phase: 7 (Polish), built and waiting on Rob's phone test. This is the last phase in the plan.
+  Phases 1 to 6 are also still in his phone test. Phase 0 is approved.
+- Built in Phase 7: sound effects and a tavern tune (`js/audio.js`), settings with the mute switch
+  (`js/ui/settings.js`), the in-game credits screen (`js/ui/credits.js`), and a writing pass held in place by
+  `tools/check-text.mjs`.
+- Sound: nothing is recorded or downloaded. `audio.js` builds every sound from oscillators and noise (a plucked
+  string, a small bell, a pipe, a thump, a rattle). `main.js` passes each live tick's events to
+  `playEvents`, which plays only the one that matters most (`pickSound`: level-up, dungeon clear, Paragon
+  rank, knockout, Legendary, quest, natural 20, other gear going on, natural 1, potion), and nothing for an
+  ordinary task or a piece that is only sold. A long time away plays one chime when the away card opens.
+  Buying an upgrade, paying the cleric, and respec play coins; retiring plays a short fanfare. Browsers keep
+  pages silent until the first tap, so sound starts then; the context is suspended while the page is hidden.
+- The tavern tune: D minor, three time, about 143 beats a minute, eight bars of Dm, C, Bb, A on a plucked
+  bass and chords, with a pipe melody that alternates between two passes (`TUNE`). Scheduled a half second
+  ahead, so it keeps time when the phone is busy.
+- Settings (Tavern tab, above Save): "Mute everything" (the doc's mute switch), "Sound effects", "Tavern
+  music", a volume slider, "Play a level-up" to test, and "Open the credits". Defaults: effects on, music
+  off, volume 60%. They belong to the device, not the save, so a save string does not carry them.
+- Credits screen: loads `data/credits.js` only when opened. The LPC generator link and commit, all 44 named
+  artists, the licences, then every one of the 127 layers as a fold-out with its files, artists, notes,
+  licences, and links. It says the backdrops, map, sounds, and tune are made in code. CREDITS.md stays as
+  the full file.
+- Writing pass: `node tools/check-text.mjs` gathers all 3,005 lines of player-facing text (about 23,000
+  words: the data files and the string literals in `js/`) and checks them against "Humor and voice": no
+  exclamation marks, emoji, internet or pop-culture words, mocking words, or fourth-wall words in story text;
+  British spelling (-our, -re, -ll; Oxford -ize is kept; "Divine Favor" keeps the 5e spelling); every
+  placeholder is one the game fills; task lines at most 70 characters; Chronicle sentences end properly; no
+  line twice in one list. `--list` prints the whole script. Fixed in the pass: five "traveler(s)", "Hair
+  color", two task lines too long for a phone, "a parking notice" (now carts), a stray leading space in the
+  Legendary line, and a Phase 6 legend line that repeated an existing joke. The rest was read in samples and
+  through a count of repeated phrases; the running themes (rent, receipts, paperwork, three hundred years)
+  are the story's own and were kept.
+- `node tools/check-sim.mjs` proves the sim (201 checks): Phases 1 to 6 as before, plus for Phase 7 the
+  writing check, which sound plays when several things happen at once, every sound exists, the tune's bars,
+  the default settings, and the credits data.
+- No rule, number, or save change in Phase 7: pacing is as measured in Phase 6, and saves stay version 5.
+- Spec departures to raise with Rob, new in Phase 7:
+  - Music is off by default (effects on). An idle game is opened in odd places; the switch is one tap away.
+  - Sound is made in code rather than from recordings, so there is nothing to download or credit.
+  - The doc does not name a spelling; the game is held to British spelling, as most of it was written.
+  - The credits name no game designer or builder; add a line in `js/ui/credits.js` if wanted.
+
+## Phase 6 record
 - Built in Phase 6 (`js/tavern.js`, `data/tavern.js`, numbers in `js/rules.js` under TAVERN, LEGACY, RIFT,
   PARAGON_XP): four tavern upgrades, the trophy wall, a roster of three heroes, retirement to the Hall of
   Legends with a redrawable portrait and the legacy bonus, the Planar Rifts, and Paragon ranks.
@@ -152,8 +196,6 @@ Rob is the game designer and does not write code.
   - A retiring hero's gold is not passed on.
   - Trophies are a list on the Tavern tab; the tavern backdrop does not show them.
   - Wardens hand over named Legendaries at level 20, so one can replace a lower-level Legendary.
-- Placeholders shown honestly: the Tavern tab's "Sound and credits" panel says both arrive in Phase 7 and
-  links to CREDITS.md.
 
 ## Phase 5 record
 - Built in Phase 5: loot (`js/loot.js`, names in `data/loot.js`, numbers in `js/rules.js`), gear that changes
@@ -261,7 +303,6 @@ Rob is the game designer and does not write code.
   Learn, ability, and respec buttons ask for a second tap. The Gear tab has nothing to tap.
 - The knockout fall plays only for a knockout seen as it happens, for a second and a half, in the scene where
   it happened; then the scene moves to the tavern.
-- No in-game credits screen or sound yet (Phase 7).
 - `sprite.js` draws the front of every shield above hats (LPC puts it under them, which clipped wide brims).
 - Not baked yet: the other 18 hair colours.
 - Local preview: `.claude/launch.json` has five servers (ports 8771, 8773, 8779, 8784, 8792) so sessions do not collide.

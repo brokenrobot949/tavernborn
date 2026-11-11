@@ -44,7 +44,7 @@ export function tavernMods(state) {
 // The effect of an upgrade at a given rank, in words, for the Tavern tab.
 export function upgradeEffect(id, rank) {
   const pct = (v) => `${Math.round(v * 100)}%`;
-  if (!rank) return 'Not built yet.';
+  if (!rank) return 'Nothing yet.';
   if (id === 'room') return `Knockout recovery ${pct(rank * TAVERN.room.per)} quicker.`;
   if (id === 'stable') return `Travel ${pct(rank * TAVERN.stable.per)} quicker.`;
   if (id === 'notice') return `Odd jobs pay ${pct(rank * TAVERN.notice.per)} more XP and gold, and their gear is a little rarer.`;

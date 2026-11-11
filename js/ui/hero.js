@@ -16,6 +16,7 @@ import { portraitOf, paragonRank, paragonTitle, paragonXp, canRetire } from '../
 import { currentQuest, clericFee, payCleric } from '../tasks.js';
 import { subclassName } from '../skills.js';
 import { el, num, heroClock, confirmBtn } from './dom.js';
+import { sfx } from '../audio.js';
 
 const STAGE_H = 70; // sprite pixels; the scene is this tall times 4
 const SHOWN_LINES = 80;
@@ -85,7 +86,7 @@ export function mountHero(root, app) {
   const clericNote = el('p', { className: 'hint' });
   const cleric = el('div', { className: 'panel cleric', hidden: true }, el('div', { className: 'row' }, clericBtn), clericNote);
   let current = null; // { state, hero } as of the last update
-  clericBtn.onclick = () => { if (current && payCleric(current.state, current.hero) != null) app.changed(); };
+  clericBtn.onclick = () => { if (current && payCleric(current.state, current.hero) != null) { sfx('coins'); app.changed(); } };
   // Retirement: offered once by a card at level 20, then always here. No penalty for ignoring it.
   const retireNote = el('p', { className: 'hint' });
   const retireRow = el('div', { className: 'row' });

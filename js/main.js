@@ -18,6 +18,7 @@ import { mountTavern } from './ui/tavern.js';
 import { showAway } from './ui/away.js';
 import { showChapter } from './ui/story.js';
 import { showRetireOffer, drawPortrait } from './ui/legacy.js';
+import { unlockOnTap, playEvents, sfx } from './audio.js';
 
 const AWAY_SECONDS = 600; // the summary card appears after more than ten minutes away
 const SAVE_EVERY = 10; // seconds between automatic saves
@@ -52,6 +53,7 @@ const app = {
     settle();
     const wasActive = id === save.activeHeroId;
     if (!retire(save, id)) return;
+    sfx('retire');
     storeSave(save);
     if (wasActive) start('tavern'); else render();
   },
@@ -138,7 +140,9 @@ function tick() {
   const events = advance(save, gap);
   save.lastSavedAt += gap * 1000;
   sinceStore += gap;
-  if (gap >= AWAY_SECONDS) showAway(root, { seconds: gap, summary: summarize(events), hero });
+  // Sound: one effect for what just happened, or one chime for a long time away.
+  if (gap >= AWAY_SECONDS) { showAway(root, { seconds: gap, summary: summarize(events), hero }); sfx('away'); }
+  else if (events.length) playEvents(events);
   if (sinceStore >= SAVE_EVERY) { sinceStore = 0; storeSave(save); }
   // Story chapter cards earned by a first dungeon clear, one at a time, after any away card.
   if (hero.unread.length && !root.querySelector('.overlay')) {
@@ -154,6 +158,7 @@ function tick() {
   render();
 }
 
+unlockOnTap();
 setInterval(tick, 1000);
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) { if (activeHero(save)) storeSave(save); } else tick();

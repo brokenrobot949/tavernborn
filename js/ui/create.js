@@ -91,7 +91,7 @@ export function mountCreate(root, state, onDone, onCancel = null) {
         for (const [v, text] of [['none', 'None'], ...HAIR_STYLES.map((h) => [h.id, h.id.replaceAll('_', ' ')])]) s.append(el('option', { value: v, textContent: text, selected: v === draft.hairStyle }));
         return s;
       })()),
-      row('Hair color', ...swatches(HAIR_COLORS, SWATCHES.hair, draft.hairColor, (n) => { draft.hairColor = n; })),
+      row('Hair colour', ...swatches(HAIR_COLORS, SWATCHES.hair, draft.hairColor, (n) => { draft.hairColor = n; })),
       race.beard ? row('Beard', pressBtn(draft.beard ? 'On' : 'Off', draft.beard, () => { draft.beard = !draft.beard; render(); })) : null,
       el('div', { className: 'row' }, el('button', { className: 'btn', type: 'button', textContent: 'Randomize appearance', onclick: () => { Object.assign(draft, randomAppearance(state, draft.race)); render(); } })),
     ];

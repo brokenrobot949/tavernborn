@@ -14,7 +14,9 @@
 // effect, upgrades shared across heroes, the trophy wall, the roster of three, retirement (only at
 // level 20, freeing the slot, keeping the portrait look and record), the legacy bonus on a new
 // hero's XP and its 10% cap, the Planar Rifts and Paragon ranks, determinism, and a Phase 5 save
-// loading intact. Exits with an error if any check fails.
+// loading intact. Then Phase 7: every line of game text against the Humor and voice rules
+// (tools/check-text.mjs), which sound plays for what, the tavern tune, the default sound settings,
+// and the credits data. Exits with an error if any check fails.
 
 import { advance, summarize } from '../js/sim.js';
 import { newSave, exportSave, importSave, migrate, SAVE_VERSION } from '../js/state.js';
@@ -829,6 +831,27 @@ ok(GEAR_STATS.weapon.perTier === 1, 'a weapon adds its rarity to every roll');
   const odd5 = JSON.parse(JSON.stringify(v4)); odd5.tavern.upgrades = { room: 99, stable: 'two', ballroom: 3 }; odd5.tavern.legends = [{ name: 'A' }, { name: 'B' }];
   const fixed5 = migrate(odd5);
   ok(fixed5.tavern.upgrades.room === 5 && fixed5.tavern.upgrades.stable === undefined && fixed5.tavern.upgrades.ballroom === undefined && fixed5.tavern.legacyBonus === 0.04, 'odd upgrade numbers are put right, and the legacy bonus is worked out from the Hall');
+}
+
+// ---------- Phase 7: polish ----------
+{ // its own scope, like Phase 6
+  console.log('\nPhase 7 polish:');
+  const { checkText } = await import('./check-text.mjs');
+  const text = await checkText();
+  ok(text.lines.length > 2500 && text.problems.length === 0, `all ${text.lines.length} lines of game text keep to the Humor and voice rules (tools/check-text.mjs)${text.problems.length ? ': ' + text.problems.slice(0, 3).join('; ') : ''}`);
+  const audio = await import('../js/audio.js');
+  const pick = (events) => audio.pickSound(events)?.name ?? null;
+  ok(pick([{ type: 'task', outcome: 'hit' }, { type: 'potion' }]) === 'potion' && pick([{ type: 'task', outcome: 'hit' }]) === null, 'an ordinary task makes no sound; a potion does');
+  ok(pick([{ type: 'loot', equipped: true, tier: 1 }, { type: 'task', outcome: 'crit' }, { type: 'levelup', level: 4 }]) === 'levelup', 'when several things happen at once, only the one that matters most is heard (a level-up)');
+  ok(pick([{ type: 'knockout' }, { type: 'loot', equipped: true, tier: 2 }]) === 'knockout' && pick([{ type: 'loot', equipped: false, tier: 3 }]) === null, 'a knockout outranks a find, and a piece that is only sold is not announced');
+  const legendSound = audio.pickSound([{ type: 'loot', equipped: true, tier: 4 }, { type: 'questdone' }]);
+  ok(legendSound.name === 'loot' && legendSound.arg === 4, 'a Legendary going on outranks a finished quest, and gets the long chime');
+  ok(['levelup', 'clear', 'crit', 'fumble', 'knockout', 'quest', 'coins', 'potion', 'paragon', 'away', 'retire', 'loot'].every((n) => typeof audio.EFFECTS[n] === 'function'), 'every sound the game asks for exists');
+  ok(audio.TUNE.every((pass) => pass.reduce((n, [, beats]) => n + beats, 0) === 24), 'each pass of the tavern tune is eight bars of three beats');
+  ok(audio.DEFAULTS.muted === false && audio.DEFAULTS.effects === true && audio.DEFAULTS.music === false, 'out of the box: effects on, music off, not muted');
+  const { CREDITS, LPC_COMMIT } = await import('../data/credits.js');
+  const creditFiles = CREDITS.flatMap((c) => c.credits);
+  ok(/^[0-9a-f]{40}$/.test(LPC_COMMIT) && creditFiles.length > 50 && creditFiles.every((f) => f.authors.length && f.licenses.length), `the credits screen has ${CREDITS.length} layers and ${creditFiles.length} art files, each with its artists and licences`);
 }
 
 // 16. Pacing across many seeds (tools/simulate.html charts all 20 levels).

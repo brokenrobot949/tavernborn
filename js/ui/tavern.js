@@ -1,6 +1,6 @@
 // Tavern tab, in the design doc's order: upgrades (and the trophy wall they hang), the cleric,
-// respec, the hero roster, the Hall of Legends, then Settings: the save string, sound and credits
-// (Phase 7), and the workshop links.
+// respec, the hero roster, the Hall of Legends, then settings (sound and the credits), the save
+// string, and the workshop links.
 //
 // Each panel is rebuilt only when something it shows changes, so a tap is never lost to the
 // once-a-second redraw. Buttons that spend a lot or cannot be undone ask for a second tap.
@@ -17,6 +17,8 @@ import { SLOT_BY_ID } from '../loot.js';
 import { upgradeRank, upgradePrice, upgradeEffect, maxRank, buyUpgrade, trophyWall, canRecruit, canRetire, paragonTitle } from '../tavern.js';
 import { el, confirmBtn, num } from './dom.js';
 import { drawPortrait } from './legacy.js';
+import { mountSettings } from './settings.js';
+import { sfx } from '../audio.js';
 
 const pct = (v) => `${Math.round(v * 100)}%`;
 const who = (h) => `Level ${h.level} ${RACES[h.race].name} ${CLASSES[h.class].name}`;
@@ -36,7 +38,7 @@ export function mountTavern(root, app) {
   // ----- the cleric -----
   const clericText = el('p', {});
   const clericBtn = el('button', { className: 'btn primary', type: 'button', textContent: 'Pay the cleric' });
-  clericBtn.onclick = () => { if (current && payCleric(current.state, current.hero) != null) app.changed(); };
+  clericBtn.onclick = () => { if (current && payCleric(current.state, current.hero) != null) { sfx('coins'); app.changed(); } };
 
   // ----- respec -----
   const respecText = el('p', {});
@@ -105,6 +107,7 @@ export function mountTavern(root, app) {
     el('section', { className: 'panel' },
       el('h3', { textContent: 'The Hall of Legends' }),
       hallBox),
+    mountSettings(),
     el('section', { className: 'panel' },
       el('h3', { textContent: 'Save' }),
       el('p', { className: 'hint', textContent: 'The game saves itself on this device every few seconds. A save string holds the whole tavern: every hero, the upgrades, and the Hall. Use it to move to another device or keep a backup.' }),
@@ -117,10 +120,6 @@ export function mountTavern(root, app) {
       input,
       el('div', { className: 'row' }, confirmBtn('Load this save', 'Tap again: replaces the whole tavern', load)),
       inMsg),
-    el('section', { className: 'panel' },
-      el('h3', { textContent: 'Sound and credits' }),
-      el('p', { className: 'hint', textContent: 'Sound effects, tavern music, the mute switch, and the credits screen arrive in the last build (Phase 7). Until then the game is silent, and every artist whose art it uses is listed in CREDITS.md.' }),
-      el('div', { className: 'row' }, el('a', { className: 'btn link', href: 'CREDITS.md', textContent: 'Open CREDITS.md' }))),
     el('section', { className: 'panel' },
       el('h3', { textContent: 'Workshop' }),
       el('div', { className: 'row' }, el('a', { className: 'btn link', href: 'sprite-lab.html', textContent: 'Open the sprite lab' })),
@@ -149,7 +148,7 @@ export function mountTavern(root, app) {
       else {
         const short = hero.gold < price;
         kids.push(el('p', { className: 'hint', textContent: `Next: ${u.ranks[rank]}. ${upgradeEffect(u.id, rank + 1)}` }));
-        const b = confirmBtn(`Build for ${num(price)} gp`, `Tap again: pay ${num(price)} gp`, () => { if (current && buyUpgrade(current.state, current.hero, u.id) != null) app.changed(); }, 'btn primary');
+        const b = confirmBtn(`Build for ${num(price)} gp`, `Tap again: pay ${num(price)} gp`, () => { if (current && buyUpgrade(current.state, current.hero, u.id) != null) { sfx('coins'); app.changed(); } }, 'btn primary');
         b.disabled = short;
         kids.push(el('div', { className: 'row' }, b));
         if (short) kids.push(el('p', { className: 'hint', textContent: `${num(price - hero.gold)} gp short.` }));
@@ -185,7 +184,7 @@ export function mountTavern(root, app) {
       respecRow.replaceChildren();
     } else {
       respecText.textContent = `${hero.skills.length} skill${hero.skills.length === 1 ? '' : 's'} learned${sub ? `, subclass ${sub}` : ', no subclass'}. Forgetting it all costs ${num(cost)} gp at level ${hero.level}.${short ? ' That is more gold than there is.' : ''}`;
-      const b = confirmBtn(`Respec for ${num(cost)} gp`, 'Tap again: every skill is forgotten', () => { if (current && respec(current.hero) != null) app.changed(); }, 'btn primary');
+      const b = confirmBtn(`Respec for ${num(cost)} gp`, 'Tap again: every skill is forgotten', () => { if (current && respec(current.hero) != null) { sfx('coins'); app.changed(); } }, 'btn primary');
       b.disabled = short;
       respecRow.replaceChildren(b);
     }

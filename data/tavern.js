@@ -103,7 +103,7 @@ export const RETIRED = '{name} hangs up the {weapon} at The Wobbly Griffin and j
 export const LEGEND_LINES = [
   'Settled the Dragon\'s Due and was home in time for supper.',
   'Paid the rent on The Wobbly Griffin, three hundred years late, in person.',
-  'Went as far as the road goes and asked for a receipt.',
+  'Went as far as the road goes, then came back to tell the regulars about it, slowly.',
   'Undone, once, by {worst}. Remembered for everything else.',
   'Feared by dragons. Avoided, on balance, by {worst}.',
 ];
