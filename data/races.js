@@ -83,9 +83,12 @@ export const HAIR_STYLES = [
   'braid', 'curly_short', 'curly_long', 'bob', 'bangs_bun', 'shorthawk', 'balding',
 ].map((id) => ({ id, def: 'hair_' + id }));
 
-// Phase 0 bakes a spread of the LPC hair palette. The full palette has 26 colours;
-// add names here (from palette_definitions/hair/hair_ulpc.json) and rebake to offer more.
-export const HAIR_COLORS = ['black', 'dark_brown', 'chestnut', 'redhead', 'blonde', 'gray', 'white', 'raven'];
+// Every colour in the LPC hair palette (palette_definitions/hair/hair_ulpc.json), natural shades
+// first and the fantasy ones after. Names are stored in saves, so never rename one.
+export const HAIR_COLORS = [
+  'black', 'raven', 'dark_brown', 'chestnut', 'light_brown', 'sandy', 'blonde', 'gold', 'strawberry', 'ginger', 'carrot',
+  'orange', 'redhead', 'red', 'ash', 'platinum', 'gray', 'dark_gray', 'white', 'rose', 'pink', 'purple', 'violet', 'navy', 'blue', 'green',
+];
 
 // Rules side of each race: ability bonuses and the quirk. `built` is false while a quirk waits
 // on a later phase; all six work as of Phase 3. A task is one roll, so the Dwarf's grudge is a

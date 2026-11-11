@@ -43,6 +43,8 @@ export async function showCredits(root) {
       ...f.urls.map((u) => el('p', { className: 'credit-link' }, link(u)))))));
 
   body.replaceChildren(
+    el('h3', { textContent: 'The game' }),
+    el('p', { textContent: 'Tavernborn was designed by Rob, and built with Claude Code.' }),
     el('h3', { textContent: 'The hero' }),
     el('p', { textContent: 'Every hero, and every piece of gear they wear, is drawn from Liberated Pixel Cup (LPC) art, by the artists below. The layers were taken from the Universal LPC Spritesheet Character Generator and recoloured with its own palettes.' }),
     el('p', { className: 'credit-link' }, link('https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator')),

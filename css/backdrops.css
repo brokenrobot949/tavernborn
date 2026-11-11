@@ -1,4 +1,4 @@
-/* Scene backdrops (Phase 5): one per region, plus the dungeon and the tavern. Drawn entirely with
+/* Scene backdrops: one per region, one per dungeon, the tavern, and the Planar Rifts. Drawn entirely with
    CSS gradients, so there is nothing to download. The Hero tab sets data-bg on the scene panel.
 
    Each backdrop is two boxes behind the sprite: ::before is everything above the horizon (sky and
@@ -242,3 +242,144 @@
     repeating-linear-gradient(90deg, #463a5a 0 52px, #120c1c 52px 58px, #3d3350 58px 104px, #120c1c 104px 112px),
     linear-gradient(#4a3f5e, #2b2338);
 }
+
+/* ----- Each dungeon its own (the shared stone above is the fallback). The Hero tab sets
+   data-dungeon to the region whose dungeon the hero is in. ----- */
+
+/* 1. The Cellar Beneath the Cellar: a brick vault, barrels, and a candle on a crate. */
+.scene[data-dungeon='mugwick']::before {
+  background-image:
+    radial-gradient(ellipse 4px 7px at 78% 52%, #fff2b0 0 50%, #ffb347 100%, transparent 110%),
+    radial-gradient(circle 60px at 78% 56%, rgba(255, 180, 90, 0.4), transparent 100%),
+    linear-gradient(90deg, transparent 72%, #5a3d22 72% 84%, transparent 84%),
+    radial-gradient(ellipse 9% 22% at 14% 100%, #6e4a2a 0 60%, #3b2614 62% 66%, #6e4a2a 68% 98%, transparent 100%),
+    radial-gradient(ellipse 9% 22% at 32% 100%, #6e4a2a 0 60%, #3b2614 62% 66%, #6e4a2a 68% 98%, transparent 100%),
+    radial-gradient(ellipse 70% 40% at 50% 0, #2a1a12 0 98%, transparent 100%),
+    repeating-linear-gradient(0deg, transparent 0 12px, #4a2a1c 12px 14px),
+    repeating-linear-gradient(90deg, transparent 0 26px, rgba(74, 42, 28, 0.8) 26px 28px),
+    linear-gradient(#7a4632, #5e3526);
+  background-size: 100% 100%, 100% 100%, 100% 18%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
+  background-position: 0 0, 0 0, 0 100%, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0;
+}
+.scene[data-dungeon='mugwick']::after { background-image: repeating-linear-gradient(90deg, #4a3020 0 30px, #3e2718 30px 32px), linear-gradient(#4a3020, #3a2416); }
+
+/* 2. The Thornwarren: an earthen burrow, roots hanging from the roof, thorns at the edges. */
+.scene[data-dungeon='mumblewood']::before {
+  background-image:
+    linear-gradient(90deg, transparent 18%, #4b3520 18% 19%, transparent 19% 41%, #4b3520 41% 41.8%, transparent 41.8% 66%, #4b3520 66% 67%, transparent 67%),
+    conic-gradient(from 160deg at 6% 70%, transparent 0 20deg, #2f4a22 20deg 40deg, transparent 40deg),
+    conic-gradient(from 160deg at 94% 64%, transparent 0 20deg, #2f4a22 20deg 40deg, transparent 40deg),
+    radial-gradient(ellipse 60% 85% at 50% 100%, #3b2b1a 0 98%, transparent 100%),
+    radial-gradient(circle 4px at 30% 30%, #5d7d3a 0 98%, transparent 100%),
+    radial-gradient(circle 3px at 72% 22%, #5d7d3a 0 98%, transparent 100%),
+    linear-gradient(#5a4128, #4a3520);
+  background-size: 100% 46%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
+  background-position: 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0;
+}
+.scene[data-dungeon='mumblewood']::after { background-image: radial-gradient(ellipse 8% 30% at 20% 30%, #3e2e1c 0 98%, transparent 100%), linear-gradient(#4f3b24, #3a2a19); }
+
+/* 3. The Drowned Lighthouse: wet stone, a round window on the sea, a lamp, water on the floor. */
+.scene[data-dungeon='saltmarrow']::before {
+  background-image:
+    radial-gradient(circle 22px at 70% 40%, #9fd6d8 0 60%, #2f4f56 64% 78%, transparent 80%),
+    radial-gradient(ellipse 5px 8px at 22% 46%, #fff4c0 0 50%, #e8c35a 100%, transparent 110%),
+    radial-gradient(circle 70px at 22% 50%, rgba(255, 220, 130, 0.35), transparent 100%),
+    repeating-linear-gradient(170deg, transparent 0 18px, rgba(140, 200, 205, 0.07) 18px 20px),
+    repeating-linear-gradient(0deg, transparent 0 20px, #24383d 20px 22px),
+    linear-gradient(#3e5a60, #2e464c);
+  background-size: 100% 100%;
+  background-position: 0 0;
+}
+.scene[data-dungeon='saltmarrow']::after {
+  background-image:
+    repeating-linear-gradient(90deg, transparent 0 22px, rgba(170, 225, 230, 0.25) 22px 34px, transparent 34px 60px),
+    linear-gradient(transparent 0 30%, rgba(80, 150, 160, 0.55) 30%),
+    linear-gradient(#34484c, #263538);
+  background-size: 100% 20%, 100% 100%, 100% 100%;
+  background-position: 0 55%, 0 0, 0 0;
+}
+
+/* 4. Hall of the Under-King: grey dwarven columns, a band of gold runes, a long cold hall. */
+.scene[data-dungeon='peaks']::before {
+  background-image:
+    linear-gradient(90deg, transparent 6%, #6c6f78 6% 14%, transparent 14% 38%, #6c6f78 38% 46%, transparent 46% 70%, #6c6f78 70% 78%, transparent 78%),
+    repeating-linear-gradient(90deg, #c9a43a 0 6px, transparent 6px 14px, #c9a43a 14px 16px, transparent 16px 26px),
+    linear-gradient(transparent 30%, #3a3c44 30% 34%, transparent 34%),
+    radial-gradient(ellipse 30% 40% at 58% 70%, rgba(201, 164, 58, 0.18), transparent 100%),
+    linear-gradient(#4b4e57, #3a3c44);
+  background-size: 100% 100%, 100% 3%, 100% 100%, 100% 100%, 100% 100%;
+  background-position: 0 0, 0 22%, 0 0, 0 0, 0 0;
+}
+.scene[data-dungeon='peaks']::after { background-image: repeating-linear-gradient(90deg, #4c4f58 0 40px, #3e4048 40px 42px), linear-gradient(#55585f, #3f4148); }
+
+/* 5. The Sunken Abbey: a pointed window full of green water, moss on the stone, a drowned pew. */
+.scene[data-dungeon='gloamfen']::before {
+  background-image:
+    radial-gradient(ellipse 13% 34% at 50% 40%, #6fa58a 0 70%, #2b3c33 74% 92%, transparent 94%),
+    linear-gradient(90deg, transparent 49.4%, #2b3c33 49.4% 50.6%, transparent 50.6%),
+    radial-gradient(ellipse 12% 8% at 18% 18%, rgba(110, 150, 80, 0.7) 0 98%, transparent 100%),
+    radial-gradient(ellipse 10% 7% at 86% 30%, rgba(110, 150, 80, 0.7) 0 98%, transparent 100%),
+    linear-gradient(90deg, transparent 8%, #3a2b1e 8% 30%, transparent 30%),
+    repeating-linear-gradient(0deg, transparent 0 24px, #34413a 24px 26px),
+    linear-gradient(#4c5a50, #3b473f);
+  background-size: 100% 100%, 100% 70%, 100% 100%, 100% 100%, 100% 8%, 100% 100%, 100% 100%;
+  background-position: 0 0, 0 10%, 0 0, 0 0, 0 92%, 0 0, 0 0;
+}
+.scene[data-dungeon='gloamfen']::after { background-image: linear-gradient(transparent 0 20%, rgba(70, 110, 80, 0.6) 20%), linear-gradient(#3a4639, #2b3429); }
+
+/* 6. Tomb of the Thrice-Buried King: sandstone, a band of carved signs, a lidded sarcophagus. */
+.scene[data-dungeon='cinder']::before {
+  background-image:
+    repeating-linear-gradient(90deg, #7a5524 0 4px, transparent 4px 10px, #7a5524 10px 12px, transparent 12px 18px, #7a5524 18px 26px, transparent 26px 32px),
+    linear-gradient(90deg, transparent 58%, #8c6a34 58% 86%, transparent 86%),
+    linear-gradient(90deg, transparent 60%, #b08a4a 60% 84%, transparent 84%),
+    radial-gradient(ellipse 5px 8px at 14% 46%, #ffe08a 0 55%, #ff9a3a 100%, transparent 110%),
+    radial-gradient(circle 70px at 14% 50%, rgba(255, 170, 70, 0.35), transparent 100%),
+    repeating-linear-gradient(0deg, transparent 0 28px, #8a6532 28px 30px),
+    linear-gradient(#b48a4c, #9a7440);
+  background-size: 100% 4%, 100% 26%, 100% 6%, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
+  background-position: 0 18%, 0 100%, 0 76%, 0 0, 0 0, 0 0, 0 0;
+}
+.scene[data-dungeon='cinder']::after { background-image: repeating-linear-gradient(90deg, #a07a44 0 50px, #8a6532 50px 52px), linear-gradient(#a8824a, #8a6a3a); }
+
+/* 7. The Lightless Market: a cavern of stalls, striped awnings, and lanterns that do not light much. */
+.scene[data-dungeon='underdeep']::before {
+  background-image:
+    radial-gradient(circle 4px at 20% 52%, #d9f2a0 0 98%, transparent 100%),
+    radial-gradient(circle 4px at 52% 48%, #a0e8f2 0 98%, transparent 100%),
+    radial-gradient(circle 4px at 84% 54%, #f2c4a0 0 98%, transparent 100%),
+    radial-gradient(circle 40px at 52% 50%, rgba(160, 232, 242, 0.15), transparent 100%),
+    repeating-linear-gradient(90deg, #5a2a4a 0 10px, #2e1a3a 10px 20px),
+    linear-gradient(90deg, transparent 6%, #1c1426 6% 34%, transparent 34% 38%, #1c1426 38% 66%, transparent 66% 70%, #1c1426 70% 98%, transparent 98%),
+    conic-gradient(from 165deg at 30% 0, transparent 0 15deg, #120c18 15deg 30deg, transparent 30deg),
+    conic-gradient(from 165deg at 76% 0, transparent 0 15deg, #120c18 15deg 30deg, transparent 30deg),
+    linear-gradient(#251a30, #1a1222);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 8%, 100% 38%, 100% 100%, 100% 100%, 100% 100%;
+  background-position: 0 0, 0 0, 0 0, 0 0, 0 60%, 0 100%, 0 0, 0 0, 0 0;
+}
+.scene[data-dungeon='underdeep']::after { background-image: radial-gradient(ellipse 40% 50% at 52% 0, rgba(160, 232, 242, 0.08), transparent 100%), linear-gradient(#221a2a, #16101c); }
+
+/* 8. The Hoard of Vexaldrith: heaps of gold under a red, lava-lit roof. */
+.scene[data-dungeon='wyrmspire']::before {
+  background-image:
+    radial-gradient(ellipse 22% 30% at 18% 100%, #e8b33a 0 60%, #b5821e 75% 98%, transparent 100%),
+    radial-gradient(ellipse 30% 42% at 66% 100%, #f2c44a 0 55%, #b5821e 75% 98%, transparent 100%),
+    radial-gradient(circle 2px at 60% 78%, #fff3b0 0 98%, transparent 100%),
+    radial-gradient(circle 2px at 22% 86%, #fff3b0 0 98%, transparent 100%),
+    radial-gradient(ellipse 80% 40% at 50% 0, rgba(255, 90, 40, 0.5), transparent 100%),
+    linear-gradient(#5a1e14, #3a1410);
+  background-size: 100% 100%;
+  background-position: 0 0;
+}
+.scene[data-dungeon='wyrmspire']::after {
+  background-image:
+    radial-gradient(circle 2px at 30% 40%, #fff3b0 0 98%, transparent 100%),
+    radial-gradient(circle 2px at 70% 60%, #fff3b0 0 98%, transparent 100%),
+    repeating-radial-gradient(circle at 50% 0, #d9a531 0 6px, #b5821e 6px 8px),
+    linear-gradient(#c8962c, #9a6e1c);
+}
+
+/* The trophy wall: plaques above the bottle shelf in the tavern, one for each trophy hung. */
+.trophy-wall { position: absolute; top: 9%; left: 9%; display: flex; gap: 6px; z-index: 0; pointer-events: none; }
+.trophy-wall i { width: 16px; height: 20px; background: #6b4a2b; border: 2px solid #c9962c; border-radius: 3px 3px 50% 50% / 3px 3px 60% 60%; display: grid; place-items: center; }
+.trophy-wall i::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--trophy, #c9962c); }

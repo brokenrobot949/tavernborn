@@ -129,7 +129,18 @@ Rob is the game designer and does not write code.
   - Music is off by default (effects on). An idle game is opened in odd places; the switch is one tap away.
   - Sound is made in code rather than from recordings, so there is nothing to download or credit.
   - The doc does not name a spelling; the game is held to British spelling, as most of it was written.
-  - The credits name no game designer or builder; add a line in `js/ui/credits.js` if wanted.
+
+## Known gaps closed after Phase 7
+- All 26 LPC hair colours are baked (`HAIR_COLORS` in `data/races.js`, natural shades first). The art is now
+  7.6 MB; the credits did not change, since no new artwork was added.
+- Each dungeon has its own backdrop (`css/backdrops.css`, `.scene[data-dungeon=<region>]`, set by the Hero tab;
+  the shared stone stays as the fallback): a brick cellar with barrels, a root-hung burrow, a wet lighthouse
+  with a sea window, a dwarven hall of columns and gold runes, a drowned abbey window, a sandstone tomb, a
+  dark market of stalls and lanterns, and the gold of the hoard.
+- The trophy wall shows in the tavern scene: one plaque per trophy hung, above the bottle shelf, each in its
+  dungeon's colour (`TROPHY_COLORS` in `data/tavern.js`).
+- The credits screen opens with "Tavernborn was designed by Rob, and built with Claude Code."
+- The design doc's Sprite looks tab now says the Cleric's Uncommon weapon is the mace recoloured to bronze.
 
 ## Phase 6 record
 - Built in Phase 6 (`js/tavern.js`, `data/tavern.js`, numbers in `js/rules.js` under TAVERN, LEGACY, RIFT,
@@ -194,7 +205,7 @@ Rob is the game designer and does not write code.
     you left them".)
   - A hero can be dismissed for good to free a slot (the doc has no way to empty a slot below level 20).
   - A retiring hero's gold is not passed on.
-  - Trophies are a list on the Tavern tab; the tavern backdrop does not show them.
+  - Trophies are a list on the Tavern tab, and plaques on the tavern wall behind the hero.
   - Wardens hand over named Legendaries at level 20, so one can replace a lower-level Legendary.
 
 ## Phase 5 record
@@ -294,7 +305,6 @@ Rob is the game designer and does not write code.
   - The level 10 emblem is LPC's neck clip, which comes with a short collar in the class colour; the title
     that goes with it is shown after the hero's class on the Hero tab (`TITLES` in `data/loot.js`).
   - Sticky Fingers no longer pays a second purse of gold; it pays in gear.
-- There is one dungeon backdrop for all eight dungeons.
 - `index.html` is the game. The Phase 0 sprite proof is `sprite-lab.html`; the simulator is
   `tools/simulate.html` (both linked from Tavern > Workshop).
 - Levels 3 to 6 were moved later than the design doc's table after Rob's play test (they came too fast);
@@ -304,6 +314,5 @@ Rob is the game designer and does not write code.
 - The knockout fall plays only for a knockout seen as it happens, for a second and a half, in the scene where
   it happened; then the scene moves to the tavern.
 - `sprite.js` draws the front of every shield above hats (LPC puts it under them, which clipped wide brims).
-- Not baked yet: the other 18 hair colours.
 - Local preview: `.claude/launch.json` has five servers (ports 8771, 8773, 8779, 8784, 8792) so sessions do not collide.
   Phase 6 was tested on `tavernborn-phase5` (8792).

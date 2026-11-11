@@ -7,12 +7,12 @@ import { CLASSES } from '../../data/classes.js';
 import { REGION_BY_ID } from '../../data/regions.js';
 import { DUNGEONS } from '../../data/dungeons.js';
 import { TIERS, EMBLEM_LEVEL } from '../../data/items.js';
-import { RIFT_NAME } from '../../data/tavern.js';
+import { RIFT_NAME, TROPHIES, TROPHY_COLORS } from '../../data/tavern.js';
 import { TITLES } from '../../data/loot.js';
 import { SpriteView, heroLook, drawStill } from '../sprite.js';
 import { maxHp, xpToNext } from '../hero.js';
 import { xpForLevel, paragonXpFor, legacyFor } from '../rules.js';
-import { portraitOf, paragonRank, paragonTitle, paragonXp, canRetire } from '../tavern.js';
+import { portraitOf, paragonRank, paragonTitle, paragonXp, canRetire, trophyWall } from '../tavern.js';
 import { currentQuest, clericFee, payCleric } from '../tasks.js';
 import { subclassName } from '../skills.js';
 import { el, num, heroClock, confirmBtn } from './dom.js';
@@ -53,7 +53,9 @@ export function mountHero(root, app) {
   const canvas = el('canvas', { attrs: { 'aria-label': 'Your hero' } });
   const still = el('canvas', { className: 'still', hidden: true });
   const place = el('span', { className: 'place' });
-  const scene = el('div', { className: 'scene' }, canvas, still, place);
+  const wall = el('div', { className: 'trophy-wall', attrs: { 'aria-hidden': 'true' } }); // the tavern's trophy wall
+  let wallKey = '';
+  const scene = el('div', { className: 'scene' }, wall, canvas, still, place);
   const view = new SpriteView(canvas, { stageW: 80, stageH: STAGE_H, ground: 8 });
   new ResizeObserver(() => {
     const w = Math.max(64, Math.min(130, Math.floor(scene.clientWidth / 4)));
@@ -148,7 +150,15 @@ export function mountHero(root, app) {
     const anim = inTavern || walking ? 'walk' : t.elapsed / t.duration >= 0.3 ? CLASSES[hero.class].attack : 'walk';
     const nextScene = (inTavern ? 'tavern' : anim) + key;
     // The backdrop: the tavern, the region's dungeon, or the region itself. All drawn in CSS.
-    if (!falling) scene.dataset.bg = inTavern ? 'tavern' : inRift ? 'rift' : inDungeon ? 'dungeon' : hero.region;
+    if (!falling) {
+      scene.dataset.bg = inTavern ? 'tavern' : inRift ? 'rift' : inDungeon ? 'dungeon' : hero.region;
+      scene.dataset.dungeon = inDungeon ? hero.region : ''; // each dungeon dresses the shared stone its own way
+      const hung = inTavern ? trophyWall(state).hung : [];
+      if (hung.join() !== wallKey) {
+        wallKey = hung.join();
+        wall.replaceChildren(...hung.map((id) => { const i = el('i', { title: TROPHIES[id] }); i.style.setProperty('--trophy', TROPHY_COLORS[id]); return i; }));
+      }
+    }
     if (!falling && nextScene !== sceneKey) {
       sceneKey = nextScene;
       scene.classList.toggle('tavern', inTavern);

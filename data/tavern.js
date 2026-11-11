@@ -41,6 +41,8 @@ export const TROPHIES = {
   underdeep: "The Broker's Voice's business card, which still talks",
   wyrmspire: "Vexaldrith's final demand, stamped PAID",
 };
+// The colour of each trophy's plaque on the wall behind the hero in the tavern scene.
+export const TROPHY_COLORS = { mugwick: '#e9e3d0', mumblewood: '#6f9a45', saltmarrow: '#5fb8c0', peaks: '#c9a43a', gloamfen: '#7fae8f', cinder: '#d98c3a', underdeep: '#a07ad0', wyrmspire: '#d94a2a' };
 export const TROPHY_HUNG = 'A new trophy for the wall at The Wobbly Griffin: {trophy}.';
 export const TROPHY_WAITING = 'A new trophy waits behind the bar for a hook on the wall: {trophy}.';
 
