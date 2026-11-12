@@ -335,3 +335,80 @@
 @media (prefers-reduced-motion: reduce) {
   .weather, .bd-track, .foe .foe-shape, .burst .rays, .worldmap .pulse, .slot-card.t4::after { animation: none !important; }
 }
+
+/* ----- The Skills tab: branch colours, a points header, and the tree as a path of tiers ----- */
+.k-might { --k: #a8372b; --k-soft: #f6dcd6; }
+.k-guard { --k: #2f6fae; --k-soft: #dbe8f5; }
+.k-fortune { --k: #b07a12; --k-soft: #f7ebc8; }
+.kind-badge { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--k); color: #fff; font-size: 15px; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.2); }
+
+.skill-summary { display: grid; grid-template-columns: 112px 1fr; gap: 8px; }
+.points-coin { display: grid; place-content: center; justify-items: center; text-align: center; gap: 2px; padding: 8px; border-radius: 10px; background: linear-gradient(135deg, #3a2c1e, #2b2118); color: #d8cbb2; border: 2px solid #5a4126; }
+.points-coin strong { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; font: 700 1.9rem var(--display); color: #8a775a; background: #3e3226; border: 3px solid #5a4126; }
+.points-coin span { font-size: 0.72rem; line-height: 1.2; }
+.points-coin.has { border-color: #d9a441; }
+.points-coin.has strong { color: #2b2118; background: radial-gradient(circle at 35% 30%, #ffe9a0, #d9a441 70%); border-color: #f6dc8c; box-shadow: 0 0 14px rgba(217, 164, 65, 0.6); }
+.points-coin.has span { color: #f6dc8c; }
+.sum-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.sum-tile { display: grid; gap: 2px; align-content: start; padding: 7px 8px; border-radius: 8px; background: #fff; border: 1px solid var(--line); min-width: 0; }
+.sum-label { display: flex; align-items: center; gap: 4px; font-size: 0.7rem; color: var(--ink-soft); }
+.sum-label .icon { color: #8a6a3a; font-size: 0.95rem; }
+.sum-tile strong { font: 700 0.9rem/1.2 var(--display); overflow-wrap: anywhere; }
+.sum-tile .bar.thin > i { background: #4f7a52; }
+
+.panel.waiting { background: linear-gradient(#fbf0d6, var(--panel) 60%); border-width: 2px; }
+.waiting-head { display: flex; align-items: center; gap: 8px; }
+.waiting-head .icon { color: #b07a12; font-size: 1.25rem; }
+.choice { border-width: 2px; border-color: color-mix(in srgb, var(--k, var(--line)) 45%, var(--line)); }
+.choice[aria-pressed='true'] { border-color: var(--k); box-shadow: inset 0 0 0 2px var(--k); background: var(--k-soft); }
+.choice-head { align-items: center; }
+.choice-head strong { flex: 1; }
+.choice .tag { border-color: var(--k); color: var(--k); }
+
+.tree h3 { margin-bottom: 8px; }
+.branch-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.branch-tab { position: relative; display: grid; justify-items: center; gap: 2px; min-height: 84px; padding: 8px 4px 6px; border: 2px solid color-mix(in srgb, var(--k) 35%, var(--line)); border-radius: 10px; background: #fff; color: var(--ink); min-width: 0; }
+.branch-tab strong { font: 700 0.9rem/1.15 var(--display); text-align: center; overflow-wrap: anywhere; }
+.branch-meta { font-size: 0.68rem; color: var(--ink-soft); white-space: nowrap; }
+.branch-bar { width: 80%; height: 5px; border-radius: 3px; background: var(--parchment-deep); overflow: hidden; }
+.branch-bar > i { display: block; height: 100%; background: var(--k); }
+.branch-tab[aria-pressed='true'] { background: var(--k); border-color: var(--k); color: #fff; box-shadow: 0 3px 0 color-mix(in srgb, var(--k) 60%, #000); }
+.branch-tab[aria-pressed='true'] .branch-meta { color: rgba(255, 255, 255, 0.85); }
+.branch-tab[aria-pressed='true'] .kind-badge { background: #fff; color: var(--k); }
+.branch-tab[aria-pressed='true'] .branch-bar { background: rgba(255, 255, 255, 0.3); }
+.branch-tab[aria-pressed='true'] .branch-bar > i { background: #fff; }
+.yours { position: absolute; top: 4px; right: 5px; color: #d9a441; font-size: 1rem; }
+.branch-tab[aria-pressed='true'] .yours { color: #f6dc8c; }
+.branch-blurb { margin: 10px 0 4px; padding: 8px 10px; border-radius: 6px; background: var(--k-soft); border-left: 4px solid var(--k); font: italic 0.9rem/1.4 var(--display); }
+
+/* The path: a line down the left joining numbered tier medallions. */
+.tier-path { position: relative; padding-left: 18px; margin-top: 6px; }
+.tier-path::before { content: ''; position: absolute; left: 13px; top: 18px; bottom: 18px; width: 3px; border-radius: 2px; background: linear-gradient(var(--k), color-mix(in srgb, var(--k) 25%, var(--line))); }
+.tier-step { position: relative; padding-bottom: 6px; }
+.tier-step .tier-head { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px -18px; padding: 0; border: 0; font: 700 0.95rem var(--display); }
+.tier-num { position: relative; z-index: 1; flex: 0 0 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--k); color: #fff; font: 700 0.95rem var(--display); border: 3px solid var(--panel); box-shadow: 0 0 0 2px var(--k); }
+.tier-name { flex: 1; }
+.tier-step .pips i { border-color: var(--k); }
+.tier-step .pips i.on { background: var(--k); border-color: var(--k); }
+.tier-lock { display: inline-flex; align-items: center; gap: 4px; font: 400 0.75rem var(--body); color: var(--ink-soft); }
+.tier-step.closed .tier-num { background: var(--parchment-deep); color: var(--ink-soft); box-shadow: 0 0 0 2px var(--line); }
+.tier-step.closed .skill { opacity: 0.7; }
+
+.tree .skill { grid-template-columns: 32px 1fr; gap: 10px; align-items: start; padding: 10px; margin-top: 6px; border: 1px solid var(--line); border-radius: 8px; background: #fff; box-shadow: none; }
+.skill-body { display: grid; gap: 4px; min-width: 0; }
+.skill-badge { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; font-size: 18px; color: var(--k); background: var(--k-soft); border: 1px solid color-mix(in srgb, var(--k) 40%, transparent); }
+.skill-head { align-items: center; }
+.skill-head strong { font-size: 1rem; }
+.tree .skill.learned { border-color: var(--k); background: linear-gradient(100deg, var(--k-soft), #fff 70%); box-shadow: inset 4px 0 0 var(--k); }
+.tree .skill.learned .skill-badge { background: var(--k); color: #fff; border-color: var(--k); }
+.tree .skill.open { border: 2px solid #d9a441; box-shadow: 0 0 0 3px rgba(217, 164, 65, 0.2); }
+.tree .skill.closed { background: transparent; border-style: dashed; }
+.tree .skill.closed .skill-badge { background: transparent; color: var(--ink-soft); border-color: var(--line); }
+.tree .skill.capstone:not(.closed) { background: linear-gradient(100deg, #f8e3a4, #fff 75%); }
+.tree .skill.capstone .skill-badge { color: #b07a12; }
+.tree .skill.capstone.learned .skill-badge { background: #d9a441; color: #2b2118; border-color: #b07a12; }
+.skill-text { font-size: 0.88rem; color: #3e3226; }
+.skill-state { display: inline-flex; align-items: center; gap: 4px; }
+.skill-state.learned { color: var(--k); }
+.tag.move { border-color: #2f6d72; color: #2f6d72; }
+.tag.cap { border-color: #b07a12; color: #8a5a00; background: #fbf0d6; }

@@ -166,8 +166,17 @@ Rob is the game designer and does not write code.
   afforded), Heroes (with portraits), Hall (legends and the trophy wall), Cleric (the cleric and respec),
   Settings (sound, credits, save, load, workshop).
 - Section tabs remember the last section on the device (`tavernborn.section.*` in localStorage, apart from the
-  save). The Skills tab already had its branch tabs and is unchanged.
-- `node tools/make-test-save.mjs [days] [class] [race]` makes a save string for testing screens.
+  save).
+- Skills tab: a header of a gold coin with the points to spend (glowing while any wait) and tiles for skills
+  learned, subclass, Feats, and the proficiency bonus. Section pills: Skill tree always, and Subclass and
+  Abilities only while they wait, each with a count. Branches have a colour and icon (Might red and swords,
+  Guard blue and shield, Fortune gold and coin), a progress bar, and a crown on the hero's subclass. The tree is
+  a path of numbered tier medallions with pips; each skill is a card with a badge (an arrow for a passive, a
+  spark for a signature move, a star for the capstone): filled when learned, gold-edged when it can be learned,
+  dashed with a padlock and the reason when not. The explanations sit in "How skills work" at the bottom.
+  (Class `.tier-step`, not `.tier`: `.tier` is the sprite lab's rarity button.)
+- `node tools/make-test-save.mjs [days] [class] [race] [--unspent]` makes a save string for testing screens
+  (`--unspent` leaves the skill points, ability points, and subclass waiting).
 - Scene extras (`js/ui/scene-fx.js`, styles at the end of `css/screens.css`), round two of the pass:
   - The foe: a dark shape with glinting eyes on the right of the scene once the hero has walked up to it.
     Twelve shapes (`SHAPES`), picked from the monster's or boss's name (`shapeFor`); quests and the Rifts pick

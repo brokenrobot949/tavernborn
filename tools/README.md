@@ -168,12 +168,13 @@ Arguments: `node tools/simulate.mjs [heroes] [road|roam|vale|unspent] [damageTim
 ## make-test-save.mjs: a save string for testing screens
 
 ```
-node tools/make-test-save.mjs [days] [class] [race] > .test-save.txt
+node tools/make-test-save.mjs [days] [class] [race] [--unspent] > .test-save.txt
 ```
 
 Plays one hero for that many days with the simulator's player (skills, upgrades, and the road, from
 `simulate-core.js`) and prints a save string, timed as if the phone was closed a moment ago, with the
-chapter cards already read. Paste it into Tavern > Settings > Load a save string, or fetch it from
+chapter cards already read. `--unspent` leaves every skill point, ability point, and the subclass
+choice waiting, for testing the Skills tab. Paste it into Tavern > Settings > Load a save string, or fetch it from
 `python tools/serve.py` in the browser. `.test-save*.txt` is ignored by git.
 
 ## make-icons.html: the home-screen icons
