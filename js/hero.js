@@ -12,6 +12,11 @@ import { gearMods, startingGear } from './loot.js';
 export const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
 export const MAX_ROLLS = 3;
 export const CHRONICLE_MAX = 200;
+// Highlights (level-ups, dungeons, finished quests, knockouts, Very Rare and Legendary gear) are
+// trimmed last, so up to KEPT_MAX of them outlive the ordinary lines of a busy day.
+export const KEPT_MAX = 60;
+const KEPT_KINDS = new Set(['levelup', 'milestone', 'paragon', 'feat', 'knockout', 'boss', 'cleared', 'chapter', 'unlock', 'trophy', 'questdone']);
+export const isHighlight = (line) => KEPT_KINDS.has(line.k) || (line.k === 'upgrade' && line.tier >= 3);
 
 export const activeHero = (state) => state.heroes.find((h) => h.id === state.activeHeroId) ?? null;
 
@@ -147,7 +152,17 @@ export function createHero(state, { name, race, cls, appearance, baseScores }) {
 export function chronicle(hero, kind, text, extra = {}) {
   const line = { n: ++hero.lines, t: hero.age, k: kind, text, ...extra };
   hero.chronicle.push(line);
-  if (hero.chronicle.length > CHRONICLE_MAX) hero.chronicle.splice(0, hero.chronicle.length - CHRONICLE_MAX);
+  if (hero.chronicle.length > CHRONICLE_MAX) {
+    // Drop the oldest ordinary lines first, and the oldest highlights only beyond KEPT_MAX.
+    let over = hero.chronicle.length - CHRONICLE_MAX;
+    let spare = Math.max(0, hero.chronicle.filter(isHighlight).length - KEPT_MAX);
+    hero.chronicle = hero.chronicle.filter((l) => {
+      if (over <= 0) return true;
+      if (isHighlight(l)) { if (spare <= 0) return true; spare -= 1; }
+      over -= 1;
+      return false;
+    });
+  }
   return line;
 }
 

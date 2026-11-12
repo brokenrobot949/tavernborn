@@ -12,8 +12,9 @@ import { regionOpen } from '../hero.js';
 import { currentQuest, setFocus, orderTravel } from '../tasks.js';
 import { STORY_QUESTS, TRAVEL_SECONDS_PER_REGION, MAX_LEVEL, RIFT } from '../rules.js';
 import { RIFT_NAME, RIFT_TEXT } from '../../data/tavern.js';
-import { el, pressBtn } from './dom.js';
+import { el } from './dom.js';
 import { showChapter } from './story.js';
+import { icon, ICONS } from './icons.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const svg = (tag, attrs = {}, ...kids) => {
@@ -36,22 +37,78 @@ const SPOTS = [
   { x: 236, y: 44, doodle: 'M-52 14l14 -26h8l14 26z M-36 -14q-2 -6 2 -9t0 -9' }, // the volcano
 ];
 
-// A smooth road through the eight spots.
-function roadPath() {
-  // A Catmull-Rom curve written as cubic segments, so the road passes through every spot.
-  const at = (i) => SPOTS[Math.max(0, Math.min(SPOTS.length - 1, i))];
-  let d = `M${SPOTS[0].x} ${SPOTS[0].y}`;
-  for (let i = 0; i < SPOTS.length - 1; i++) {
-    const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
-    const c1 = [p1.x + (p2.x - p0.x) / 6, p1.y + (p2.y - p0.y) / 6];
-    const c2 = [p2.x - (p3.x - p1.x) / 6, p2.y - (p3.y - p1.y) / 6];
-    d += ` C${c1[0].toFixed(1)} ${c1[1].toFixed(1)} ${c2[0].toFixed(1)} ${c2[1].toFixed(1)} ${p2.x} ${p2.y}`;
-  }
-  return d;
+// Each region's colour on the map and on its card, in road order.
+export const REGION_COLORS = { mugwick: '#6f9a4a', mumblewood: '#2f6b3a', saltmarrow: '#2f7fa0', peaks: '#737c8a', gloamfen: '#4f7a6a', cinder: '#c9802f', underdeep: '#6a4f9a', wyrmspire: '#b0402a' };
+
+// A smooth road through the eight spots: a Catmull-Rom curve written as cubic segments, so the
+// road passes through every spot. `roadLeg(i)` is the stretch from spot i to spot i + 1.
+function roadLeg(i) {
+  const at = (j) => SPOTS[Math.max(0, Math.min(SPOTS.length - 1, j))];
+  const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
+  const c1 = [p1.x + (p2.x - p0.x) / 6, p1.y + (p2.y - p0.y) / 6];
+  const c2 = [p2.x - (p3.x - p1.x) / 6, p2.y - (p3.y - p1.y) / 6];
+  return `M${p1.x} ${p1.y} C${c1[0].toFixed(1)} ${c1[1].toFixed(1)} ${c2[0].toFixed(1)} ${c2[1].toFixed(1)} ${p2.x} ${p2.y}`;
+}
+const roadPath = () => SPOTS.slice(1).map((_, i) => roadLeg(i)).join(' ');
+
+// The land under the road: a sea down the east side, sand, a swamp, a cave mouth, the volcano's
+// glow, and scorched edges on the parchment.
+function terrain() {
+  const stop = (offset, color, opacity) => svg('stop', { offset, 'stop-color': color, 'stop-opacity': opacity });
+  return svg('g', { class: 'terrain' },
+    svg('defs', {},
+      svg('filter', { id: 'fog', x: '-50%', y: '-50%', width: '200%', height: '200%' }, svg('feGaussianBlur', { stdDeviation: 7 })),
+      svg('filter', { id: 'soft', x: '-50%', y: '-50%', width: '200%', height: '200%' }, svg('feGaussianBlur', { stdDeviation: 4 })),
+      svg('radialGradient', { id: 'lava' }, stop('0', '#ff8a2a', '0.75'), stop('1', '#ff8a2a', '0')),
+      svg('radialGradient', { id: 'burn', r: '72%' }, stop('0.72', '#8a6a3a', '0'), stop('1', '#5a3c18', '0.5'))),
+    svg('path', { class: 'sea', d: 'M340 150 C 318 176 300 206 312 236 C 324 266 296 292 312 318 C 324 338 332 352 340 360 Z' }),
+    svg('path', { class: 'waves', d: 'M318 196q4 -4 8 0t8 0 M314 242q4 -4 8 0t8 0 M320 300q4 -4 8 0t8 0' }),
+    svg('ellipse', { class: 'sand', cx: 132, cy: 104, rx: 70, ry: 34, filter: 'url(#soft)' }),
+    svg('ellipse', { class: 'swamp', cx: 52, cy: 186, rx: 40, ry: 30, filter: 'url(#soft)' }),
+    svg('ellipse', { class: 'cave', cx: 276, cy: 124, rx: 30, ry: 22, filter: 'url(#soft)' }),
+    svg('ellipse', { cx: 236, cy: 40, rx: 52, ry: 36, fill: 'url(#lava)' }),
+    svg('path', { class: 'hills', d: 'M132 244l10 -14l10 14 M146 248l12 -18l12 18 M210 236l9 -12l9 12' }),
+    svg('path', { class: 'trees', d: 'M150 356l5 -10l5 10z M160 362l5 -10l5 10z M222 350l5 -10l5 10z M232 344l5 -10l5 10z M112 300l5 -10l5 10z' }),
+    svg('rect', { x: 0, y: 0, width: 340, height: 400, fill: 'url(#burn)' }));
+}
+
+// A compass rose in the corner.
+const compass = () => svg('g', { class: 'compass', transform: 'translate(306 366)' },
+  svg('circle', { r: 15 }),
+  svg('path', { class: 'needle', d: 'M0 -13l4 13l-4 13l-4 -13z' }),
+  svg('path', { class: 'needle-n', d: 'M0 -13l4 13h-8z' }),
+  svg('text', { y: -18, class: 'compass-n' }, 'N'));
+
+// An icon inside the map's SVG (the same drawing as `icon`, as a group).
+function mapIcon(name, transform) {
+  const g = svg('g', { transform, class: 'map-icon' });
+  for (const d of ICONS[name]) g.append(svg('path', d[0] === '*' ? { d: d.slice(1), class: 'fill' } : { d }));
+  return g;
 }
 
 const FOCUS_LABEL = { roam: 'Roam', quest: 'Quest', delve: 'Delve', rift: 'Rifts' };
+const FOCUS_ICON = { roam: 'swords', quest: 'scroll', delve: 'door', rift: 'vortex' };
 const times = (n) => (n === 1 ? 'once' : n === 2 ? 'twice' : `${n} times`);
+
+// One progress tile on a region card: an icon, a label, a count, and a bar.
+function tile(glyph, label, value, done, of) {
+  const fill = el('i');
+  fill.style.width = `${of ? Math.min(100, (100 * done) / of) : 0}%`;
+  return el('div', { className: 'tile' + (of && done >= of ? ' full' : '') },
+    el('div', { className: 'tile-head' }, icon(glyph), el('span', { textContent: label })),
+    el('strong', { textContent: value }),
+    of ? el('div', { className: 'bar thin' }, fill) : null);
+}
+
+// The picture strip at the top of a region card: the region's own backdrop, standing still.
+function regionStrip(r, i, tag) {
+  const strip = el('div', { className: 'scene mini', attrs: { 'data-bg': r.id, 'aria-hidden': 'true' } }, el('div', { className: 'bd' }));
+  return el('div', { className: 'region-banner' }, strip,
+    el('div', { className: 'region-title' },
+      el('span', { className: 'region-num', textContent: String(i + 1) }),
+      el('h3', { textContent: r.name }),
+      el('span', { className: 'tag', textContent: tag })));
+}
 
 export function mountMap(root, app) {
   let selected = null; // region id whose details are showing; follows the hero until tapped
@@ -61,10 +118,21 @@ export function mountMap(root, app) {
   function draw(hero) {
     const here = REGION_INDEX[hero.region];
     const map = svg('svg', { viewBox: '0 0 340 400', class: 'worldmap', role: 'group', 'aria-label': 'World map: eight regions along the road from The Wobbly Griffin' });
+    // Open regions glow in their colour; the rest are under fog. The road is solid as far as it is open.
+    const openUpTo = REGIONS.reduce((n, r, i) => (regionOpen(hero, r.id) ? i : n), 0);
+    map.append(terrain());
+    REGIONS.forEach((r, i) => {
+      const s = SPOTS[i];
+      map.append(regionOpen(hero, r.id)
+        ? svg('circle', { cx: s.x, cy: s.y, r: 40, class: 'zone', fill: REGION_COLORS[r.id], filter: 'url(#fog)' })
+        : svg('circle', { cx: s.x, cy: s.y, r: 38, class: 'fog', filter: 'url(#fog)' }));
+    });
     map.append(
       svg('rect', { x: 3, y: 3, width: 334, height: 394, rx: 10, class: 'map-edge' }),
       svg('path', { d: roadPath(), class: 'road-bed' }),
-      svg('path', { d: roadPath(), class: 'road' }));
+      svg('path', { d: roadPath(), class: 'road' }),
+      svg('path', { d: SPOTS.slice(1, openUpTo + 1).map((_, i) => roadLeg(i)).join(' '), class: 'road-done' }),
+      compass());
     REGIONS.forEach((r, i) => {
       const s = SPOTS[i];
       const open = regionOpen(hero, r.id);
@@ -78,12 +146,16 @@ export function mountMap(root, app) {
         transform: `translate(${s.x} ${s.y})`, class: `spot ${state}${r.id === selected ? ' picked' : ''}${hero.travelTo === r.id ? ' bound' : ''}`,
         role: 'button', tabindex: 0, 'aria-pressed': String(r.id === selected),
         'aria-label': `${r.name}, levels ${r.levels[0]} to ${r.levels[1]}, ${state === 'here' ? 'you are here' : state}`,
+        style: `--region: ${REGION_COLORS[r.id]}`,
       },
         svg('path', { d: s.doodle, class: 'doodle' }),
         svg('circle', { r: 24, class: 'hit' }),
+        state === 'here' ? svg('circle', { r: 15, class: 'pulse' }) : null,
         svg('circle', { r: 15, class: 'dot' }),
         r.id === selected ? svg('circle', { r: 20, class: 'ring' }) : null,
-        number, label);
+        state === 'locked' ? mapIcon('lock', 'translate(-7 -8) scale(0.58)') : number,
+        label,
+        state === 'here' ? svg('g', { class: 'flag', transform: 'translate(9 -31)' }, svg('path', { d: 'M0 18V0', class: 'pole' }), svg('path', { d: 'M0 0h14l-3 4.5 3 4.5H0z', class: 'banner' })) : null);
       const pickIt = () => { selected = r.id; app.changed(); };
       node.addEventListener('click', pickIt);
       node.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickIt(); } });
@@ -100,14 +172,16 @@ export function mountMap(root, app) {
     const open = regionOpen(hero, r.id);
     const bound = hero.travelTo === r.id;
     const line = (text) => el('p', { className: 'region-line', textContent: text });
-    const head = el('div', { className: 'region-head' },
-      el('h3', { textContent: `${i + 1}. ${r.name}` }),
-      el('span', { className: 'tag', textContent: here ? 'You are here' : bound ? 'On the way' : open ? 'Open' : 'Locked' }));
-    const levels = el('p', { className: 'hint', textContent: `Levels ${r.levels[0]} to ${r.levels[1]}. ${r.flavor}` });
+    const banner = regionStrip(r, i, here ? 'You are here' : bound ? 'On the way' : open ? 'Open' : 'Locked');
+    const levels = el('p', { className: 'region-levels' }, el('strong', { textContent: `Levels ${r.levels[0]} to ${r.levels[1]}. ` }), r.flavor);
+    const card = (...kids) => {
+      const c = el('section', { className: 'panel region' + (open ? '' : ' locked') }, banner, el('div', { className: 'region-body' }, ...kids.filter(Boolean)));
+      c.style.setProperty('--region', REGION_COLORS[r.id]);
+      return c;
+    };
     if (!open) {
       const before = REGIONS[i - 1];
-      return el('section', { className: 'panel region locked' }, head, levels,
-        line(`A sketch on the map and nothing more. The road opens when ${DUNGEONS[before.id].name}, in ${before.name}, has been cleared.`));
+      return card(levels, line(`A sketch on the map and nothing more. The road opens when ${DUNGEONS[before.id].name}, in ${before.name}, has been cleared.`));
     }
 
     const all = MONSTERS[r.id];
@@ -117,31 +191,38 @@ export function mountMap(root, app) {
     const quest = here && hero.focus === 'quest' && qp?.started ? currentQuest(hero) : null;
     const clears = hero.dungeonClears[r.id] ?? 0;
     const run = here && hero.delve ? hero.delve : null;
-    const kids = [head, levels];
-    if (hero.level < r.levels[0]) kids.push(line(`Above ${hero.name}'s level (${hero.level}). Fights here pay more XP and end in the tavern far more often.`));
-    kids.push(
-      line(`Monsters defeated at least once: ${met} of ${all.length}.`),
-      line(`Story quests: ${story} of ${STORY_QUESTS}.${hero.feats.includes(r.id) ? ' Feat earned.' : ''}${qp?.odd ? ` Odd jobs done: ${qp.odd}.` : ''}`),
-      quest ? line(`On the board now: ${quest.title}, step ${Math.min(qp.step + 1, quest.steps)} of ${quest.steps}.`) : null,
-      line(`Dungeon: ${d.name}, built for level ${d.level}. ${clears ? `Cleared ${times(clears)}.` : 'Not yet cleared.'}`),
+    const kids = [levels];
+    if (hero.level < r.levels[0]) kids.push(el('p', { className: 'region-warn' }, icon('skull'), el('span', { textContent: `Above ${hero.name}'s level (${hero.level}). Fights here pay more XP and end in the tavern far more often.` })));
+    kids.push(el('div', { className: 'tiles' },
+      tile('eye', 'Monsters met', `${met} of ${all.length}`, met, all.length),
+      tile('scroll', 'Story quests', `${story} of ${STORY_QUESTS}`, story, STORY_QUESTS),
+      tile('door', 'Dungeon', clears ? `Cleared ${times(clears)}` : 'Not cleared', clears ? 1 : 0, 1)));
+    if (hero.feats.includes(r.id) || qp?.odd) kids.push(line(`${hero.feats.includes(r.id) ? 'Feat earned. ' : ''}${qp?.odd ? `Odd jobs done: ${qp.odd}.` : ''}`.trim()));
+    if (quest) kids.push(line(`On the board now: ${quest.title}, step ${Math.min(qp.step + 1, quest.steps)} of ${quest.steps}.`));
+    kids.push(el('div', { className: 'dungeon-box' },
+      el('p', { className: 'dungeon-name' }, icon('door'), el('span', { textContent: `${d.name}, built for level ${d.level}` })),
       run ? line(run.room >= run.rooms ? `Run in progress: every room done, ${d.boss.name} is next.` : `Run in progress: room ${run.room + 1} of ${run.rooms}.`) : null,
-      el('p', { className: 'hint', textContent: d.about }));
+      el('p', { className: 'hint', textContent: d.about })));
 
+    const buttons = [];
     if (clears) {
       const c = CHAPTERS[r.id];
-      kids.push(el('div', { className: 'row' }, el('button', { className: 'btn', type: 'button', textContent: `Read chapter ${c.n}: ${c.title}`, onclick: () => showChapter(document.getElementById('game'), r.id, hero) })));
+      buttons.push(el('button', { className: 'btn', type: 'button', onclick: () => showChapter(document.getElementById('game'), r.id, hero) }, icon('book'), el('span', { textContent: `Read chapter ${c.n}: ${c.title}` })));
     }
+    if (!here) {
+      buttons.push(bound
+        ? el('button', { className: 'btn', type: 'button', textContent: 'Cancel the journey', onclick: () => { orderTravel(hero, hero.region); app.changed(); } })
+        : el('button', { className: 'btn primary', type: 'button', onclick: () => { orderTravel(hero, r.id); app.changed(); } }, icon('boots'), el('span', { textContent: 'Travel here' })));
+    }
+    if (buttons.length) kids.push(el('div', { className: 'row region-actions' }, ...buttons));
     if (!here) {
       const hops = Math.max(1, Math.abs(i - REGION_INDEX[hero.region]));
       const minutes = Math.round((hops * TRAVEL_SECONDS_PER_REGION) / 60 * 10) / 10;
-      kids.push(el('div', { className: 'row' }, bound
-        ? el('button', { className: 'btn', type: 'button', textContent: 'Cancel the journey', onclick: () => { orderTravel(hero, hero.region); app.changed(); } })
-        : el('button', { className: 'btn primary', type: 'button', textContent: 'Travel here', onclick: () => { orderTravel(hero, r.id); app.changed(); } })));
       kids.push(el('p', { className: 'hint', textContent: bound
         ? `${hero.name} sets off when the current task ends.`
         : `About ${minutes} minutes on the road. ${hero.name} sets off when the current task ends.${hero.delve ? ' Leaving abandons the dungeon run in progress.' : ''}` }));
     }
-    return el('section', { className: 'panel region' }, ...kids.filter(Boolean));
+    return card(...kids);
   }
 
   function orders(hero) {
@@ -154,11 +235,11 @@ export function mountMap(root, app) {
       rift: `Rifts: ${hero.name} goes down ${RIFT_NAME.replace(/^The /, 'the ')}, one floor at a time, from wherever they stand. ${RIFT_TEXT.about} Hit points come back a little between floors, but only the potions carried in can be drunk. A Warden on every ${RIFT.wardenEvery}th floor leaves gear, and sometimes one of the eight named Legendaries. A knockout ends the run; the next starts at floor 1. ${hero.rift ? `Now on floor ${hero.rift.floor}. ` : ''}${hero.stats.riftBest ? `Deepest so far: floor ${hero.stats.riftBest}.` : 'Not yet entered.'}`,
     }[hero.focus];
     const focuses = Object.entries(FOCUS_LABEL).filter(([id]) => id !== 'rift' || hero.level >= MAX_LEVEL);
-    return el('section', { className: 'panel' },
+    return el('section', { className: 'panel orders' },
       el('h3', { textContent: hero.focus === 'rift' ? 'Standing order: the Rifts' : `Standing order in ${r.name}` }),
-      el('div', { className: 'row focus' }, ...focuses.map(([id, label]) => {
-        const b = pressBtn(label, hero.focus === id, () => { setFocus(hero, id); app.changed(); });
-        b.classList.add('grow');
+      el('div', { className: 'order-btns' }, ...focuses.map(([id, label]) => {
+        const b = el('button', { type: 'button', className: 'order-btn o-' + id, onclick: () => { setFocus(hero, id); app.changed(); } }, icon(FOCUS_ICON[id]), el('span', { textContent: label }));
+        b.setAttribute('aria-pressed', String(hero.focus === id));
         return b;
       })),
       el('p', { className: 'hint', textContent: about }),

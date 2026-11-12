@@ -56,3 +56,39 @@ export function duration(seconds) {
   }
   return parts.join(' ') || '0 seconds';
 }
+
+// Section tabs at the top of a long tab: a row of pills that shows one section at a time instead
+// of one long scroll. `pages` is [{ id, label, icon (an svg node or null), node }]. The choice is
+// remembered on this device (a convenience only; it is fine if storage is unavailable).
+export function sectionTabs(name, pages) {
+  const storeKey = 'tavernborn.section.' + name;
+  let current = null;
+  try { current = localStorage.getItem(storeKey); } catch { /* storage blocked: start on the first */ }
+  if (!pages.some((p) => p.id === current)) current = pages[0].id;
+  const buttons = {};
+  const nav = el('nav', { className: 'subnav', attrs: { role: 'tablist', 'aria-label': 'Sections' } });
+  for (const p of pages) {
+    p.node.classList.add('subpage');
+    buttons[p.id] = el('button', { type: 'button', attrs: { role: 'tab' }, onclick: () => show(p.id, true) }, p.icon, el('span', { textContent: p.label }));
+    nav.append(buttons[p.id]);
+  }
+  function show(id, tapped = false) {
+    current = id;
+    for (const p of pages) {
+      p.node.hidden = p.id !== id;
+      buttons[p.id].setAttribute('aria-selected', String(p.id === id));
+    }
+    if (tapped) {
+      try { localStorage.setItem(storeKey, id); } catch { /* not remembered, which is fine */ }
+      if (nav.getBoundingClientRect().top < 0) nav.scrollIntoView();
+      buttons[id].scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  }
+  show(current);
+  return {
+    nav, show,
+    current: () => current,
+    // A small count on a section's pill (an empty value hides it).
+    badge(id, value) { buttons[id].dataset.badge = value ? String(value) : ''; },
+  };
+}

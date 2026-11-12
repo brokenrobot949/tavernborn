@@ -1,6 +1,7 @@
-// Tavern tab, in the design doc's order: upgrades (and the trophy wall they hang), the cleric,
-// respec, the hero roster, the Hall of Legends, then settings (sound and the credits), the save
-// string, and the workshop links.
+// Tavern tab: the inn sign, the common room (the roster standing about, the trophy plaques, and a
+// line overheard at the bar), then five sections behind tabs: upgrades; heroes; the Hall of
+// Legends and the trophy wall; the cleric and respec; and settings, the save string, and the
+// workshop links.
 //
 // Each panel is rebuilt only when something it shows changes, so a tap is never lost to the
 // once-a-second redraw. Buttons that spend a lot or cannot be undone ask for a second tap.
@@ -9,18 +10,22 @@ import { exportSave, importSave } from '../state.js';
 import { clericFee, payCleric, foeName } from '../tasks.js';
 import { respec, respecCost, subclassName, BRANCH_BY_ID } from '../skills.js';
 import { respecPrice, MAX_HEROES, MAX_LEVEL } from '../rules.js';
-import { UPGRADES, TROPHIES } from '../../data/tavern.js';
+import { UPGRADES, TROPHIES, TROPHY_COLORS, BAR_TALK } from '../../data/tavern.js';
 import { RACES } from '../../data/races.js';
 import { CLASSES } from '../../data/classes.js';
 import { TIERS } from '../../data/items.js';
 import { SLOT_BY_ID } from '../loot.js';
-import { upgradeRank, upgradePrice, upgradeEffect, maxRank, buyUpgrade, trophyWall, canRecruit, canRetire, paragonTitle } from '../tavern.js';
-import { el, confirmBtn, num } from './dom.js';
+import { upgradeRank, upgradePrice, upgradeEffect, maxRank, buyUpgrade, trophyWall, canRecruit, canRetire, paragonTitle, portraitOf } from '../tavern.js';
+import { el, confirmBtn, num, sectionTabs } from './dom.js';
 import { drawPortrait } from './legacy.js';
+import { icon } from './icons.js';
+import { timeOfDay } from './hero.js';
 import { mountSettings } from './settings.js';
 import { sfx } from '../audio.js';
 
 const pct = (v) => `${Math.round(v * 100)}%`;
+const UPGRADE_ICONS = { room: 'bed', stable: 'horse', notice: 'board', trophies: 'trophy' };
+const TALK_SECONDS = 20; // how long one overheard line stays before the next
 const who = (h) => `Level ${h.level} ${RACES[h.race].name} ${CLASSES[h.class].name}`;
 
 // `app` swaps saves (replaceSave), changes the roster (recruit, switchHero, retire, dismiss), and
@@ -82,51 +87,98 @@ export function mountTavern(root, app) {
     }
   };
 
+  // ----- the sign and the common room -----
+  const room = el('div', { className: 'scene mini common-room', attrs: { 'data-bg': 'tavern', 'aria-hidden': 'true' } },
+    el('div', { className: 'bd' }), el('div', { className: 'tavern-window' }));
+  const plaques = el('div', { className: 'trophy-wall' });
+  const regulars = el('div', { className: 'regulars' });
+  room.append(plaques, regulars);
+  const talk = el('p', { className: 'bar-talk', attrs: { 'aria-live': 'off' } });
+  let roomKey = '';
+  let talkAt = -1;
+
+  const page = (id, label, glyph, ...kids) => ({ id, label, icon: icon(glyph), node: el('div', {}, ...kids) });
+  const pages = [
+    page('upgrades', 'Upgrades', 'hammer',
+      el('section', { className: 'panel' },
+        el('h3', { textContent: 'Upgrades' }),
+        upgradesNote,
+        upgradesBox)),
+    page('heroes', 'Heroes', 'people',
+      el('section', { className: 'panel' },
+        el('h3', { textContent: 'Heroes' }),
+        rosterBox)),
+    page('hall', 'Hall', 'frame',
+      el('section', { className: 'panel' },
+        el('h3', { textContent: 'The Hall of Legends' }),
+        hallBox),
+      el('section', { className: 'panel' },
+        el('h3', { textContent: 'The trophy wall' }),
+        trophyBox)),
+    page('services', 'Cleric', 'potion',
+      el('section', { className: 'panel service' },
+        el('h3', {}, icon('heart'), el('span', { textContent: 'The cleric' })),
+        clericText,
+        el('div', { className: 'row' }, clericBtn),
+        el('p', { className: 'hint', textContent: 'A knocked-out hero gets up unaided after a rest, 15 minutes at level 1 up to about 2 hours at level 20, and loses nothing but the dungeon run or quest step they were on. A better room shortens the rest. The cleric ends it at once for a fee that grows with the time left and with level.' })),
+      el('section', { className: 'panel service' },
+        el('h3', {}, icon('potion'), el('span', { textContent: 'Respec' })),
+        respecText,
+        respecRow,
+        el('p', { className: 'hint', textContent: 'The barkeep keeps an unlabelled bottle for heroes with second thoughts. One glass returns every skill point and leaves the subclass open to choose again. The price rises with level. Ability score increases are kept.' }))),
+    page('settings', 'Settings', 'gear',
+      mountSettings(),
+      el('section', { className: 'panel' },
+        el('h3', { textContent: 'Save' }),
+        el('p', { className: 'hint', textContent: 'The game saves itself on this device every few seconds. A save string holds the whole tavern: every hero, the upgrades, and the Hall. Use it to move to another device or keep a backup.' }),
+        el('div', { className: 'row' },
+          el('button', { className: 'btn', type: 'button', textContent: 'Make save string', onclick: makeString }),
+          el('button', { className: 'btn', type: 'button', textContent: 'Copy', onclick: copy })),
+        out, outMsg),
+      el('section', { className: 'panel' },
+        el('h3', { textContent: 'Load a save string' }),
+        input,
+        el('div', { className: 'row' }, confirmBtn('Load this save', 'Tap again: replaces the whole tavern', load)),
+        inMsg),
+      el('section', { className: 'panel' },
+        el('h3', { textContent: 'Workshop' }),
+        el('div', { className: 'row' }, el('a', { className: 'btn link', href: 'sprite-lab.html', textContent: 'Open the sprite lab' })),
+        el('p', { className: 'hint', textContent: 'The Phase 0 page for judging looks: every race, class, and gear tier.' }),
+        el('div', { className: 'row' }, el('a', { className: 'btn link', href: 'tools/simulate.html', textContent: 'Open the pacing simulator' })),
+        el('p', { className: 'hint', textContent: 'Runs 500 heroes through the game rules at high speed and charts when each level lands. It does not touch your save.' }))),
+  ];
+  const tabs = sectionTabs('tavern', pages);
   root.append(
-    el('h2', { className: 'view-title', textContent: 'The Wobbly Griffin' }),
-    el('section', { className: 'panel' },
-      el('h3', { textContent: 'Upgrades' }),
-      upgradesNote,
-      upgradesBox),
-    el('section', { className: 'panel' },
-      el('h3', { textContent: 'The trophy wall' }),
-      trophyBox),
-    el('section', { className: 'panel' },
-      el('h3', { textContent: 'The cleric' }),
-      clericText,
-      el('div', { className: 'row' }, clericBtn),
-      el('p', { className: 'hint', textContent: 'A knocked-out hero gets up unaided after a rest, 15 minutes at level 1 up to about 2 hours at level 20, and loses nothing but the dungeon run or quest step they were on. A better room shortens the rest. The cleric ends it at once for a fee that grows with the time left and with level.' })),
-    el('section', { className: 'panel' },
-      el('h3', { textContent: 'Respec' }),
-      respecText,
-      respecRow,
-      el('p', { className: 'hint', textContent: 'The barkeep keeps an unlabelled bottle for heroes with second thoughts. One glass returns every skill point and leaves the subclass open to choose again. The price rises with level. Ability score increases are kept.' })),
-    el('section', { className: 'panel' },
-      el('h3', { textContent: 'Heroes' }),
-      rosterBox),
-    el('section', { className: 'panel' },
-      el('h3', { textContent: 'The Hall of Legends' }),
-      hallBox),
-    mountSettings(),
-    el('section', { className: 'panel' },
-      el('h3', { textContent: 'Save' }),
-      el('p', { className: 'hint', textContent: 'The game saves itself on this device every few seconds. A save string holds the whole tavern: every hero, the upgrades, and the Hall. Use it to move to another device or keep a backup.' }),
-      el('div', { className: 'row' },
-        el('button', { className: 'btn', type: 'button', textContent: 'Make save string', onclick: makeString }),
-        el('button', { className: 'btn', type: 'button', textContent: 'Copy', onclick: copy })),
-      out, outMsg),
-    el('section', { className: 'panel' },
-      el('h3', { textContent: 'Load a save string' }),
-      input,
-      el('div', { className: 'row' }, confirmBtn('Load this save', 'Tap again: replaces the whole tavern', load)),
-      inMsg),
-    el('section', { className: 'panel' },
-      el('h3', { textContent: 'Workshop' }),
-      el('div', { className: 'row' }, el('a', { className: 'btn link', href: 'sprite-lab.html', textContent: 'Open the sprite lab' })),
-      el('p', { className: 'hint', textContent: 'The Phase 0 page for judging looks: every race, class, and gear tier.' }),
-      el('div', { className: 'row' }, el('a', { className: 'btn link', href: 'tools/simulate.html', textContent: 'Open the pacing simulator' })),
-      el('p', { className: 'hint', textContent: 'Runs 500 heroes through the game rules at high speed and charts when each level lands. It does not touch your save.' })),
+    el('header', { className: 'inn-sign' }, el('span', { className: 'sign-chain left' }), el('span', { className: 'sign-chain right' }),
+      el('div', { className: 'sign-board' }, el('small', { textContent: 'Rooms, ale, and a cleric' }), el('h2', { textContent: 'The Wobbly Griffin' }))),
+    room,
+    el('div', { className: 'bar-talk-box' }, icon('mug'), talk),
+    tabs.nav,
+    ...pages.map((p) => p.node),
   );
+
+  // The common room: plaques for the trophies hung, the window showing the time of day, and every
+  // hero on the roster standing about. Redrawn only when one of those changes.
+  function drawRoom(state) {
+    room.dataset.time = timeOfDay();
+    const hung = trophyWall(state).hung;
+    const looks = state.heroes.map((h) => portraitOf(h));
+    const key = JSON.stringify([hung, looks]);
+    if (key !== roomKey) {
+      roomKey = key;
+      plaques.replaceChildren(...hung.map((id) => { const i = el('i', { title: TROPHIES[id] }); i.style.setProperty('--trophy', TROPHY_COLORS[id]); return i; }));
+      regulars.replaceChildren(...state.heroes.map((h, n) => {
+        const c = el('canvas', { className: 'regular', attrs: { title: h.name } });
+        drawPortrait(c, looks[n], 2);
+        return c;
+      }));
+    }
+    const at = Math.floor(Date.now() / 1000 / TALK_SECONDS);
+    if (at !== talkAt) {
+      talkAt = at;
+      talk.textContent = BAR_TALK[at % BAR_TALK.length];
+    }
+  }
 
   // ---------- panels ----------
 
@@ -139,8 +191,11 @@ export function mountTavern(root, app) {
       const rank = upgradeRank(state, u.id);
       const top = maxRank(u.id);
       const price = upgradePrice(state, u.id);
+      const pips = el('span', { className: 'pips', attrs: { 'aria-label': `Rank ${rank} of ${top}` } }, ...Array.from({ length: top }, (_, k) => el('i', { className: k < rank ? 'on' : '' })));
       const kids = [
-        el('div', { className: 'upgrade-head' }, el('span', { className: 'upgrade-name', textContent: u.name }), el('span', { className: 'upgrade-rank', textContent: `Rank ${rank} of ${top}` })),
+        el('div', { className: 'upgrade-head' },
+          el('span', { className: 'upgrade-icon' }, icon(UPGRADE_ICONS[u.id] ?? 'hammer')),
+          el('span', { className: 'upgrade-name', textContent: u.name }), pips),
         el('p', { className: 'hint', textContent: u.about }),
         el('p', { className: 'upgrade-now', textContent: rank ? `${u.ranks[rank - 1]}. ${upgradeEffect(u.id, rank)}` : 'Nothing yet.' }),
       ];
@@ -153,8 +208,9 @@ export function mountTavern(root, app) {
         kids.push(el('div', { className: 'row' }, b));
         if (short) kids.push(el('p', { className: 'hint', textContent: `${num(price - hero.gold)} gp short.` }));
       }
-      return el('div', { className: 'upgrade' }, ...kids);
+      return el('div', { className: 'upgrade' + (price == null ? ' done' : '') }, ...kids);
     }));
+    tabs.badge('upgrades', UPGRADES.filter((u) => hero.gold >= (upgradePrice(state, u.id) ?? Infinity)).length);
   }
 
   function drawTrophies(state) {
@@ -166,7 +222,11 @@ export function mountTavern(root, app) {
     if (!wall.hooks) kids.push(el('p', { className: 'hint', textContent: `No hooks yet. Build the trophy wall above to hang what heroes bring back from the dungeons.${wall.waiting.length ? ` ${wall.waiting.length} trophies are waiting behind the bar.` : ''}` }));
     else {
       kids.push(el('p', { className: 'hint', textContent: `${wall.hung.length} of ${wall.hooks} hooks in use. Each dungeon gives one trophy, the first time any hero of this tavern clears it.` }));
-      if (wall.hung.length) kids.push(el('ul', { className: 'stats trophies' }, ...wall.hung.map((id) => el('li', {}, el('span', { textContent: TROPHIES[id] })))));
+      if (wall.hung.length) kids.push(el('ul', { className: 'stats trophies' }, ...wall.hung.map((id) => {
+        const plaque = el('i', { className: 'plaque' });
+        plaque.style.setProperty('--trophy', TROPHY_COLORS[id]);
+        return el('li', {}, plaque, el('span', { textContent: TROPHIES[id] }));
+      })));
       if (wall.waiting.length) kids.push(el('p', { className: 'hint', textContent: `${wall.waiting.length} more waiting behind the bar for a hook.` }));
     }
     trophyBox.replaceChildren(...kids);
@@ -201,7 +261,7 @@ export function mountTavern(root, app) {
   }
 
   function drawRoster(state) {
-    const key = JSON.stringify([state.activeHeroId, state.heroes.map((h) => [h.id, h.name, h.level, h.knockedOutUntil != null, h.subclass]), state.tavern.legends.length]);
+    const key = JSON.stringify([state.activeHeroId, state.heroes.map((h) => [h.id, h.name, h.level, h.knockedOutUntil != null, h.subclass, portraitOf(h)]), state.tavern.legends.length]);
     if (key === rosterKey) return;
     rosterKey = key;
     const rows = state.heroes.map((h) => {
@@ -212,9 +272,14 @@ export function mountTavern(root, app) {
       if (!active) buttons.push(el('button', { className: 'btn primary', type: 'button', textContent: 'Send out', onclick: () => app.switchHero(h.id) }));
       if (canRetire(h)) buttons.push(confirmBtn('Retire', 'Tap again: retire for good', () => app.retire(h.id)));
       buttons.push(confirmBtn('Dismiss', 'Tap again: gone for good', () => app.dismiss(h.id)));
+      const face = el('canvas', { className: 'portrait', attrs: { 'aria-label': `Portrait of ${h.name}` } });
+      drawPortrait(face, portraitOf(h), 1);
       return el('li', { className: 'roster-hero' + (active ? ' active' : '') },
-        el('div', { className: 'roster-head' }, el('span', { className: 'roster-name', textContent: h.name }), el('span', { className: 'tag', textContent: active ? 'Active' : 'Waiting' })),
-        el('p', { className: 'hint', textContent: `${who(h)}${sub ? ', ' + sub : ''}. ${status}.` }),
+        el('div', { className: 'roster-top' },
+          el('div', { className: 'portrait-frame small' }, face),
+          el('div', { className: 'roster-info' },
+            el('div', { className: 'roster-head' }, el('span', { className: 'roster-name', textContent: h.name }), el('span', { className: 'tag' + (active ? ' out' : ''), textContent: active ? 'Out adventuring' : 'Waiting' })),
+            el('p', { className: 'hint', textContent: `${who(h)}${sub ? ', ' + sub : ''}. ${status}.` }))),
         el('div', { className: 'row' }, ...buttons));
     });
     const kids = [
@@ -269,6 +334,7 @@ export function mountTavern(root, app) {
 
   function update(state, hero) {
     current = { state, hero };
+    drawRoom(state);
     drawUpgrades(state, hero);
     drawTrophies(state);
     drawCleric(hero);

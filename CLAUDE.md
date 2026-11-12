@@ -38,9 +38,11 @@ Rob is the game designer and does not write code.
   sound settings, kept in localStorage under `tavernborn.settings`, apart from the save
 - `js/ui/` one module per tab, plus `create.js` (creation), `away.js` (the summary card), `story.js` (chapter
   cards), `legacy.js` (the retirement card and Hall portraits), `settings.js` (sound switches, volume, credits
-  button), `credits.js` (the credits screen), `dom.js` (helpers);
+  button), `credits.js` (the credits screen), `dom.js` (helpers, and `sectionTabs`, the pill row that splits a
+  long tab into sections), `icons.js` (the small line icons, drawn as inline SVG);
   `data/` all content (`data/loot.js` holds gear names and the named Legendaries; `data/items.js` the
-  sprite look of each class, slot, and rarity); `css/backdrops.css` the scene backdrops; `tools/` dev-only
+  sprite look of each class, slot, and rarity); `css/backdrops.css` the scene backdrops, their scrolling, and
+  day and night; `css/screens.css` the visual pass (Chronicle colours, section tabs, Map, Gear, Tavern); `tools/` dev-only
 
 ## Sprites
 - Asset list: `data/races.js` and `data/items.js`. A layer is `{ def, color }`, where `def` is an LPC
@@ -129,6 +131,46 @@ Rob is the game designer and does not write code.
   - Music is off by default (effects on). An idle game is opened in odd places; the switch is one tap away.
   - Sound is made in code rather than from recordings, so there is nothing to download or credit.
   - The doc does not name a spelling; the game is held to British spelling, as most of it was written.
+
+## Visual pass after Phase 7 (waiting on Rob's phone test)
+- Hero tab scene: the backdrop scrolls while the hero walks. Each backdrop is two tracks (sky, ground) of three
+  tiles (plain, mirrored, plain) that slide two tiles and loop; the mirror makes both seams meet. The sky moves
+  at a quarter of the ground's speed. `--ground-time` is set from the scene's width so the ground passes at
+  about 120 px a second. It stops while the hero swings, stands in the tavern, or falls. Every ground has a
+  few pebbles (`.bd > i`) so the motion shows on plain earth. A soft shadow sits under the hero
+  (`SpriteView`'s `shadow`).
+- Fights alternate walking and swinging (`PATTERNS` in `js/ui/hero.js`, read from the task's elapsed
+  seconds): roam walks up for the first 20% and then swings 4 s, walks 3 s; a quest walks 6, swings 4, walks 3,
+  swings 3; dungeon rooms, bosses, and the Rifts are mostly swings with short walks. Travel is all walking.
+- Day and night from the device's clock (`timeOfDay`): dawn 5 to 7, day 7 to 18, dusk 18 to 21, night after.
+  Outdoors only (not dungeons, the Rifts, the tavern, or the Underdeep): a multiply tint, and stars over the
+  regions with open sky. The tavern's window shows the sky too, on the Hero tab and the Tavern tab.
+- Chronicle: each line has a round icon in its family's colour (fights, crits, bad luck, growth, skills,
+  dungeons, quests, the road, loot by rarity, healing, the tavern, the Rifts, story). Highlights are cards.
+  "Everything / Highlights" switches the list. Highlights (`isHighlight` in `js/hero.js`: level-ups,
+  milestones, Paragon ranks, Feats, knockouts, bosses beaten, clears, chapters, new regions, trophies,
+  finished quests, Very Rare and Legendary gear) are trimmed last: the Chronicle still holds 200 lines, but
+  up to 60 highlights outlive the ordinary lines (`KEPT_MAX`). No save change.
+- Map: region colours (`REGION_COLORS` in `js/ui/map.js`) glowing under open regions, fog over locked ones
+  with a padlock, a sea, sand, swamp, cave, and the volcano's glow, scorched parchment edges, a compass,
+  the travelled road drawn solid, and a red flag and pulse on the hero's region. The region card opens with
+  that region's backdrop as a still strip, then progress tiles (monsters met, story quests, the dungeon), a
+  dark dungeon box, and icon buttons. Standing orders are four large icon buttons.
+- Gear: section tabs (Gear, Abilities, Lifetime, Bestiary). A dark card with the hero in their gear and
+  "All told" as chips, then the eight slots as a two-column grid of cards tinted and bordered in their
+  rarity's colour, each with a slot icon and a rarity chip. Legendaries shine; a named Legendary's card is full
+  width with its story line. Lifetime is a grid of icon tiles.
+- Tavern: a hanging inn sign, the common room (the tavern backdrop with the trophy plaques and every hero on
+  the roster standing in it), a line overheard at the bar that changes every 20 seconds (`BAR_TALK` in
+  `data/tavern.js`, 14 lines), then section tabs: Upgrades (icons and rank pips; the pill shows how many can be
+  afforded), Heroes (with portraits), Hall (legends and the trophy wall), Cleric (the cleric and respec),
+  Settings (sound, credits, save, load, workshop).
+- Section tabs remember the last section on the device (`tavernborn.section.*` in localStorage, apart from the
+  save). The Skills tab already had its branch tabs and is unchanged.
+- `node tools/make-test-save.mjs [days] [class] [race]` makes a save string for testing screens.
+- `node tools/check-sim.mjs` (203 checks) adds two for the kept highlights. No rule or pacing change.
+- Spec departures to raise with Rob: the time of day comes from the phone's clock, not from the hero's own day
+  count; the Highlights list keeps 60 lines at most.
 
 ## Known gaps closed after Phase 7
 - All 26 LPC hair colours are baked (`HAIR_COLORS` in `data/races.js`, natural shades first). The art is now

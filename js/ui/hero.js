@@ -10,21 +10,75 @@ import { TIERS, EMBLEM_LEVEL } from '../../data/items.js';
 import { RIFT_NAME, TROPHIES, TROPHY_COLORS } from '../../data/tavern.js';
 import { TITLES } from '../../data/loot.js';
 import { SpriteView, heroLook, drawStill } from '../sprite.js';
-import { maxHp, xpToNext } from '../hero.js';
+import { maxHp, xpToNext, isHighlight } from '../hero.js';
 import { xpForLevel, paragonXpFor, legacyFor } from '../rules.js';
 import { portraitOf, paragonRank, paragonTitle, paragonXp, canRetire, trophyWall } from '../tavern.js';
 import { currentQuest, clericFee, payCleric } from '../tasks.js';
 import { subclassName } from '../skills.js';
 import { el, num, heroClock, confirmBtn } from './dom.js';
+import { icon } from './icons.js';
 import { sfx } from '../audio.js';
 
 const STAGE_H = 70; // sprite pixels; the scene is this tall times 4
 const SHOWN_LINES = 80;
+const WALK_PX_PER_S = 120; // how fast the ground scrolls past a walking hero, in screen pixels
+// Regions drawn with open sky, where stars come out at night. The Underdeep is underground.
+const OPEN_SKY = new Set(['mugwick', 'saltmarrow', 'peaks', 'gloamfen', 'cinder', 'wyrmspire']);
+
+// The two scrolling layers of a backdrop: sky and ground, three tiles each (see css/backdrops.css).
+function backdropTracks() {
+  const tiles = (ground) => [0, 1, 2].map((i) => el('div', { className: 'bd' + (i === 1 ? ' flip' : '') }, ground ? el('i') : null));
+  return [el('div', { className: 'bd-track sky' }, ...tiles(false)), el('div', { className: 'bd-track ground' }, ...tiles(true))];
+}
+
+// The time of day on this device: dawn 5 to 7, day 7 to 18, dusk 18 to 21, night after that.
+export function timeOfDay(date = new Date()) {
+  const h = date.getHours() + date.getMinutes() / 60;
+  return h < 5 || h >= 21 ? 'night' : h < 7 ? 'dawn' : h < 18 ? 'day' : 'dusk';
+}
+
+// What the hero is doing this second. Travel is all walking. A fight alternates: a walk up to the
+// foe, then bursts of swings with short walks between, so the same motion does not repeat for
+// minutes. The pattern is read from the task's elapsed seconds, so it is the same on every redraw.
+const PATTERNS = {
+  roam: { approach: 0.2, beats: [['attack', 4], ['walk', 3]] },
+  quest: { approach: 0, beats: [['walk', 6], ['attack', 4], ['walk', 3], ['attack', 3]] },
+  delve: { approach: 0.15, beats: [['attack', 4], ['walk', 2]] },
+  boss: { approach: 0.1, beats: [['attack', 5], ['walk', 2]] },
+  rift: { approach: 0.15, beats: [['attack', 4], ['walk', 2]] },
+};
+function actionFor(t) {
+  const p = t && PATTERNS[t.kind];
+  if (!p) return 'walk';
+  const start = Math.ceil(t.duration * p.approach);
+  if (t.elapsed < start) return 'walk';
+  const cycle = p.beats.reduce((n, [, s]) => n + s, 0);
+  let at = (t.elapsed - start) % cycle;
+  for (const [what, s] of p.beats) { if (at < s) return what; at -= s; }
+  return 'walk';
+}
 
 
 // The sprite layers for a hero: appearance, the look of whatever is in each gear slot (its
 // rarity picks one of five looks), and the milestones their level has earned.
 // The Hall of Legends keeps the same look data (`portraitOf`, js/tavern.js) to redraw a portrait.
+// How each kind of Chronicle line is shown: its colour family and its icon. Which lines are
+// highlights (kept longer, listed under Highlights, and drawn as cards) is `isHighlight` in js/hero.js.
+const LINE_LOOK = {
+  hit: ['fight', 'swords'], miss: ['miss', 'swords'], task: ['fight', 'swords'], roll: ['fight', 'd20'],
+  crit: ['crit', 'star'], fumble: ['bad', 'd20'], knockout: ['bad', 'skull'],
+  levelup: ['grow', 'up'], milestone: ['grow', 'crown'], paragon: ['grow', 'crown'],
+  growth: ['grow', 'up'], feat: ['grow', 'star'], learned: ['skill', 'book'], skill: ['skill', 'spark'],
+  boss: ['dungeon', 'crown'], cleared: ['dungeon', 'door'], chapter: ['dungeon', 'book'], unlock: ['dungeon', 'flag'], trophy: ['dungeon', 'trophy'],
+  questdone: ['quest', 'scroll'], quest: ['quest', 'scroll'],
+  travel: ['road', 'boots'], arrive: ['road', 'pin'],
+  upgrade: ['loot', 'trinket'], sold: ['sold', 'coin'],
+  potion: ['heal', 'potion'], recovered: ['heal', 'heart'],
+  tavern: ['tavern', 'mug'], rift: ['rift', 'vortex'],
+  story: ['story', 'book'], confidence: ['story', 'eye'], bestiary: ['story', 'eye'],
+};
+const lookOf = (line) => LINE_LOOK[line.k] ?? ['plain', 'd20'];
+
 export const heroSpriteLook = (hero) => heroLook(portraitOf(hero));
 
 // One line above the task bar saying what the task is part of.
@@ -55,11 +109,13 @@ export function mountHero(root, app) {
   const place = el('span', { className: 'place' });
   const wall = el('div', { className: 'trophy-wall', attrs: { 'aria-hidden': 'true' } }); // the tavern's trophy wall
   let wallKey = '';
-  const scene = el('div', { className: 'scene' }, wall, canvas, still, place);
-  const view = new SpriteView(canvas, { stageW: 80, stageH: STAGE_H, ground: 8 });
+  const scene = el('div', { className: 'scene' }, ...backdropTracks(), el('div', { className: 'sky-tint' }), el('div', { className: 'stars' }), el('div', { className: 'tavern-window' }), wall, canvas, still, place);
+  const view = new SpriteView(canvas, { stageW: 80, stageH: STAGE_H, ground: 8, shadow: true });
   new ResizeObserver(() => {
     const w = Math.max(64, Math.min(130, Math.floor(scene.clientWidth / 4)));
     if (w !== view.stageW) view.resize(w);
+    // The ground slides two scene-widths per loop at about the pace of the walk cycle.
+    scene.style.setProperty('--ground-time', ((2 * scene.clientWidth) / WALK_PX_PER_S).toFixed(2) + 's');
   }).observe(scene);
 
   // ----- name and bars -----
@@ -96,12 +152,26 @@ export function mountHero(root, app) {
   let retireKey = '';
 
   const list = el('ul', { className: 'chronicle', attrs: { 'aria-live': 'polite' } });
+  const highlights = el('ul', { className: 'chronicle', hidden: true });
+  const noHighlights = el('p', { className: 'hint', hidden: true, textContent: 'No highlights yet. Level-ups, dungeons, finished quests, rare gear, and knockouts are kept here.' });
+  let onlyHighlights = false;
+  let highlightKey = -1;
+  const filterBtn = (label, hl) => el('button', { type: 'button', className: 'seg', textContent: label, onclick: () => { onlyHighlights = hl; drawFilter(); if (current) update(current.state, current.hero); } });
+  const allBtn = filterBtn('Everything', false);
+  const hlBtn = filterBtn('Highlights', true);
+  function drawFilter() {
+    allBtn.setAttribute('aria-pressed', String(!onlyHighlights));
+    hlBtn.setAttribute('aria-pressed', String(onlyHighlights));
+    list.hidden = onlyHighlights;
+    highlights.hidden = !onlyHighlights;
+  }
+  drawFilter();
   root.append(
     scene,
     el('div', { className: 'hero-head' }, el('div', {}, name, sub), gold),
     hp.wrap, xp.wrap, task, cleric, retirePanel,
-    el('h3', { className: 'section', textContent: 'Chronicle' }),
-    list,
+    el('div', { className: 'chronicle-head' }, el('h3', { className: 'section', textContent: 'Chronicle' }), el('div', { className: 'segs', attrs: { role: 'group', 'aria-label': 'Show' } }, allBtn, hlBtn)),
+    list, highlights, noHighlights,
   );
 
   let heroId = null;
@@ -114,17 +184,22 @@ export function mountHero(root, app) {
   let fallUntil = 0; // while a knockout's fall is playing, the scene stays where it happened
 
   const lineNode = (line) => {
-    const li = el('li', { className: 'k-' + line.k },
-      el('span', { className: 'when', textContent: heroClock(line.t) }),
-      el('span', { className: 'text', textContent: line.text }),
-      line.roll ? el('span', { className: 'roll', textContent: line.roll + (line.gain ? '  ·  ' + line.gain : '') }) : null);
-    if (line.tier != null) { li.classList.add('loot'); li.style.setProperty('--tier', TIERS[line.tier].color); }
+    const [family, glyph] = lookOf(line);
+    const li = el('li', { className: `k-${line.k} c-${family}${isHighlight(line) ? ' hl' : ''}` },
+      el('span', { className: 'badge' }, icon(glyph)),
+      el('div', { className: 'body' },
+        el('span', { className: 'when', textContent: heroClock(line.t) }),
+        el('span', { className: 'text', textContent: line.text }),
+        line.roll || line.gain ? el('span', { className: 'roll' },
+          line.roll ? el('span', { textContent: line.roll }) : null,
+          line.gain ? el('span', { className: 'gain', textContent: line.gain }) : null) : null));
+    if (line.tier != null) { li.classList.add('loot'); li.style.setProperty('--tier', TIERS[line.tier].color); if (line.tier === 4) li.classList.add('legendary'); }
     return li;
   };
 
   function update(state, hero) {
     current = { state, hero };
-    if (hero.id !== heroId) { heroId = hero.id; lookKey = sceneKey = taskKey = ''; lastLine = 0; wasTavern = null; fallUntil = 0; list.replaceChildren(); }
+    if (hero.id !== heroId) { heroId = hero.id; lookKey = sceneKey = taskKey = ''; lastLine = 0; highlightKey = -1; wasTavern = null; fallUntil = 0; list.replaceChildren(); }
 
     // sprite: walk up to the monster, then attack; stand in the tavern while recovering
     const t = hero.currentTask;
@@ -147,12 +222,18 @@ export function mountHero(root, app) {
     const walking = !t || ['travel', 'return', 'camp'].includes(t.kind);
     const inDungeon = !!t && ['delve', 'boss', 'camp'].includes(t.kind);
     const inRift = t?.kind === 'rift';
-    const anim = inTavern || walking ? 'walk' : t.elapsed / t.duration >= 0.3 ? CLASSES[hero.class].attack : 'walk';
+    const anim = inTavern || walking ? 'walk' : actionFor(t) === 'attack' ? CLASSES[hero.class].attack : 'walk';
+    // The backdrop scrolls only while the hero walks somewhere (not in the tavern, not mid-swing).
+    scene.classList.toggle('moving', !inTavern && !falling && anim === 'walk');
     const nextScene = (inTavern ? 'tavern' : anim) + key;
     // The backdrop: the tavern, the region's dungeon, or the region itself. All drawn in CSS.
     if (!falling) {
       scene.dataset.bg = inTavern ? 'tavern' : inRift ? 'rift' : inDungeon ? 'dungeon' : hero.region;
       scene.dataset.dungeon = inDungeon ? hero.region : ''; // each dungeon dresses the shared stone its own way
+      scene.dataset.time = timeOfDay();
+      const outdoor = !inTavern && !inDungeon && !inRift && hero.region !== 'underdeep';
+      scene.classList.toggle('outdoor', outdoor);
+      scene.classList.toggle('open-sky', outdoor && OPEN_SKY.has(hero.region));
       const hung = inTavern ? trophyWall(state).hung : [];
       if (hung.join() !== wallKey) {
         wallKey = hung.join();
@@ -234,6 +315,14 @@ export function mountHero(root, app) {
       list.prepend(...fresh.slice(-SHOWN_LINES).reverse().map(lineNode));
       while (list.children.length > SHOWN_LINES) list.lastChild.remove();
     }
+    // Highlights: drawn from the whole kept Chronicle, and only while that view is showing.
+    if (onlyHighlights && highlightKey !== lastLine) {
+      highlightKey = lastLine;
+      const picked = hero.chronicle.filter(isHighlight).slice(-SHOWN_LINES).reverse();
+      highlights.replaceChildren(...picked.map(lineNode));
+      noHighlights.hidden = picked.length > 0;
+    }
+    if (!onlyHighlights) noHighlights.hidden = true;
   }
 
   return { update, destroy: () => cancelAnimationFrame(view.frameReq) };

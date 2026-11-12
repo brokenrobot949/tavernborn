@@ -154,8 +154,9 @@ export async function drawStill(canvas, look, { anim = 'walk', facing = 'down', 
 // An animated hero on a stage canvas. The stage is wider and taller than one 64 px frame so
 // oversize weapon swings have room; anything beyond the stage is clipped.
 export class SpriteView {
-  constructor(canvas, { stageW = 96, stageH = 96, ground = 10 } = {}) {
+  constructor(canvas, { stageW = 96, stageH = 96, ground = 10, shadow = false } = {}) {
     this.canvas = canvas;
+    this.shadow = shadow; // a soft shadow on the ground under the feet (the Hero tab's scene)
     this.ctx = canvas.getContext('2d');
     this.stageW = stageW;
     this.stageH = stageH;
@@ -224,6 +225,12 @@ export class SpriteView {
     const frameX = (this.stageW - FRAME) / 2, frameY = this.stageH - this.ground - FRAME;
     const off = (prep.size - FRAME) / 2;
     const cx = (frameX + FRAME / 2) * SCALE, cy = (frameY + FRAME / 2) * SCALE;
+    if (this.shadow) {
+      ctx.fillStyle = 'rgba(20, 12, 6, 0.28)';
+      ctx.beginPath();
+      ctx.ellipse(cx, (frameY + FRAME - 3) * SCALE, 13 * SCALE, 3 * SCALE, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
     drawGlow(ctx, this.look?.fx, cx, cy, SCALE, t);
     ctx.drawImage(this.buf, 0, 0, prep.size, prep.size, (frameX - off) * SCALE, (frameY - off) * SCALE, prep.size * SCALE, prep.size * SCALE);
     drawWisp(ctx, this.look?.fx, cx, cy, SCALE, t);

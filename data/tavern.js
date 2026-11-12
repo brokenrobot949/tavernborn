@@ -27,7 +27,25 @@ export const UPGRADES = [
     bought: 'The Wobbly Griffin gains {rank}. The regulars have started dusting it.',
   },
 ];
-export const UPGRADE_BY_ID = Object.fromEntries(UPGRADES.map((u) => [u.id, u]));
+// The Tavern tab's header: one line overheard at the bar, changing every so often.
+export const BAR_TALK = [
+  'The barkeep is polishing the same tankard. It is the cleanest object in the Vale.',
+  'Two farmers at the window table are disagreeing about the goose, quietly, in case it hears.',
+  'A bard in the corner is three verses into a song about a hero who has not done it yet.',
+  'Someone has carved a griffin into the bar. It also wobbles.',
+  'The cleric is reading the same book as last week, from the other end.',
+  'A tax collector asks whether anyone has seen a dragon. Nobody has, loudly.',
+  'The cat under the stairs has been made an honorary regular. It was not consulted.',
+  'The stew of the day is the stew of yesterday, served with confidence.',
+  'A dwarf is explaining mountains to a fisherman, who is explaining the sea back.',
+  'Somebody has pinned a drawing of the hero to the notice board. The likeness is generous.',
+  'The fire has been lit since spring. The barkeep says it is a matter of principle.',
+  'A traveller asks the way to Wyrmspire. The whole room points, then thinks better of it.',
+  'The barkeep keeps a ledger of what the tavern owes the dragon. It is a large book.',
+  'Dice are rolling at the back table. Someone has just been very lucky, and is being watched.',
+];
+
+export const UPGRADE_BY_ID =Object.fromEntries(UPGRADES.map((u) => [u.id, u]));
 
 // What hangs on the trophy wall: one piece from each dungeon, earned the first time any hero of
 // this tavern clears it, in the order they were won.

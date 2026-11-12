@@ -112,7 +112,7 @@ export function shop(save, hero) {
 export const tavernAfter = (upgrades, legends = 1) => ({ upgrades: { ...upgrades }, legends: Array.from({ length: legends }, (_, i) => ({ name: `Legend ${i + 1}` })), legacyBonus: legacyFor(legends), trophies: [] });
 
 // The simulated player's standing orders, re-read every few minutes of game time.
-function steer(hero, sim, style) {
+export function steer(hero, sim, style) {
   const i = REGION_INDEX[hero.region];
   const region = REGIONS[i];
   const next = REGIONS[i + 1];

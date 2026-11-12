@@ -164,3 +164,14 @@ Arguments: `node tools/simulate.mjs [heroes] [road|roam|vale|unspent] [damageTim
 - `damageTimes` (the page's "What if monsters hit harder?") multiplies all damage for that run only,
   through `WHAT_IF` in `js/rules.js`. Nothing is written to the game's files.
 - Rerun after any change to pacing, monsters, quests, dungeons, damage, healing, or skills.
+
+## make-test-save.mjs: a save string for testing screens
+
+```
+node tools/make-test-save.mjs [days] [class] [race] > .test-save.txt
+```
+
+Plays one hero for that many days with the simulator's player (skills, upgrades, and the road, from
+`simulate-core.js`) and prints a save string, timed as if the phone was closed a moment ago, with the
+chapter cards already read. Paste it into Tavern > Settings > Load a save string, or fetch it from
+`python tools/serve.py` in the browser. `.test-save*.txt` is ignored by git.

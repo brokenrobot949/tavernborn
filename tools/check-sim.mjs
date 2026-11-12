@@ -20,7 +20,7 @@
 
 import { advance, summarize } from '../js/sim.js';
 import { newSave, exportSave, importSave, migrate, SAVE_VERSION } from '../js/state.js';
-import { createHero, assignScores, defaultAppearance, maxHp, regionOpen, raiseAbility, abilityPointsBy, STANDARD_ARRAY } from '../js/hero.js';
+import { createHero, assignScores, defaultAppearance, maxHp, regionOpen, raiseAbility, abilityPointsBy, STANDARD_ARRAY, chronicle, isHighlight, KEPT_MAX } from '../js/hero.js';
 import {
   TREES, ALL_SKILLS, FX_KEYS, SIG_TYPES, MAX_SKILLS, canLearn, whyNot, learnSkill, chooseSubclass, respec, respecCost, pending,
 } from '../js/skills.js';
@@ -102,6 +102,17 @@ const ms = performance.now() - t0;
 console.log(`  30 days: ${monthEvents.length} events in ${ms.toFixed(0)} ms, level ${m.heroes[0].level}, chronicle holds ${m.heroes[0].chronicle.length} lines`);
 ok(ms < 1000, 'thirty days away resolves in under a second');
 ok(m.heroes[0].chronicle.length <= 200, 'the Chronicle keeps at most 200 lines');
+{
+  // Highlights are trimmed last: after a busy stretch the level-ups are still there, up to KEPT_MAX.
+  const h = fresh(77).heroes[0];
+  h.chronicle = []; h.lines = 0;
+  for (let i = 0; i < 100; i++) chronicle(h, 'levelup', `Level ${i}.`);
+  for (let i = 0; i < 500; i++) chronicle(h, 'hit', `Hit ${i}.`);
+  const kept = h.chronicle.filter(isHighlight);
+  ok(h.chronicle.length === 200 && kept.length === KEPT_MAX && kept.at(-1).text === 'Level 99.' && h.chronicle.at(-1).text === 'Hit 499.',
+    `the Chronicle keeps the newest ${KEPT_MAX} highlights through 500 ordinary lines, and still at most 200 lines`);
+  ok(h.chronicle.every((l, i) => i === 0 || l.n > h.chronicle[i - 1].n), 'the Chronicle stays in the order it was written');
+}
 
 // 5. Export and import.
 const text = exportSave(a);
