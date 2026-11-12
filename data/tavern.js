@@ -45,7 +45,16 @@ export const BAR_TALK = [
   'Dice are rolling at the back table. Someone has just been very lucky, and is being watched.',
 ];
 
-export const UPGRADE_BY_ID =Object.fromEntries(UPGRADES.map((u) => [u.id, u]));
+// The bard on the Tavern tab, who sings back the chapters of The Dragon's Due the tavern has heard.
+export const BARD = {
+  intro: 'The bard in the corner has set the story so far to a tune, and will sing any part of it again for the price of listening.',
+  none: 'The bard has a tune and no words yet. The story starts when somebody clears the cellar beneath the cellar.',
+  all: 'The bard has the whole of it now, and has started on a second verse nobody asked for.',
+  waiting: 'Not yet sung. The bard is waiting on news from {dungeon}.',
+  someone: 'a hero of this tavern',
+};
+
+export const UPGRADE_BY_ID = Object.fromEntries(UPGRADES.map((u) => [u.id, u]));
 
 // What hangs on the trophy wall: one piece from each dungeon, earned the first time any hero of
 // this tavern clears it, in the order they were won.

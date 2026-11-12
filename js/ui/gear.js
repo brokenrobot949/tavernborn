@@ -7,7 +7,10 @@
 
 import { TIERS } from '../../data/items.js';
 import { MONSTERS } from '../../data/monsters.js';
-import { REGION_BY_ID } from '../../data/regions.js';
+import { REGIONS } from '../../data/regions.js';
+import { DUNGEONS } from '../../data/dungeons.js';
+import { regionOpen } from '../hero.js';
+import { REGION_COLORS } from './map.js';
 import { foeName } from '../tasks.js';
 import { RACES, RACE_TRAITS } from '../../data/races.js';
 import { CLASSES } from '../../data/classes.js';
@@ -126,24 +129,58 @@ export function mountGear(root) {
   }
 
   // ----- bestiary -----
+  // Every region, in road order, each a fold-out with its monsters and its dungeon's boss. The region
+  // the hero is in starts open; what is opened or closed by hand stays that way until the hero moves on.
+  const folded = {}; // region id -> open (true) or closed (false), as last tapped
+  let foldedFor = '';
   function drawBestiary(hero) {
-    const monsters = MONSTERS[hero.region];
-    if (!changed('beasts', [hero.id, hero.region, monsters.map((m) => hero.bestiary[m.id] ?? 0)])) return;
-    const met = monsters.filter((m) => hero.bestiary[m.id]).length;
-    const fill = el('i');
-    fill.style.width = `${(100 * met) / monsters.length}%`;
-    beastPage.replaceChildren(el('section', { className: 'panel' },
-      el('h3', { textContent: `Bestiary: ${REGION_BY_ID[hero.region].name}` }),
-      el('p', { className: 'hint', textContent: `${met} of ${monsters.length} defeated at least once. The Bestiary shows the region the hero is in.` }),
-      el('div', { className: 'bar thin beast-bar' }, fill),
-      el('ul', { className: 'bestiary' }, ...monsters.map((m) => {
+    if (!changed('beasts', [hero.id, hero.region, REGIONS.map((r) => [regionOpen(hero, r.id), hero.dungeonClears[r.id] ?? 0, MONSTERS[r.id].map((m) => hero.bestiary[m.id] ?? 0)])])) return;
+    if (foldedFor !== hero.id + hero.region) { foldedFor = hero.id + hero.region; for (const k of Object.keys(folded)) delete folded[k]; }
+    const all = REGIONS.flatMap((r) => MONSTERS[r.id]);
+    const metAll = all.filter((m) => hero.bestiary[m.id]).length;
+    const bossesBeaten = REGIONS.filter((r) => hero.dungeonClears[r.id]).length;
+    const total = el('i');
+    total.style.width = `${(100 * metAll) / all.length}%`;
+    const regions = REGIONS.map((r, i) => {
+      const monsters = MONSTERS[r.id];
+      const met = monsters.filter((m) => hero.bestiary[m.id]).length;
+      const reached = regionOpen(hero, r.id) || met > 0;
+      const d = DUNGEONS[r.id];
+      const clears = hero.dungeonClears[r.id] ?? 0;
+      const fill = el('i');
+      fill.style.width = `${(100 * met) / monsters.length}%`;
+      const rows = reached ? monsters.map((m) => {
         const count = hero.bestiary[m.id] ?? 0;
         return el('li', { className: count ? 'beast' : 'beast unknown' },
           el('span', { className: 'beast-icon' }, icon(count ? 'eye' : 'lock')),
           el('div', {},
             el('div', { className: 'beast-head' }, el('span', { textContent: count ? m.name : 'Not yet defeated' }), el('span', { className: 'beast-count', textContent: count ? '×' + num(count) : '' })),
             count ? el('p', { className: 'hint', textContent: m.about }) : null));
-      }))));
+      }) : [];
+      if (reached) {
+        rows.push(el('li', { className: 'beast boss' + (clears ? '' : ' unknown') },
+          el('span', { className: 'beast-icon' }, icon(clears ? 'crown' : 'lock')),
+          el('div', {},
+            el('div', { className: 'beast-head' }, el('span', { textContent: clears ? d.boss.name : 'The boss of the dungeon' }), el('span', { className: 'beast-count', textContent: clears ? '×' + num(clears) : '' })),
+            el('p', { className: 'hint', textContent: clears ? `Boss of ${d.name}.` : `Waits at the bottom of ${d.name}.` }))));
+      }
+      const here = r.id === hero.region;
+      const fold = el('details', { className: 'beast-region' + (reached ? '' : ' unreached') },
+        el('summary', {},
+          el('span', { className: 'region-num', textContent: String(i + 1) }),
+          el('span', { className: 'beast-region-name' }, el('strong', { textContent: r.name }), el('span', { className: 'hint', textContent: reached ? `${met} of ${monsters.length} monsters${clears ? ', boss beaten' : ''}${here ? '. You are here' : ''}` : 'Not yet reached' })),
+          reached ? el('span', { className: 'beast-region-bar bar thin' }, fill) : el('span', { className: 'beast-lock' }, icon('lock'))),
+        reached ? el('ul', { className: 'bestiary' }, ...rows) : null);
+      fold.style.setProperty('--region', REGION_COLORS[r.id]);
+      fold.open = reached && (folded[r.id] ?? here);
+      fold.addEventListener('toggle', () => { folded[r.id] = fold.open; });
+      return fold;
+    });
+    beastPage.replaceChildren(el('section', { className: 'panel' },
+      el('h3', { textContent: 'Bestiary' }),
+      el('p', { className: 'hint', textContent: `${metAll} of ${all.length} monsters defeated at least once, and ${bossesBeaten} of ${REGIONS.length} bosses. Tap a region to open it.` }),
+      el('div', { className: 'bar thin beast-bar' }, total),
+      el('div', { className: 'beast-regions' }, ...regions)));
   }
 
   function update(state, hero) {

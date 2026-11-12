@@ -1,7 +1,7 @@
 // Tavern tab: the inn sign, the common room (the roster standing about, the trophy plaques, and a
-// line overheard at the bar), then five sections behind tabs: upgrades; heroes; the Hall of
-// Legends and the trophy wall; the cleric and respec; and settings, the save string, and the
-// workshop links.
+// line overheard at the bar), then six sections behind tabs: upgrades; heroes; the Hall of
+// Legends and the trophy wall; the bard, who sings back the story chapters the tavern has heard;
+// the cleric and respec; and settings, the save string, and the workshop links.
 //
 // Each panel is rebuilt only when something it shows changes, so a tap is never lost to the
 // once-a-second redraw. Buttons that spend a lot or cannot be undone ask for a second tap.
@@ -10,7 +10,12 @@ import { exportSave, importSave } from '../state.js';
 import { clericFee, payCleric, foeName } from '../tasks.js';
 import { respec, respecCost, subclassName, BRANCH_BY_ID } from '../skills.js';
 import { respecPrice, MAX_HEROES, MAX_LEVEL } from '../rules.js';
-import { UPGRADES, TROPHIES, TROPHY_COLORS, BAR_TALK } from '../../data/tavern.js';
+import { UPGRADES, TROPHIES, TROPHY_COLORS, BAR_TALK, BARD } from '../../data/tavern.js';
+import { CHAPTERS, STORY_TITLE } from '../../data/story.js';
+import { REGIONS } from '../../data/regions.js';
+import { DUNGEONS } from '../../data/dungeons.js';
+import { showChapter } from './story.js';
+import { REGION_COLORS } from './map.js';
 import { RACES } from '../../data/races.js';
 import { CLASSES } from '../../data/classes.js';
 import { TIERS } from '../../data/items.js';
@@ -55,6 +60,8 @@ export function mountTavern(root, app) {
   let rosterKey = '';
   const hallBox = el('div', {});
   let hallKey = '';
+  const bardBox = el('div', {});
+  let bardKey = '';
 
   // ----- save string -----
   const out = el('textarea', { className: 'save-text', readOnly: true, rows: 4, attrs: { 'aria-label': 'Your save string' } });
@@ -115,6 +122,10 @@ export function mountTavern(root, app) {
       el('section', { className: 'panel' },
         el('h3', { textContent: 'The trophy wall' }),
         trophyBox)),
+    page('bard', 'Bard', 'lute',
+      el('section', { className: 'panel bard' },
+        el('h3', {}, icon('lute'), el('span', { textContent: `The bard: ${STORY_TITLE}` })),
+        bardBox)),
     page('services', 'Cleric', 'potion',
       el('section', { className: 'panel service' },
         el('h3', {}, icon('heart'), el('span', { textContent: 'The cleric' })),
@@ -332,9 +343,49 @@ export function mountTavern(root, app) {
     hallBox.replaceChildren(el('p', { className: 'hint', textContent: intro }), ...(cards.length ? [el('ul', { className: 'hall' }, ...cards)] : []));
   }
 
+  // The bard: every chapter the tavern has heard, from any hero's first clear of a dungeon (the
+  // trophy list keeps that, retired heroes included) or a clear by a hero on the roster.
+  function drawBard(state) {
+    const known = new Set([...(state.tavern.trophies ?? []), ...state.heroes.flatMap((h) => Object.keys(h.dungeonClears).filter((id) => h.dungeonClears[id]))]);
+    const key = [...known].sort().join() + '|' + state.heroes.map((h) => h.name).join();
+    if (key === bardKey) return;
+    bardKey = key;
+    const heard = REGIONS.filter((r) => known.has(r.id)).length;
+    const fill = el('i');
+    fill.style.width = `${(100 * heard) / REGIONS.length}%`;
+    const verses = REGIONS.map((r) => {
+      const c = CHAPTERS[r.id];
+      const d = DUNGEONS[r.id];
+      if (!known.has(r.id)) {
+        return el('li', { className: 'verse unheard' },
+          el('span', { className: 'verse-num', textContent: String(c.n) }),
+          el('div', { className: 'verse-body' },
+            el('p', { className: 'verse-kicker', textContent: `Chapter ${c.n}` }),
+            el('p', { className: 'hint', textContent: BARD.waiting.replace('{dungeon}', d.name) })));
+      }
+      const finder = state.heroes.find((h) => h.dungeonClears[r.id]);
+      const teller = { name: finder?.name ?? BARD.someone };
+      const v = el('li', { className: 'verse' },
+        el('span', { className: 'verse-num', textContent: String(c.n) }),
+        el('div', { className: 'verse-body' },
+          el('p', { className: 'verse-kicker', textContent: `Chapter ${c.n} · ${r.name}` }),
+          el('p', { className: 'verse-title', textContent: c.title }),
+          el('p', { className: 'verse-line', textContent: c.learned }),
+          el('div', { className: 'row' }, el('button', { className: 'btn', type: 'button', onclick: () => showChapter(document.getElementById('game'), r.id, teller) }, icon('lute'), el('span', { textContent: 'Hear it again' })))));
+      v.style.setProperty('--region', REGION_COLORS[r.id]);
+      return v;
+    });
+    bardBox.replaceChildren(
+      el('p', { className: 'bard-intro', textContent: heard === 0 ? BARD.none : heard === REGIONS.length ? BARD.all : BARD.intro }),
+      el('div', { className: 'bard-progress' }, el('span', { textContent: `${heard} of ${REGIONS.length} chapters` }), el('div', { className: 'bar thin' }, fill)),
+      el('ol', { className: 'verses' }, ...verses));
+    tabs.badge('bard', '');
+  }
+
   function update(state, hero) {
     current = { state, hero };
     drawRoom(state);
+    drawBard(state);
     drawUpgrades(state, hero);
     drawTrophies(state);
     drawCleric(hero);

@@ -45,6 +45,7 @@ export const ICONS = {
   flag: ['M5 21V4', 'M5 4h12l-3 4 3 4H5'],
   lock: ['M6 11h12v10H6z', 'M8.5 11V8a3.5 3.5 0 0 1 7 0v3'],
   check: ['M4 12.5l5 5L20 6.5'],
+  lute: ['M8.5 11a6 6 0 1 0 4.5 4.5l2-2L10.5 9z', 'M13 11l6.5-6.5', 'M18 3l3 3', '*M8.5 16a1.4 1.4 0 1 0 .01 0z'],
 };
 
 // An <svg> for one icon. `cls` adds classes (for colour and size, set in CSS).

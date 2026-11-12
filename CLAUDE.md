@@ -175,6 +175,14 @@ Rob is the game designer and does not write code.
   spark for a signature move, a star for the capstone): filled when learned, gold-edged when it can be learned,
   dashed with a padlock and the reason when not. The explanations sit in "How skills work" at the bottom.
   (Class `.tier-step`, not `.tier`: `.tier` is the sprite lab's rarity button.)
+- Bestiary (Gear tab): every region in road order as a fold-out in its colour, with monsters met, a bar, and
+  the dungeon's boss once beaten (count from `dungeonClears`). The hero's region starts open; regions not
+  reached are locked. A total across all 51 monsters and 8 bosses at the top.
+- The Bard (Tavern tab, a sixth section): the eight chapters of The Dragon's Due as verses in their region's
+  colour, each with its title, its `learned` line, and "Hear it again" (the chapter card). A chapter is known
+  once any hero of the tavern has cleared that dungeon (`state.tavern.trophies`, which keeps retired heroes'
+  clears too, or a roster hero's `dungeonClears`); the card names the roster hero who cleared it, or "a hero of
+  this tavern". Unheard chapters say which dungeon the bard is waiting on. Text in `BARD`, `data/tavern.js`.
 - `node tools/make-test-save.mjs [days] [class] [race] [--unspent]` makes a save string for testing screens
   (`--unspent` leaves the skill points, ability points, and subclass waiting).
 - Scene extras (`js/ui/scene-fx.js`, styles at the end of `css/screens.css`), round two of the pass:
