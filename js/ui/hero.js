@@ -17,6 +17,8 @@ import { currentQuest, clericFee, payCleric } from '../tasks.js';
 import { subclassName } from '../skills.js';
 import { el, num, heroClock, confirmBtn } from './dom.js';
 import { icon } from './icons.js';
+import { foeSvg, shapeFor, pickBy, popRoll, burst, arrival, weatherFor } from './scene-fx.js';
+import { MONSTERS } from '../../data/monsters.js';
 import { sfx } from '../audio.js';
 
 const STAGE_H = 70; // sprite pixels; the scene is this tall times 4
@@ -24,6 +26,21 @@ const SHOWN_LINES = 80;
 const WALK_PX_PER_S = 120; // how fast the ground scrolls past a walking hero, in screen pixels
 // Regions drawn with open sky, where stars come out at night. The Underdeep is underground.
 const OPEN_SKY = new Set(['mugwick', 'saltmarrow', 'peaks', 'gloamfen', 'cinder', 'wyrmspire']);
+
+// Every monster by id, for the foe's shape.
+const MONSTER_BY_ID = Object.fromEntries(Object.values(MONSTERS).flat().map((m) => [m.id, m]));
+const POPS_UP_TO = 3; // dice rise only for what happened in the last few seconds, not for a long gap
+
+// The foe the hero is facing in this task, as [shape, glint colour, key], or null for none (travel,
+// rests, and dungeon rooms that are a trap or a puzzle rather than a monster).
+function foeOf(hero, t) {
+  if (!t) return null;
+  if ((t.kind === 'roam' || t.kind === 'delve') && t.monster) { const m = MONSTER_BY_ID[t.monster]; return m ? [shapeFor(m.name), '#ff5a3a', t.monster] : null; }
+  if (t.kind === 'boss') { const b = DUNGEONS[hero.region].boss; return [shapeFor(b.name), '#ffcf4a', 'boss:' + b.name]; }
+  if (t.kind === 'rift') return [pickBy(t.text, ['eye', 'flame', 'humanoid', 'blob']), '#b98cff', 'rift:' + t.text];
+  if (t.kind === 'quest') return [pickBy(t.text, ['humanoid', 'beast', 'small', 'critter', 'humanoid']), '#ff5a3a', 'quest:' + t.text];
+  return null;
+}
 
 // The two scrolling layers of a backdrop: sky and ground, three tiles each (see css/backdrops.css).
 function backdropTracks() {
@@ -47,6 +64,11 @@ const PATTERNS = {
   boss: { approach: 0.1, beats: [['attack', 5], ['walk', 2]] },
   rift: { approach: 0.15, beats: [['attack', 4], ['walk', 2]] },
 };
+// Whether the hero has reached the foe yet (the first walk of a fight is the approach).
+function engaged(t) {
+  const p = t && PATTERNS[t.kind];
+  return !!p && t.elapsed >= Math.ceil(t.duration * p.approach);
+}
 function actionFor(t) {
   const p = t && PATTERNS[t.kind];
   if (!p) return 'walk';
@@ -109,7 +131,12 @@ export function mountHero(root, app) {
   const place = el('span', { className: 'place' });
   const wall = el('div', { className: 'trophy-wall', attrs: { 'aria-hidden': 'true' } }); // the tavern's trophy wall
   let wallKey = '';
-  const scene = el('div', { className: 'scene' }, ...backdropTracks(), el('div', { className: 'sky-tint' }), el('div', { className: 'stars' }), el('div', { className: 'tavern-window' }), wall, canvas, still, place);
+  const weather = el('div', { className: 'weather' });
+  const foe = el('div', { className: 'foe' });
+  const fx = el('div', { className: 'scene-fx', attrs: { 'aria-hidden': 'true' } });
+  const fxBack = el('div', { className: 'scene-fx back', attrs: { 'aria-hidden': 'true' } }); // behind the hero
+  let foeKey = '';
+  const scene = el('div', { className: 'scene' }, ...backdropTracks(), el('div', { className: 'sky-tint' }), el('div', { className: 'stars' }), el('div', { className: 'tavern-window' }), wall, fxBack, foe, canvas, still, weather, place, fx);
   const view = new SpriteView(canvas, { stageW: 80, stageH: STAGE_H, ground: 8, shadow: true });
   new ResizeObserver(() => {
     const w = Math.max(64, Math.min(130, Math.floor(scene.clientWidth / 4)));
@@ -234,6 +261,16 @@ export function mountHero(root, app) {
       const outdoor = !inTavern && !inDungeon && !inRift && hero.region !== 'underdeep';
       scene.classList.toggle('outdoor', outdoor);
       scene.classList.toggle('open-sky', outdoor && OPEN_SKY.has(hero.region));
+      // Weather out in the open (the Underdeep has its spores); none indoors or in the Rifts.
+      weather.dataset.kind = !inTavern && !inDungeon && !inRift ? weatherFor(hero.region) : '';
+      // The foe: there once the hero has walked up to it, gone between fights and during travel.
+      const f = !inTavern && engaged(t) ? foeOf(hero, t) : null;
+      const fk = f ? f[2] + t.text : '';
+      if (fk !== foeKey) {
+        foeKey = fk;
+        foe.replaceChildren(...(f ? [foeSvg(f[0], f[1])] : []));
+        foe.className = 'foe' + (f ? ' here ' + f[0] : '');
+      }
       const hung = inTavern ? trophyWall(state).hung : [];
       if (hung.join() !== wallKey) {
         wallKey = hung.join();
@@ -325,5 +362,33 @@ export function mountHero(root, app) {
     if (!onlyHighlights) noHighlights.hidden = true;
   }
 
-  return { update, destroy: () => cancelAnimationFrame(view.frameReq) };
+  // What just happened, as it happens: dice rising from the fight, the foe flinching or the hero
+  // flashing red, the level-up burst, and the banner on arriving somewhere new. `gap` is how many
+  // seconds the events cover; after a long gap only the level-up and the arrival are shown.
+  function show(events, gap = 1) {
+    if (root.hidden || !current) return;
+    const hero = current.hero;
+    let pops = 0;
+    for (const e of events) {
+      if (gap <= POPS_UP_TO && e.type === 'task' && e.roll && pops < 3) {
+        popRoll(fx, e, pops * 350);
+        pops += 1;
+        const landed = e.roll.outcome === 'hit' || e.roll.outcome === 'crit' || e.won;
+        const cls = landed ? 'flinch' : '';
+        if (cls) { foe.classList.remove(cls); void foe.offsetWidth; foe.classList.add(cls); }
+        if (e.damage > 0) { canvas.classList.remove('hurt-flash'); void canvas.offsetWidth; canvas.classList.add('hurt-flash'); }
+      }
+    }
+    const level = events.filter((e) => e.type === 'levelup').at(-1);
+    const paragon = events.filter((e) => e.type === 'paragon').at(-1);
+    if (level) burst(fx, fxBack, `Level ${level.level}`, hero.name);
+    else if (paragon) burst(fx, fxBack, `Paragon ${paragon.rank}`, hero.name);
+    const arrived = events.filter((e) => e.type === 'arrive').at(-1);
+    if (arrived && !level) {
+      const r = REGION_BY_ID[arrived.region];
+      arrival(fx, r.name, `Levels ${r.levels[0]} to ${r.levels[1]}`);
+    }
+  }
+
+  return { update, show, destroy: () => cancelAnimationFrame(view.frameReq) };
 }

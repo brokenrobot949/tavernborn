@@ -249,3 +249,89 @@
 .trophies .plaque::after { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--trophy, #c9962c); }
 .legend { padding: 12px 0; }
 .stats.trophies li > span { text-align: left; font-weight: 400; flex: 1; }
+
+/* ----- On the scene: the foe, rising dice, the level-up burst, arrival banners, weather ----- */
+.scene > canvas:not(.still) { position: relative; z-index: 1; }
+.scene .place { z-index: 3; }
+.scene-fx { position: absolute; inset: 0; z-index: 4; pointer-events: none; overflow: hidden; }
+.scene-fx.back { z-index: 0; }
+
+.foe { position: absolute; right: 5%; bottom: 10%; width: 30%; max-width: 120px; aspect-ratio: 1; z-index: 0; pointer-events: none; }
+.foe .foe-shape { width: 100%; height: 100%; overflow: visible; transform-origin: 50% 100%; transform: scale(var(--foe-scale, 1)); animation: foe-in 0.6s ease-out, foe-idle 2.4s ease-in-out 0.6s infinite alternate; filter: drop-shadow(0 0 1.2px rgba(255, 236, 205, 0.7)) drop-shadow(0 4px 2px rgba(0, 0, 0, 0.35)); }
+.foe .foe-shape path { fill: #1d1520; }
+.foe .foe-shape .limb { fill: none; stroke: #1d1520; stroke-width: 3.2; stroke-linecap: round; }
+.foe .glint { animation: glint 3s steps(1) infinite; }
+@keyframes foe-in { from { opacity: 0; transform: translateX(30%) scale(var(--foe-scale, 1)); } }
+@keyframes foe-idle { to { transform: translateY(-2%) scale(var(--foe-scale, 1)); } }
+@keyframes glint { 0%, 92% { opacity: 1; } 93%, 97% { opacity: 0; } }
+.foe.flinch { animation: flinch 0.45s ease-out; }
+@keyframes flinch { 20% { transform: translateX(10%); filter: brightness(2.4); } 60% { transform: translateX(-3%); } }
+.scene canvas.hurt-flash { animation: hurt-flash 0.5s ease-out; }
+@keyframes hurt-flash { 25% { filter: brightness(1.5) sepia(1) saturate(6) hue-rotate(-30deg); transform: translateX(-2%); } }
+.scene.tavern .foe { display: none; }
+
+.pop { position: absolute; right: 8%; bottom: 52%; display: grid; justify-items: center; gap: 2px; opacity: 0; animation: pop-rise 2s ease-out forwards; }
+@keyframes pop-rise { 0% { opacity: 0; transform: translateY(10px) scale(0.6); } 15% { opacity: 1; transform: translateY(0) scale(1.08); } 25% { transform: scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: translateY(-46px); } }
+.pop-die { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px 2px 6px; border-radius: 14px; background: #fbf5e6; color: var(--ink); border: 2px solid #2b2118; font: 700 1.1rem var(--display); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4); }
+.pop-die .icon { font-size: 1.1rem; }
+.pop.o-crit .pop-die { background: #f6c84a; border-color: #7a5600; font-size: 1.4rem; }
+.pop.o-miss .pop-die { background: #d8d0c2; color: #5c4a3a; }
+.pop.o-fumble .pop-die { background: #a8372b; color: #fff; border-color: #5a1a12; }
+.pop-word { font: 700 0.75rem var(--display); color: #fff; text-shadow: 0 1px 2px #000, 0 0 4px #000; }
+.pop-gains { display: flex; gap: 6px; white-space: nowrap; font: 700 0.78rem var(--body); text-shadow: 0 1px 2px #000, 0 0 3px #000; }
+.pop-xp { color: #ffe08a; } .pop-gold { color: #fff1b8; } .pop-hurt { color: #ff8a7a; }
+
+.burst { position: absolute; inset: 0; display: grid; place-items: center; animation: burst-life 3.2s ease-out forwards; }
+.burst .rays { position: absolute; left: 50%; top: 58%; width: 560px; height: 560px; margin: -280px 0 0 -280px; border-radius: 50%;
+  background: repeating-conic-gradient(rgba(255, 220, 120, 0.55) 0 8deg, transparent 8deg 22deg);
+  -webkit-mask: radial-gradient(circle, #000 10%, transparent 62%); mask: radial-gradient(circle, #000 10%, transparent 62%);
+  animation: rays-spin 3.2s linear; }
+.burst-banner { position: absolute; top: 14%; display: grid; justify-items: center; padding: 6px 22px 8px; border-radius: 8px; background: linear-gradient(#7a4f22, #5a3818); border: 2px solid #f6dc8c; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5); color: #f6dc8c; animation: banner-pop 0.6s cubic-bezier(0.2, 1.6, 0.4, 1); }
+.burst-banner strong { font: 700 1.6rem var(--display); letter-spacing: 0.03em; text-shadow: 0 2px 0 #2b1a0c; }
+.burst-banner span { font: italic 0.8rem var(--display); color: #f1e6cf; }
+@keyframes rays-spin { from { transform: rotate(0) scale(0.4); } 20% { transform: rotate(20deg) scale(1); } to { transform: rotate(90deg) scale(1.05); } }
+@keyframes burst-life { 0% { opacity: 0; } 8% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes banner-pop { from { transform: scale(0.3); opacity: 0; } }
+
+.arrival { position: absolute; left: 0; right: 0; top: 24%; display: grid; justify-items: center; padding: 8px 12px 10px; background: linear-gradient(90deg, transparent, rgba(20, 14, 8, 0.78) 18%, rgba(20, 14, 8, 0.78) 82%, transparent); color: #f1e6cf; animation: arrive 4.2s ease-in-out forwards; }
+.arrival small { font: 600 0.68rem var(--body); letter-spacing: 0.18em; text-transform: uppercase; color: #d9c08a; }
+.arrival strong { font: 700 1.5rem var(--display); color: #f6dc8c; text-shadow: 0 2px 0 #000; text-align: center; }
+.arrival span { font: italic 0.8rem var(--display); }
+@keyframes arrive { 0% { opacity: 0; transform: translateY(-8px); } 15% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; } }
+
+/* Weather. Each kind tiles small drops or motes and slides them a whole number of tiles, so it loops. */
+.weather { position: absolute; inset: 0; z-index: 2; pointer-events: none; display: none; background-repeat: repeat; }
+.weather[data-kind='rain'] { display: block; left: -12%; right: -12%; transform: skewX(-14deg);
+  background-image: radial-gradient(ellipse 0.8px 7px at 50% 50%, rgba(220, 235, 255, 0.75) 0 98%, transparent 100%), radial-gradient(ellipse 0.6px 5px at 30% 20%, rgba(220, 235, 255, 0.5) 0 98%, transparent 100%);
+  background-size: 23px 41px, 37px 59px; animation: fall-rain 0.5s linear infinite; }
+@keyframes fall-rain { to { background-position: 0 82px, 0 59px; } }
+.scene.outdoor[data-time='day']:has(.weather[data-kind='rain']) .sky-tint { opacity: 1; background: linear-gradient(#a6b0bc, #d4d8da); }
+.weather[data-kind='snow'] { display: block;
+  background-image: radial-gradient(circle 2px at 30% 40%, #fff 0 98%, transparent 100%), radial-gradient(circle 1.4px at 70% 70%, rgba(255, 255, 255, 0.85) 0 98%, transparent 100%);
+  background-size: 50px 50px, 83px 83px; animation: fall-snow 6s linear infinite, sway 3s ease-in-out infinite alternate; }
+@keyframes fall-snow { to { background-position: 0 100px, 0 83px; } }
+@keyframes sway { from { transform: translateX(-6px); } to { transform: translateX(6px); } }
+.weather[data-kind='leaves'] { display: block;
+  background-image: radial-gradient(ellipse 3px 2px at 20% 30%, #c08a3a 0 98%, transparent 100%), radial-gradient(ellipse 2.5px 1.6px at 70% 60%, #9ab84a 0 98%, transparent 100%);
+  background-size: 120px 140px, 170px 190px; animation: fall-leaves 11s linear infinite, sway 4s ease-in-out infinite alternate; }
+@keyframes fall-leaves { to { background-position: 120px 280px, -170px 190px; } }
+.weather[data-kind='sand'] { display: block; top: 40%;
+  background-image: radial-gradient(ellipse 14px 0.8px at 50% 50%, rgba(255, 230, 180, 0.6) 0 98%, transparent 100%), radial-gradient(ellipse 9px 0.6px at 20% 30%, rgba(240, 200, 140, 0.55) 0 98%, transparent 100%);
+  background-size: 90px 26px, 140px 37px; animation: blow-sand 1.4s linear infinite; }
+@keyframes blow-sand { to { background-position: -180px 0, -140px 0; } }
+.weather[data-kind='mist'] { display: block; top: 45%; left: -40%; right: -40%; opacity: 0.55;
+  background-image: radial-gradient(ellipse 50% 40% at 30% 70%, rgba(220, 235, 225, 0.8), transparent 70%), radial-gradient(ellipse 40% 30% at 80% 50%, rgba(220, 235, 225, 0.6), transparent 70%);
+  background-size: 50% 100%, 60% 100%; animation: drift-mist 40s linear infinite alternate; }
+@keyframes drift-mist { from { transform: translateX(-12%); } to { transform: translateX(12%); } }
+.weather[data-kind='embers'] { display: block;
+  background-image: radial-gradient(circle 1.6px at 30% 50%, #ffb24f 0 60%, rgba(255, 120, 40, 0.4) 100%, transparent 140%), radial-gradient(circle 1.1px at 70% 20%, #ff8a3a 0 60%, transparent 140%);
+  background-size: 60px 90px, 97px 110px; animation: rise-embers 5s linear infinite, sway 2.5s ease-in-out infinite alternate; }
+@keyframes rise-embers { to { background-position: 0 -180px, 0 -110px; } }
+.weather[data-kind='spores'] { display: block; opacity: 0.8;
+  background-image: radial-gradient(circle 1.4px at 30% 50%, rgba(140, 240, 255, 0.9) 0 60%, transparent 140%), radial-gradient(circle 1.2px at 70% 20%, rgba(200, 150, 255, 0.85) 0 60%, transparent 140%);
+  background-size: 70px 100px, 110px 130px; animation: rise-embers 14s linear infinite, sway 5s ease-in-out infinite alternate; }
+
+/* Phones set to reduce motion: the scene stays still. */
+@media (prefers-reduced-motion: reduce) {
+  .weather, .bd-track, .foe .foe-shape, .burst .rays, .worldmap .pulse, .slot-card.t4::after { animation: none !important; }
+}

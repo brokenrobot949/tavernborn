@@ -142,7 +142,7 @@ function tick() {
   sinceStore += gap;
   // Sound: one effect for what just happened, or one chime for a long time away.
   if (gap >= AWAY_SECONDS) { showAway(root, { seconds: gap, summary: summarize(events), hero }); sfx('away'); }
-  else if (events.length) playEvents(events);
+  else if (events.length) { playEvents(events); screen.views.hero.show(events, gap); }
   if (sinceStore >= SAVE_EVERY) { sinceStore = 0; storeSave(save); }
   // Story chapter cards earned by a first dungeon clear, one at a time, after any away card.
   if (hero.unread.length && !root.querySelector('.overlay')) {

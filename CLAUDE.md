@@ -168,6 +168,23 @@ Rob is the game designer and does not write code.
 - Section tabs remember the last section on the device (`tavernborn.section.*` in localStorage, apart from the
   save). The Skills tab already had its branch tabs and is unchanged.
 - `node tools/make-test-save.mjs [days] [class] [race]` makes a save string for testing screens.
+- Scene extras (`js/ui/scene-fx.js`, styles at the end of `css/screens.css`), round two of the pass:
+  - The foe: a dark shape with glinting eyes on the right of the scene once the hero has walked up to it.
+    Twelve shapes (`SHAPES`), picked from the monster's or boss's name (`shapeFor`); quests and the Rifts pick
+    one steadily from the task text. None for travel, rests, or dungeon rooms that are a trap. It flinches when
+    a roll lands; the hero flashes red when hurt.
+  - Dice rise from the fight for each roll seen live (`popRoll`, at most three a second, none after a gap of
+    more than 3 seconds): the d20 in gold for a natural 20, red for a 1, grey for a miss, with XP, gold, and
+    hit points lost. `main.js` hands each live tick's events to the Hero tab (`show(events, gap)`).
+  - Level-up and Paragon rank: gold rays behind the hero and a banner (`burst`). Arriving in a region: a
+    banner with its name and levels (`arrival`).
+  - Weather (`weatherFor`): leaves in the Mumblewood, rain on the coast (greying the daytime sky), snow in
+    the Peaks, blowing sand in the Wastes, spells of 90 minutes that come and go the same on every device;
+    mist in Gloamfen, spores in the Underdeep, and embers at Wyrmspire always. Mugwick Vale is fair. Not in
+    the tavern, dungeons, or the Rifts. Phones set to reduce motion get a still scene.
+- Home screen: `manifest.webmanifest` and `assets/icons/` (192, 512, maskable 512, and the Apple 180), so
+  the game can be added to a phone's home screen and opens full screen. The icons are drawn by
+  `tools/make-icons.html` from the game's own LPC layers (a Human Fighter in Rare gear), already credited.
 - `node tools/check-sim.mjs` (203 checks) adds two for the kept highlights. No rule or pacing change.
 - Spec departures to raise with Rob: the time of day comes from the phone's clock, not from the hero's own day
   count; the Highlights list keeps 60 lines at most.

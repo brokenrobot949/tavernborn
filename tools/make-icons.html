@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tavernborn icons</title>
+  <style>
+    body { margin: 0; padding: 16px; background: #f1e6cf; color: #2b2118; font: 16px/1.4 system-ui, sans-serif; }
+    .row { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; margin-top: 12px; }
+    figure { margin: 0; text-align: center; }
+    canvas { display: block; max-width: 100%; height: auto; border-radius: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
+    a { display: inline-block; margin-top: 6px; min-height: 44px; line-height: 44px; }
+  </style>
+</head>
+<body>
+  <h1>Tavernborn home-screen icons</h1>
+  <p>Dev-only. Draws the icons from the game's own sprite layers: a Human Fighter in Rare gear, front on, in front of
+  a tavern-lamp glow. Save each one into <code>assets/icons/</code> under the name shown. The art is LPC, already in the credits.</p>
+  <div class="row" id="out"></div>
+  <script type="module">
+    import { heroLook, drawStill } from '../js/sprite.js';
+    import { defaultAppearance } from '../js/hero.js';
+    import { SLOTS } from '../data/items.js';
+
+    const look = heroLook({ race: 'human', cls: 'fighter', ...defaultAppearance('human'), tiers: Object.fromEntries(SLOTS.map((s) => [s.id, 2])) });
+
+    // `pad` is how much of the edge is kept clear: a maskable icon may be cut to a circle by the phone.
+    async function icon(size, pad) {
+      const hero = document.createElement('canvas');
+      await drawStill(hero, look, { facing: 'down', scale: 8 }); // 512 x 512, pixels kept sharp
+      const c = document.createElement('canvas');
+      c.width = c.height = size;
+      const g = c.getContext('2d');
+      const bg = g.createRadialGradient(size / 2, size * 0.55, size * 0.05, size / 2, size / 2, size * 0.72);
+      bg.addColorStop(0, '#c98a3a');
+      bg.addColorStop(0.45, '#6b4a2b');
+      bg.addColorStop(1, '#2b2118');
+      g.fillStyle = bg;
+      g.fillRect(0, 0, size, size);
+      // A gold ring inside the safe area.
+      g.strokeStyle = '#d9a441';
+      g.lineWidth = size * 0.022;
+      g.beginPath();
+      g.arc(size / 2, size / 2, size * (0.5 - pad) - g.lineWidth, 0, Math.PI * 2);
+      g.stroke();
+      // The hero: in the 64 px frame the figure stands from about row 12 to row 62, so the frame is drawn
+      // a little larger than the safe area and lifted 5 rows to centre the body.
+      g.imageSmoothingEnabled = false;
+      const span = size * (1 - 2 * pad) * 1.12;
+      g.drawImage(hero, (size - span) / 2, (size - span) / 2 - span * (5 / 64), span, span);
+      return c;
+    }
+
+    const out = document.getElementById('out');
+    for (const [name, size, pad] of [['icon-512.png', 512, 0.1], ['icon-192.png', 192, 0.1], ['apple-touch-icon.png', 180, 0.06], ['icon-maskable-512.png', 512, 0.16]]) {
+      const c = await icon(size, pad);
+      c.dataset.name = name;
+      const link = Object.assign(document.createElement('a'), { href: c.toDataURL('image/png'), download: name, textContent: 'Save ' + name });
+      const fig = document.createElement('figure');
+      fig.append(c, link);
+      out.append(fig);
+    }
+    document.body.dataset.ready = 'yes';
+  </script>
+</body>
+</html>

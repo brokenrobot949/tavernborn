@@ -175,3 +175,9 @@ Plays one hero for that many days with the simulator's player (skills, upgrades,
 `simulate-core.js`) and prints a save string, timed as if the phone was closed a moment ago, with the
 chapter cards already read. Paste it into Tavern > Settings > Load a save string, or fetch it from
 `python tools/serve.py` in the browser. `.test-save*.txt` is ignored by git.
+
+## make-icons.html: the home-screen icons
+
+Open `tools/make-icons.html` through `python tools/serve.py` and save each icon it draws into
+`assets/icons/` under the name shown. It draws a Human Fighter in Rare gear from the baked LPC layers on a
+tavern-lamp glow. `manifest.webmanifest` and the tags in `index.html` point at those files.
