@@ -319,8 +319,8 @@ export function mountHero(root, app) {
       scene.dataset.cls = hero.class;
       scene.classList.toggle('attacking', !!f && actionFor(t) === 'attack');
       scene.classList.toggle('vs-boss', f?.[2] === 'boss'); // the hero gives a boss a little more room
-      // A festival dresses the open air and the tavern, not the dungeons or the Rifts.
-      const fest = !inDungeon && !inRift ? festivalOn(new Date()) : null;
+      // A festival dresses the tavern only (seen here while recovering there), not the road or the dungeons.
+      const fest = inTavern ? festivalOn(new Date()) : null;
       festive.dataset.deco = fest?.deco ?? '';
       const hung = inTavern ? trophyWall(state).hung : [];
       if (hung.join() !== wallKey) {

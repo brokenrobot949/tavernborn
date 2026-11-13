@@ -664,3 +664,7 @@
 .scene.vs-boss > canvas:not(.still) { transform: translateX(-11%); }
 .scene.vs-boss .hero-fb { left: 39%; }
 .scene.vs-boss .heal-glow { left: 39%; }
+
+/* The Tavern tab's seven sections: two rows of pills (four, then three) instead of one crowded row. */
+.subnav.two-rows { flex-wrap: wrap; overflow-x: visible; }
+.subnav.two-rows button { flex: 1 1 calc(25% - 6px); min-width: 0; min-height: 48px; font-size: 0.8rem; }

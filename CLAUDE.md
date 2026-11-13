@@ -168,6 +168,7 @@ Rob is the game designer and does not write code.
   `data/tavern.js`, 14 lines), then section tabs: Upgrades (icons and rank pips; the pill shows how many can be
   afforded), Heroes (with portraits), Hall (legends and the trophy wall), Cleric (the cleric and respec),
   Settings (sound, credits, save, load, workshop).
+- The Tavern tab's seven section pills sit in two rows (four, then three: `.subnav.two-rows`).
 - Section tabs remember the last section on the device (`tavernborn.section.*` in localStorage, apart from the
   save).
 - Skills tab: a header of a gold coin with the points to spend (glowing while any wait) and tiles for skills
@@ -259,7 +260,7 @@ effects, bosses, loot arriving, the hero on the map, and the barkeep (no other p
   player never shops there.
 - Festivals by the device's calendar (`FESTIVALS`): Lantern Night 5 to 25 November, Midwinter 18 December to
   6 January, the Blossom Fair 10 to 30 April, Midsummer 14 June to 4 July, the Harvest Fair 20 September to
-  10 October. Bunting or lanterns over the Hero tab's scene (not dungeons or the Rifts) and the common room,
+  10 October. Bunting or lanterns in the tavern only (the common room, and the Hero tab while recovering there),
   every other bar line about it, and a card on the Tavern tab: each hero may join once a year (`hero.joined`) for
   24 hours of festive spirits (+10% XP and gold).
 - Deeds (`data/deeds.js`, 24): checked after every task and after buying or joining; each writes a Chronicle line

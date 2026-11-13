@@ -174,6 +174,7 @@ export function mountTavern(root, app) {
         el('p', { className: 'hint', textContent: 'Runs 500 heroes through the game rules at high speed and charts when each level lands. It does not touch your save.' }))),
   ];
   const tabs = sectionTabs('tavern', pages);
+  tabs.nav.classList.add('two-rows'); // seven sections: four pills above, three below, so the names have room
   root.append(
     el('header', { className: 'inn-sign' }, el('span', { className: 'sign-chain left' }), el('span', { className: 'sign-chain right' }),
       el('div', { className: 'sign-board' }, el('small', { textContent: 'Rooms, ale, and a cleric' }), el('h2', { textContent: 'The Wobbly Griffin' }))),
