@@ -11,7 +11,10 @@
    exactly. The sky track (::before) moves slower than the ground (::after), for depth. The Hero
    tab sets --ground-time from the scene's width so the ground keeps pace with the feet. */
 .bd-track { position: absolute; top: 0; bottom: 0; left: 0; width: 300%; display: flex; z-index: -2; pointer-events: none;
-  animation: bd-scroll var(--ground-time, 6s) linear infinite; animation-play-state: paused; }
+  animation: bd-scroll var(--ground-time, 6s) linear infinite; animation-play-state: paused;
+  /* Keep each track on its own layer for good: otherwise starting or stopping the scroll (every few seconds
+     in a fight) makes a phone repaint the gradients, and the dark scene shows through for a frame. */
+  will-change: transform; backface-visibility: hidden; }
 .bd-track.sky { animation-duration: calc(var(--ground-time, 6s) * 4); }
 .scene.moving .bd-track { animation-play-state: running; }
 @keyframes bd-scroll { to { transform: translateX(-66.6667%); } }

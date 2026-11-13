@@ -55,6 +55,11 @@ function backdropTracks() {
   return [el('div', { className: 'bd-track sky' }, ...tiles(false)), el('div', { className: 'bd-track ground' }, ...tiles(true))];
 }
 
+// Write a data attribute or text only when it changes. The scene is redrawn every second, and a
+// needless write makes the browser restyle (and on a phone sometimes repaint) the whole backdrop.
+function setData(node, key, value) { if (node.dataset[key] !== value) node.dataset[key] = value; }
+function setText(node, value) { if (node.textContent !== value) node.textContent = value; }
+
 // The time of day on this device: dawn 5 to 7, day 7 to 18, dusk 18 to 21, night after that.
 export function timeOfDay(date = new Date()) {
   const h = date.getHours() + date.getMinutes() / 60;
@@ -283,14 +288,14 @@ export function mountHero(root, app) {
     const nextScene = (inTavern ? 'tavern' : anim) + key;
     // The backdrop: the tavern, the region's dungeon, or the region itself. All drawn in CSS.
     if (!falling) {
-      scene.dataset.bg = inTavern ? 'tavern' : inRift ? 'rift' : inDungeon ? 'dungeon' : hero.region;
-      scene.dataset.dungeon = inDungeon ? hero.region : ''; // each dungeon dresses the shared stone its own way
-      scene.dataset.time = timeOfDay();
+      setData(scene, 'bg', inTavern ? 'tavern' : inRift ? 'rift' : inDungeon ? 'dungeon' : hero.region);
+      setData(scene, 'dungeon', inDungeon ? hero.region : ''); // each dungeon dresses the shared stone its own way
+      setData(scene, 'time', timeOfDay());
       const outdoor = !inTavern && !inDungeon && !inRift && hero.region !== 'underdeep';
       scene.classList.toggle('outdoor', outdoor);
       scene.classList.toggle('open-sky', outdoor && OPEN_SKY.has(hero.region));
       // Weather out in the open (the Underdeep has its spores); none indoors or in the Rifts.
-      weather.dataset.kind = !inTavern && !inDungeon && !inRift ? weatherFor(hero.region) : '';
+      setData(weather, 'kind', !inTavern && !inDungeon && !inRift ? weatherFor(hero.region) : '');
       // The foe: there once the hero has walked up to it, gone between fights and during travel.
       const f = !inTavern && engaged(t) ? foeOf(hero, t) : null;
       const fk = f ? f[3] + t.text : '';
@@ -316,12 +321,12 @@ export function mountHero(root, app) {
       }
       // While swinging, the class's own effect plays at the foe: a sword arc, a fireball, quick
       // dagger cuts, or a burst of holy light.
-      scene.dataset.cls = hero.class;
+      setData(scene, 'cls', hero.class);
       scene.classList.toggle('attacking', !!f && actionFor(t) === 'attack');
       scene.classList.toggle('vs-boss', f?.[2] === 'boss'); // the hero gives a boss a little more room
       // A festival dresses the tavern only (seen here while recovering there), not the road or the dungeons.
       const fest = inTavern ? festivalOn(new Date()) : null;
-      festive.dataset.deco = fest?.deco ?? '';
+      setData(festive, 'deco', fest?.deco ?? '');
       const hung = inTavern ? trophyWall(state).hung : [];
       if (hung.join() !== wallKey) {
         wallKey = hung.join();
@@ -337,7 +342,7 @@ export function mountHero(root, app) {
       else view.set({ look, anim, facing: 'right' });
       lookKey = key;
     }
-    if (!falling) place.textContent = inTavern ? 'The Wobbly Griffin' : inRift ? RIFT_NAME : t?.kind === 'travel' || t?.kind === 'return' ? 'On the road' : inDungeon ? DUNGEONS[hero.region].name : REGION_BY_ID[hero.region].name;
+    if (!falling) setText(place, inTavern ? 'The Wobbly Griffin' : inRift ? RIFT_NAME : t?.kind === 'travel' || t?.kind === 'return' ? 'On the road' : inDungeon ? DUNGEONS[hero.region].name : REGION_BY_ID[hero.region].name);
 
     name.textContent = titled(hero);
     const subclass = subclassName(hero);
