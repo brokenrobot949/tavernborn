@@ -23,7 +23,7 @@ export function newSave(seed = (Date.now() ^ Math.floor(Math.random() * 0x100000
     version: SAVE_VERSION,
     lastSavedAt: now,
     rngSeed: seed >>> 0,
-    tavern: { upgrades: {}, legends: [], legacyBonus: 0, trophies: [] },
+    tavern: { upgrades: {}, legends: [], legacyBonus: 0, trophies: [], relics: [] },
     activeHeroId: null,
     heroes: [],
   };
@@ -89,7 +89,10 @@ function tavernFields(save) {
   for (const r of save.version < 5 ? REGIONS : []) {
     if (!trophies.includes(r.id) && save.heroes.some((h) => (h.dungeonClears?.[r.id] ?? 0) > 0)) trophies.push(r.id);
   }
-  save.tavern = { ...t, upgrades, legends, trophies, legacyBonus: legacyFor(legends.length) };
+  // The glass case (after Phase 7): one entry per named Legendary at most, each one that exists.
+  const relics = (Array.isArray(t.relics) ? t.relics : []).filter((r, i, all) => r && LEGENDARIES[r.legend] && all.findIndex((x) => x?.legend === r.legend) === i)
+    .map((r) => ({ legend: r.legend, level: Math.max(1, Math.min(MAX_LEVEL, Math.floor(r.level) || 1)), hero: typeof r.hero === 'string' ? r.hero : '' }));
+  save.tavern = { ...t, upgrades, legends, trophies, relics, legacyBonus: legacyFor(legends.length) };
 }
 
 // Bring an older or partial save up to the current shape, or throw if it is not a save at all.

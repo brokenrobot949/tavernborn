@@ -6,8 +6,10 @@
 // sits under in `hero.gear`. Nothing is ever kept in a bag: a piece that is better than the one
 // worn goes on at once and the old one is sold, and anything else is sold on the spot.
 //
-// "Better" is rarity first, then level. So the sprite, which shows each slot's rarity, only ever
-// moves up. What a piece does is in GEAR_STATS (js/rules.js): one job per slot.
+// "Better" is more power: rarity plus a seventh of a step per level (`gearPower`, js/rules.js). So a
+// newer piece of a lower rarity can replace an old Legendary, and the sprite can step back a look.
+// A named Legendary that loses its place is never sold: it goes into the glass case at the tavern
+// (`displayLegend`, js/tavern.js). What a piece does is in GEAR_STATS: one job per slot.
 //
 // tasks.js decides when something drops and writes the Chronicle line; this file makes the piece
 // (`rollItem`, `legendItem`), judges it (`better`), and hands it over (`receive`). `gearMods`
@@ -18,7 +20,7 @@ import {
   GEAR_SLOTS, NOUNS, TRINKETS, STARTING_NAMES, STARTING_CLOAK, ADVERBS, ADJECTIVES, DEGREES, QUALITIES, WHICH, WHAT, LEGENDARIES,
 } from '../data/loot.js';
 import { DUNGEONS } from '../data/dungeons.js';
-import { GEAR_STATS, LOOT, sellPrice, mod, pick, random } from './rules.js';
+import { GEAR_STATS, GEAR_MAX_POWER, LOOT, sellPrice, mod, pick, random, gearPower } from './rules.js';
 
 export const SLOT_IDS = GEAR_SLOTS.map((s) => s.id);
 export const SLOT_BY_ID = Object.fromEntries(GEAR_SLOTS.map((s) => [s.id, s]));
@@ -38,7 +40,11 @@ export const slotOpen = (hero, slot) => slot !== 'cloak' || hero.level >= LOOT.c
 
 // ---------- what a piece does ----------
 
-const amount = (rule, item) => item.tier * rule.perTier + Math.max(0, item.level - 1) * rule.perLevel;
+const amount = (rule, item) => {
+  if (rule.perLevel != null) return Math.max(0, item.level - 1) * rule.perLevel;
+  const v = (gearPower(item) / GEAR_MAX_POWER) * rule.at20;
+  return rule.whole ? Math.round(v) : v;
+};
 
 // The numbers one piece adds, keyed like FX_KEYS: { roll: 2, critReward: 0.16 } for a weapon.
 export function itemStats(slot, item) {
@@ -96,7 +102,7 @@ export function describeAll(hero) {
 // ---------- judging ----------
 
 // Rarity first, then level. An empty slot loses to anything.
-export const better = (item, worn) => !worn || item.tier > worn.tier || (item.tier === worn.tier && item.level > worn.level);
+export const better = (item, worn) => !worn || gearPower(item) > gearPower(worn) + 1e-9 || (Math.abs(gearPower(item) - gearPower(worn)) < 1e-9 && item.tier > worn.tier);
 
 // The open slot most in need of something: empty first, then lowest rarity, then lowest level.
 export function weakestSlot(hero) {
@@ -104,7 +110,7 @@ export function weakestSlot(hero) {
   for (const id of SLOT_IDS) {
     if (!slotOpen(hero, id)) continue;
     const it = hero.gear[id];
-    const rank = it ? it.tier * 100 + it.level : -1;
+    const rank = gearPower(it);
     if (!worst || rank < worst.rank) worst = { id, rank };
   }
   return worst.id;
@@ -151,17 +157,19 @@ export function dropChance(hero, source, crit) {
 
 // ---------- handing it over ----------
 
-// Equip the piece if it is better than what is worn and sell whichever one loses.
-// Returns { equipped, old (the piece worn before, or null), gold (what the sale paid) }.
+// Equip the piece if it is better than what is worn and sell whichever one loses, unless it is a
+// named Legendary: that is handed back as `kept`, unsold, for the tavern's glass case.
+// Returns { equipped, old (the piece worn before, or null), gold (what the sale paid), kept }.
 export function receive(hero, slot, item) {
   const old = hero.gear[slot] ?? null;
   const equipped = better(item, old);
-  const sold = equipped ? old : item;
-  const gold = sold ? sellPrice(sold) : 0;
+  const loser = equipped ? old : item;
+  const kept = loser?.legend ? loser : null;
+  const gold = loser && !kept ? sellPrice(loser) : 0;
   if (equipped) hero.gear[slot] = item;
   hero.gold += gold;
   hero.stats.itemsFound += 1;
   if (equipped) hero.stats.upgrades += 1;
   hero.stats.soldFor += gold;
-  return { equipped, old, gold };
+  return { equipped, old, gold, kept };
 }

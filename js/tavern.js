@@ -18,6 +18,7 @@ import { BOSS_BY_ID } from '../data/dungeons.js';
 import { TAVERN, MAX_HEROES, MAX_LEVEL, legacyFor, paragonRankFor, paragonXpFor, xpForLevel, pick } from './rules.js';
 import { chronicle } from './hero.js';
 import { SLOT_IDS, better } from './loot.js';
+import { LEGENDARIES } from '../data/loot.js';
 
 export const UPGRADE_IDS = UPGRADES.map((u) => u.id);
 const fill = (text, values) => text.replace(/\{(\w+)\}/g, (_, key) => values[key] ?? '');
@@ -133,6 +134,23 @@ export function bestItem(hero) {
     if (it && (!best || better(it, best.item))) best = { slot, item: it };
   }
   return best ? { slot: best.slot, ...best.item } : null;
+}
+
+// ---------- the glass case ----------
+
+// A named Legendary that has lost its place (something better went on, or it was found when
+// something better was already worn) goes into the glass case in the Hall rather than being sold.
+// One of each: the case keeps the higher-level copy, with the name of the hero who brought it.
+// Returns true if the piece went in, false if the case already holds one as good (it is sold).
+//   state.tavern.relics: [{ legend (region id), level, hero (name) }], in the order they arrived
+export function displayLegend(state, hero, item) {
+  if (!item?.legend || !LEGENDARIES[item.legend]) return false;
+  const relics = (state.tavern.relics ??= []);
+  const have = relics.find((r) => r.legend === item.legend);
+  if (have && have.level >= item.level) return false;
+  if (have) Object.assign(have, { level: item.level, hero: hero.name });
+  else relics.push({ legend: item.legend, level: item.level, hero: hero.name });
+  return true;
 }
 
 // Retire a level 20 hero to the Hall of Legends. The slot is freed, the portrait and record are

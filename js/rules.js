@@ -179,23 +179,27 @@ export const skipFee = (level, secondsLeft) => Math.max(5, Math.ceil((secondsLef
 // level: a few hours of a hero's earnings at that level (450 gp at 3, 3,250 at 10, 11,500 at 20).
 export const respecPrice = (level) => 25 * level * (level + 3);
 
-// ----- gear and loot (Phase 5) -----
-// Every slot does one job. A piece's number is `tier` steps of `perTier` (Common is tier 0,
-// Legendary tier 4) plus `perLevel` for every level of the piece above 1. Nineteen levels are
-// worth a little less than one rarity step, so a rarer piece always beats a commoner one and,
-// within a rarity, a higher-level piece beats a lower. The starting kit (Common, level 1) is
-// worth exactly nothing. `keys` are the same numbers skills change (FX_KEYS in js/skills.js).
-// The weapon is the one piece with two lines: rarity sets its bonus to rolls, level what a
-// critical pays.
+// ----- gear and loot (Phase 5; level weighed more after the visual pass) -----
+// A piece's power is its rarity (Common 0 to Legendary 4) plus a seventh of a rarity step for every
+// level above 1 (`gearPower`). So seven levels are worth one step: a level 3 Legendary (power 4.3)
+// is worn until a Very Rare of level 11 or so, or a Rare of level 18, comes along. Every slot does
+// one job, and its number is `at20` (what a Legendary of level 20 gives) in proportion to power.
+// The starting kit (Common, level 1) is worth exactly nothing. Along the usual path (rarity about a
+// fifth of the level) the numbers match the Phase 5 table; a piece far ahead of its level is worth
+// less than it was. `keys` are the same numbers skills change (FX_KEYS in js/skills.js). The weapon
+// has two lines: power sets its bonus to rolls (a whole number), level what a critical pays.
+export const GEAR_LEVEL_STEP = 1 / 7;
+export const gearPower = (item) => (item ? item.tier + Math.max(0, item.level - 1) * GEAR_LEVEL_STEP : -1);
+export const GEAR_MAX_POWER = 4 + 19 * GEAR_LEVEL_STEP;
 export const GEAR_STATS = {
-  weapon: { keys: ['roll'], perTier: 1, perLevel: 0, also: { keys: ['critReward'], perTier: 0, perLevel: 0.02 } },
-  offhand: { keys: ['dodge'], perTier: 0.015, perLevel: 0.00075 },
-  head: { keys: ['hp'], perTier: 0.02, perLevel: 0.001 },
-  body: { keys: ['dr'], perTier: 0.02, perLevel: 0.001 },
-  hands: { keys: ['gold'], perTier: 0.03, perLevel: 0.0015 },
-  feet: { keys: ['travel', 'recovery'], perTier: 0.05, perLevel: 0.0025 },
-  cloak: { keys: ['rest', 'potion'], perTier: 0.04, perLevel: 0.002 },
-  trinket: { keys: ['xp'], perTier: 0.01, perLevel: 0.0005 },
+  weapon: { keys: ['roll'], at20: 4, whole: true, also: { keys: ['critReward'], perLevel: 0.02 } },
+  offhand: { keys: ['dodge'], at20: 0.07425 },
+  head: { keys: ['hp'], at20: 0.099 },
+  body: { keys: ['dr'], at20: 0.099 },
+  hands: { keys: ['gold'], at20: 0.1485 },
+  feet: { keys: ['travel', 'recovery'], at20: 0.2475 },
+  cloak: { keys: ['rest', 'potion'], at20: 0.198 },
+  trinket: { keys: ['xp'], at20: 0.0495 },
 };
 export const LOOT = {
   cloakLevel: 5, // the Cloak slot opens, and a Common cloak is handed over

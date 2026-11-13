@@ -39,11 +39,12 @@ import { LAYERS } from '../data/sprite-layers.js';
 import { layerKey } from '../js/layer-key.js';
 import { GEAR_SLOTS, LEGENDARIES, NOUNS, MILESTONES } from '../data/loot.js';
 import { SLOT_IDS, startingGear, startingCloak, gearMods, itemStats, describe, better, receive, rollItem, rollTier, legendItem, sellPrice } from '../js/loot.js';
-import { LOOT, GEAR_STATS } from '../js/rules.js';
+import { LOOT, GEAR_STATS, gearPower } from '../js/rules.js';
 import { TAVERN, MAX_HEROES, PARAGON_XP, TRAVEL_SECONDS_PER_REGION, legacyFor, paragonRankFor, paragonXpFor } from '../js/rules.js';
 import {
   UPGRADE_IDS, buyUpgrade, upgradeRank, upgradePrice, maxRank, tavernMods, trophyWall, recordTrophy, canRecruit, switchHero,
   dismissHero, retire, canRetire, portraitOf, paragonRank, paragonTitle,
+  displayLegend,
 } from '../js/tavern.js';
 import { activeHero } from '../js/hero.js';
 import { nextTask } from '../js/tasks.js';
@@ -422,7 +423,7 @@ ok(JSON.stringify(again) === JSON.stringify(up), 'loading a current save changes
 
 // ---------- Phase 5: gear and visuals ----------
 console.log('\nPhase 5 gear:');
-const rank = (it) => (it ? it.tier * 100 + it.level : -1);
+const rank = (it) => gearPower(it);
 const lootOf = (events) => events.filter((e) => e.type === 'loot');
 
 // 26. Looks: every class has five different looks in each of the seven visible slots, all baked.
@@ -445,7 +446,16 @@ const kit = fresh(5).heroes[0];
 ok(SLOT_IDS.filter((id) => kit.gear[id]).length === 6 && kit.gear.cloak === null && kit.gear.trinket === null, 'a new hero wears six Common pieces; Cloak and Trinket start empty');
 ok(Object.values(gearMods(kit)).every((v) => v === 0), 'the starting kit is worth exactly nothing, so level 1 is where it was');
 const worth = (slot, tier, level) => Object.values(itemStats(slot, { tier, level }))[0];
-ok(SLOT_IDS.every((id) => [0, 1, 2, 3].every((t) => worth(id, t + 1, 1) > worth(id, t, 20) || (id === 'weapon' && worth(id, t + 1, 1) > worth(id, t, 20)))), 'in every slot a rarer piece of level 1 beats a commoner one of level 20');
+// Seven levels are worth one rarity step: a piece one rarity lower and eight levels higher wins,
+// six levels higher does not.
+const steps = [];
+for (let t = 0; t < 4; t++) for (let l = 1; l <= 12; l++) steps.push([t, l]);
+ok(steps.every(([t, l]) => better({ tier: t, level: l + 8 }, { tier: t + 1, level: l }) && !better({ tier: t, level: l + 6 }, { tier: t + 1, level: l })),
+  'a piece one rarity lower wins at eight levels higher and loses at six: seven levels are worth one rarity step');
+ok(SLOT_IDS.every((id) => steps.every(([t, l]) => worth(id, t, l + 8) >= worth(id, t + 1, l) && worth(id, t + 1, l + 1) >= worth(id, t + 1, l))),
+  'and in every slot the better piece is worth at least as much, and a level more is never worth less');
+ok(better({ tier: 3, level: 11 }, { tier: 4, level: 3, legend: 'mugwick' }) && !better({ tier: 3, level: 10 }, { tier: 4, level: 3, legend: 'mugwick' }),
+  'the Boots of Office (Legendary, level 3) give way to a Very Rare of level 11, not 10');
 ok(SLOT_IDS.every((id) => Object.values(itemStats(id, { tier: 2, level: 12 })).every((v, i) => v >= Object.values(itemStats(id, { tier: 2, level: 6 }))[i])) && itemStats('weapon', { tier: 2, level: 12 }).critReward > itemStats('weapon', { tier: 2, level: 6 }).critReward, 'and within a rarity a higher level is worth more');
 console.log(`  a Legendary of level 20, slot by slot: ${SLOT_IDS.map((id) => describe(id, { tier: 4, level: 20 })).join('; ')}`);
 
@@ -469,6 +479,25 @@ ok(unpaid === 0, 'auto-sell: whichever piece loses is sold, and the gold arrives
 ok(wrongSlot === 0, 'every generated piece has a slot and a name of three parts or more, with no exclamation mark');
 ok(bh.stats.itemsFound === 4000 && bh.stats.upgrades > 8 && bh.stats.upgrades < 400, `nothing is kept in a bag: ${bh.stats.upgrades} of 4,000 went on, the rest were sold for ${bh.stats.soldFor} gp`);
 
+// 28b. The glass case: a named Legendary that loses its place is kept, not sold.
+{
+  const cs = placed(62, 'fighter', 'human', 12, 'peaks', 'roam');
+  const ch = cs.heroes[0];
+  ch.gear.feet = legendItem('mugwick').item; // the Boots of Office, level 3
+  const gold0 = ch.gold;
+  const swap = receive(ch, 'feet', { tier: 3, level: 12, name: 'Test Boots of the Later Road' });
+  const placedIn = swap.kept ? displayLegend(cs, ch, swap.kept) : false;
+  ok(swap.equipped && swap.kept?.legend === 'mugwick' && swap.gold === 0 && ch.gold === gold0 && placedIn && cs.tavern.relics.length === 1,
+    'a Very Rare of level 12 replaces the Boots of Office, which go into the glass case unsold');
+  const again = receive(ch, 'feet', legendItem('mugwick').item);
+  ok(!again.equipped && again.kept?.legend === 'mugwick' && !displayLegend(cs, ch, again.kept) && cs.tavern.relics.length === 1,
+    'a second copy, no better than the one in the case, is not shelved twice (the game sells it)');
+  ok(displayLegend(cs, ch, legendItem('mugwick', 20).item) && cs.tavern.relics[0].level === 20 && cs.tavern.relics.length === 1,
+    'a higher-level copy takes its place in the case');
+  const back = importSave(exportSave(cs));
+  ok(back.tavern.relics.length === 1 && back.tavern.relics[0].legend === 'mugwick' && back.tavern.relics[0].hero === ch.name, 'the glass case travels in the save string');
+}
+
 // 29. Drops from each source, through the real `advance`.
 const roamer = placed(62, 'cleric', 'human', 9, 'peaks', 'roam');
 const roamLoot = lootOf(advance(roamer, 40 * HOUR));
@@ -483,7 +512,7 @@ const afterQuest = questEvents.map((e, i) => (e.type === 'questdone' ? questEven
 ok(afterQuest.every((t) => t === 'loot'), 'the piece arrives with the quest, on the next Chronicle line');
 // A story quest's piece goes to the slot that needs it most: after six of them no starting piece is left.
 const qg = quester.heroes[0].gear;
-ok(['weapon', 'offhand', 'head', 'body', 'hands', 'feet', 'trinket'].every((id) => qg[id] && rank(qg[id]) > 1), 'story quests pay into the weakest slot: after six, and the odd jobs, no slot still holds its starting piece');
+ok(['weapon', 'offhand', 'head', 'body', 'hands', 'feet', 'trinket'].every((id) => qg[id] && rank(qg[id]) > 0), 'story quests pay into the weakest slot: after six, and the odd jobs, no slot still holds its starting piece');
 const delver = placed(63, 'fighter', 'dwarf', 20, 'saltmarrow', 'delve');
 const delveEvents = advance(delver, 30 * HOUR);
 const clearsSeen = delveEvents.filter((e) => e.type === 'cleared').length;
@@ -528,7 +557,7 @@ const cubEvents = advance(cub5, 14 * HOUR);
 const five = cubEvents.find((e) => e.type === 'levelup' && e.level === 5);
 const yh = cub5.heroes[0];
 ok(five && cubEvents.filter((e) => e.type === 'loot' && e.at < five.at).every((e) => e.slot !== 'cloak'), 'no cloak can be found before level 5: the slot is shut');
-ok(five && yh.gear.cloak && rank(yh.gear.cloak) >= 5 && cubEvents.some((e) => e.type === 'milestone' && e.level === 5), `at level 5 the Cloak slot opens with a Common cloak (${yh.gear.cloak?.name})`);
+ok(five && yh.gear.cloak && yh.gear.cloak.level >= 5 && cubEvents.some((e) => e.type === 'milestone' && e.level === 5), `at level 5 the Cloak slot opens with a Common cloak (${yh.gear.cloak?.name})`);
 ok([5, 10, 15, 20].every((l) => MILESTONES[l] && !MILESTONES[l].includes('!')), 'levels 5, 10, 15, and 20 each write a milestone line');
 
 // 33. The six loot skills do what their cards say, and no skill is waiting on a later build.
@@ -607,7 +636,8 @@ console.log(`  the hero of check 15: average rarity ${tiersAt}; at the end ${SLO
 ok([0, 1, 2, 3, 4].every((t) => wornEver.has(t)), 'over the month the simulated hero wears every rarity, Common to Legendary');
 ok(full.tierAt[10] > full.tierAt[5] && full.tierAt[15] > full.tierAt[10] && full.tierAt[20] > full.tierAt[15], 'and the average rarity of the kit rises from level 5 to 10 to 15 to 20');
 ok(Object.values(full.gear).every((t) => t != null && t >= 2) && Object.values(full.gear).some((t) => t === 4), 'ending with every slot Rare or better and at least one Legendary, so every visible slot has changed look');
-ok(GEAR_STATS.weapon.perTier === 1, 'a weapon adds its rarity to every roll');
+ok(itemStats('weapon', { tier: 4, level: 20 }).roll === 4 && steps.every(([t, l]) => Number.isInteger(itemStats('weapon', { tier: t, level: l }).roll ?? 0)),
+  'a weapon adds a whole number to every roll: +4 for a Legendary of level 20');
 
 // ---------- Phase 6: the tavern and legacy ----------
 { // its own scope, so its names do not collide with the checks above

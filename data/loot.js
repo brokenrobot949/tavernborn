@@ -137,6 +137,11 @@ export const LOOT_LINES = {
   ],
   legend: 'Found: {item}. {flavor}',
   legendOver: '{old} is sold for {gold} gp and not missed.',
+  // A named Legendary is never sold while the glass case at the tavern has room for it.
+  shelved: '{old} goes into the glass case at The Wobbly Griffin, where the regulars may look at it and not touch it.',
+  upgradeShelved: 'Found: {item}. It replaces {old}, which goes into the glass case at The Wobbly Griffin rather than to a pedlar.',
+  legendShelved: 'Found: {item}. {flavor} What {name} wears already does the job better, so it goes into the glass case at The Wobbly Griffin.',
+  legendSpare: 'Found: {item}, again. The glass case at The Wobbly Griffin holds a better one already, so this one is sold for {gold} gp.',
 };
 
 // Level milestones on the sprite (design doc, "Hero visuals"). {name} is the hero, {title} the

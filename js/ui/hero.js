@@ -17,7 +17,8 @@ import { currentQuest, clericFee, payCleric } from '../tasks.js';
 import { subclassName } from '../skills.js';
 import { el, num, heroClock, confirmBtn } from './dom.js';
 import { icon } from './icons.js';
-import { foeSvg, shapeFor, pickBy, popRoll, burst, arrival, weatherFor } from './scene-fx.js';
+import { shapeFor, pickBy, popRoll, burst, arrival, weatherFor } from './scene-fx.js';
+import { foeCanvas } from './foes.js';
 import { MONSTERS } from '../../data/monsters.js';
 import { sfx } from '../audio.js';
 
@@ -31,14 +32,15 @@ const OPEN_SKY = new Set(['mugwick', 'saltmarrow', 'peaks', 'gloamfen', 'cinder'
 const MONSTER_BY_ID = Object.fromEntries(Object.values(MONSTERS).flat().map((m) => [m.id, m]));
 const POPS_UP_TO = 3; // dice rise only for what happened in the last few seconds, not for a long gap
 
-// The foe the hero is facing in this task, as [shape, glint colour, key], or null for none (travel,
-// rests, and dungeon rooms that are a trap or a puzzle rather than a monster).
+// The foe the hero is facing in this task, as [shape, name, kind, key], or null for none (travel,
+// rests, and dungeon rooms that are a trap or a puzzle rather than a monster). The name picks the
+// colours (js/ui/foes.js); a quest step has no named foe, so its shape is picked from the task text.
 function foeOf(hero, t) {
   if (!t) return null;
-  if ((t.kind === 'roam' || t.kind === 'delve') && t.monster) { const m = MONSTER_BY_ID[t.monster]; return m ? [shapeFor(m.name), '#ff5a3a', t.monster] : null; }
-  if (t.kind === 'boss') { const b = DUNGEONS[hero.region].boss; return [shapeFor(b.name), '#ffcf4a', 'boss:' + b.name]; }
-  if (t.kind === 'rift') return [pickBy(t.text, ['eye', 'flame', 'humanoid', 'blob']), '#b98cff', 'rift:' + t.text];
-  if (t.kind === 'quest') return [pickBy(t.text, ['humanoid', 'beast', 'small', 'critter', 'humanoid']), '#ff5a3a', 'quest:' + t.text];
+  if ((t.kind === 'roam' || t.kind === 'delve') && t.monster) { const m = MONSTER_BY_ID[t.monster]; return m ? [shapeFor(m.name), m.name, '', t.monster] : null; }
+  if (t.kind === 'boss') { const b = DUNGEONS[hero.region].boss; return [shapeFor(b.name), b.name, 'boss', 'boss:' + b.name]; }
+  if (t.kind === 'rift') return [pickBy(t.text, ['eye', 'flame', 'humanoid', 'blob']), '', 'rift', 'rift:' + t.text];
+  if (t.kind === 'quest') return [pickBy(t.text, ['humanoid', 'beast', 'small', 'critter', 'humanoid']), '', '', 'quest:' + t.text];
   return null;
 }
 
@@ -265,11 +267,11 @@ export function mountHero(root, app) {
       weather.dataset.kind = !inTavern && !inDungeon && !inRift ? weatherFor(hero.region) : '';
       // The foe: there once the hero has walked up to it, gone between fights and during travel.
       const f = !inTavern && engaged(t) ? foeOf(hero, t) : null;
-      const fk = f ? f[2] + t.text : '';
+      const fk = f ? f[3] + t.text : '';
       if (fk !== foeKey) {
         foeKey = fk;
-        foe.replaceChildren(...(f ? [foeSvg(f[0], f[1])] : []));
-        foe.className = 'foe' + (f ? ' here ' + f[0] : '');
+        foe.replaceChildren(...(f ? [foeCanvas(f[0], f[1], f[2])] : []));
+        foe.className = 'foe' + (f ? ' here ' + f[0] + (f[2] === 'boss' ? ' boss' : '') : '');
       }
       const hung = inTavern ? trophyWall(state).hung : [];
       if (hung.join() !== wallKey) {

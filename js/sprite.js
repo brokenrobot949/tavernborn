@@ -184,8 +184,10 @@ export class SpriteView {
     this.render();
   }
 
-  async set({ look = this.look, anim = this.anim, facing = this.facing } = {}) {
+  // `still`: stand on the walk sheet's standing frame instead of walking (the tavern's regulars).
+  async set({ look = this.look, anim = this.anim, facing = this.facing, still = false } = {}) {
     const restart = anim !== this.anim;
+    this.still = still && anim === 'walk';
     this.look = look;
     this.anim = anim;
     this.facing = facing;
@@ -205,6 +207,7 @@ export class SpriteView {
     // a wisp or a glow moves on its own, a little smoother than the walk cycle
     if (this.look?.fx && t < this.nextAt && t - this.fxAt > 60) { this.fxAt = t; this.render(t); }
     if (t < this.nextAt) return;
+    if (this.still) { this.nextAt = t + 60; if (this.look?.fx) this.render(t); return; }
     this.step = (this.step + 1) % this.prep.cycle.length;
     // hold the last frame of an attack or a fall for a moment before looping
     const hold = this.step === this.prep.cycle.length - 1 ? a.rest ?? 0 : 0;
@@ -219,7 +222,8 @@ export class SpriteView {
     if (!prep) return;
     bctx.clearRect(0, 0, 192, 192);
     const row = prep.rows === 1 ? 0 : FACINGS.indexOf(this.facing);
-    drawFrame(bctx, prep, this.step, row);
+    if (this.still) drawFrame(bctx, { ...prep, cycle: [{ body: 0, col: 0 }] }, 0, row);
+    else drawFrame(bctx, prep, this.step, row);
     ctx.imageSmoothingEnabled = false;
     // place the 64 px body frame centred, feet near the ground line
     const frameX = (this.stageW - FRAME) / 2, frameY = this.stageH - this.ground - FRAME;

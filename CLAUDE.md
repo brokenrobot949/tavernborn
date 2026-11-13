@@ -202,7 +202,37 @@ Rob is the game designer and does not write code.
 - Home screen: `manifest.webmanifest` and `assets/icons/` (192, 512, maskable 512, and the Apple 180), so
   the game can be added to a phone's home screen and opens full screen. The icons are drawn by
   `tools/make-icons.html` from the game's own LPC layers (a Human Fighter in Rare gear), already credited.
-- `node tools/check-sim.mjs` (203 checks) adds two for the kept highlights. No rule or pacing change.
+- Round three (Rob's notes on gear, the tavern, and the foes):
+  - Gear is judged by power (`gearPower` in `js/rules.js`): rarity plus a seventh of a rarity step per level
+    above 1, so seven levels are worth one step. A level 3 Legendary (the Boots of Office) gives way to a Very
+    Rare of level 11 or a Rare of level 18. Each slot's number is `at20` (what a level 20 Legendary gives, the
+    same totals as before) in proportion to power; the weapon's roll bonus is rounded to a whole number. Along
+    the usual path the numbers match the Phase 5 table; a piece far ahead of its level is worth less than it
+    was. The sprite can now step back a look when a newer, commoner piece wins. `better`, `weakestSlot`, and
+    `bestItem` all use power.
+    Measured after the change (`node tools/simulate.mjs`, 500 heroes): median level 20 at 29.6 days (10th to
+    90th: 27.7 to 32.2), every level within 4% of its target except level 3 (+11%, as before), all 500 clear
+    the last dungeon. At the end 63% of slots are Very Rare and 37% Legendary (was 56 / 44); 493 of 500 heroes
+    still wear a Legendary.
+  - The glass case: a named Legendary that loses its place is not sold (`receive` returns it as `kept`).
+    `displayLegend` (js/tavern.js) puts it in `state.tavern.relics` ({ legend, level, hero }), one of each,
+    keeping the higher level; a copy no better than the one in the case is sold. Chronicle lines in
+    `LOOT_LINES` (`upgradeShelved`, `shelved`, `legendShelved`, `legendSpare`). Shown in the Tavern tab's Hall
+    section (a shelf per named Legendary, empty ones saying where each comes from) and as gems in a small
+    case on the common room wall. Saves stay version 5; `tavernFields` keeps only valid relics.
+  - The common room (`js/ui/common-room.js`): a pixel-art hearth drawn every frame (stone surround, mantel,
+    logs, a fire from layered sines, embers) with a flickering glow, and every hero on the roster walking
+    about on real LPC walk frames (`SpriteView` at half size, two screen pixels to a sprite pixel): to the
+    fire, the window, the bar, the door, the middle of the room, standing a few seconds on the standing
+    frame (`still` on `SpriteView.set`) facing what they came for, then off again. It pauses while the
+    Tavern tab is hidden.
+  - Foes v2 (`js/ui/foes.js`): pixel art instead of dark shapes. Twelve hand-drawn maps facing left, with
+    the outline added in code round every filled pixel as LPC draws its own, drawn four or five screen pixels
+    to a map pixel (the hero is four). A palette per kind and colours per monster by name (`VARIANTS`); the
+    Rifts are violet, bosses have gold eyes. They step in, bob, and flinch in steps, like the sprites.
+- `node tools/check-sim.mjs` (209 checks) adds two for the kept highlights and, for round three, seven
+  levels to a rarity step, the Boots of Office giving way at Very Rare 11, whole-number weapon rolls, and the
+  glass case (unsold, one of each, the higher copy, in the save string).
 - Spec departures to raise with Rob: the time of day comes from the phone's clock, not from the hero's own day
   count; the Highlights list keeps 60 lines at most.
 
@@ -291,9 +321,9 @@ Rob is the game designer and does not write code.
   (`css/backdrops.css`), the knockout fall, the Gear tab, loot on the away card, the real effect of the six
   loot skills, and gear in the simulator's report.
 - A piece of gear is `{ tier (0 Common to 4 Legendary), level, name }`, plus `legend` (a region id) on a named
-  Legendary. It sits in `hero.gear[slot]`; there is no inventory. "Better" is rarity first, then level
-  (`better` in `js/loot.js`), so the sprite, which shows each slot's rarity, only ever moves up. A better
-  piece goes on at once and whichever piece loses is sold (`sellPrice` in `js/rules.js`).
+  Legendary. It sits in `hero.gear[slot]`; there is no inventory. "Better" was rarity first, then level, in
+  Phase 5; since round three of the visual pass it is power (see that section). A better piece goes on at
+  once and whichever piece loses is sold (`sellPrice` in `js/rules.js`), except a named Legendary.
 - What gear does (`GEAR_STATS` in `js/rules.js`): one job per slot. Weapon: +1 to every roll per rarity step,
   and criticals pay more with its level. Off-hand: chance to halve a hit. Head: hit points. Body: damage
   taken. Hands: gold. Feet: travel and knockout recovery. Cloak: healing from rests and potions. Trinket: XP.

@@ -16,6 +16,8 @@ import { REGIONS } from '../../data/regions.js';
 import { DUNGEONS } from '../../data/dungeons.js';
 import { showChapter } from './story.js';
 import { REGION_COLORS } from './map.js';
+import { mountCommonRoom } from './common-room.js';
+import { LEGENDARIES } from '../../data/loot.js';
 import { RACES } from '../../data/races.js';
 import { CLASSES } from '../../data/classes.js';
 import { TIERS } from '../../data/items.js';
@@ -95,14 +97,11 @@ export function mountTavern(root, app) {
   };
 
   // ----- the sign and the common room -----
-  const room = el('div', { className: 'scene mini common-room', attrs: { 'data-bg': 'tavern', 'aria-hidden': 'true' } },
-    el('div', { className: 'bd' }), el('div', { className: 'tavern-window' }));
-  const plaques = el('div', { className: 'trophy-wall' });
-  const regulars = el('div', { className: 'regulars' });
-  room.append(plaques, regulars);
+  const commonRoom = mountCommonRoom();
   const talk = el('p', { className: 'bar-talk', attrs: { 'aria-live': 'off' } });
-  let roomKey = '';
   let talkAt = -1;
+  const caseBox = el('div', {});
+  let caseKey = '';
 
   const page = (id, label, glyph, ...kids) => ({ id, label, icon: icon(glyph), node: el('div', {}, ...kids) });
   const pages = [
@@ -119,6 +118,9 @@ export function mountTavern(root, app) {
       el('section', { className: 'panel' },
         el('h3', { textContent: 'The Hall of Legends' }),
         hallBox),
+      el('section', { className: 'panel glass-case' },
+        el('h3', {}, icon('trinket'), el('span', { textContent: 'The glass case' })),
+        caseBox),
       el('section', { className: 'panel' },
         el('h3', { textContent: 'The trophy wall' }),
         trophyBox)),
@@ -162,28 +164,17 @@ export function mountTavern(root, app) {
   root.append(
     el('header', { className: 'inn-sign' }, el('span', { className: 'sign-chain left' }), el('span', { className: 'sign-chain right' }),
       el('div', { className: 'sign-board' }, el('small', { textContent: 'Rooms, ale, and a cleric' }), el('h2', { textContent: 'The Wobbly Griffin' }))),
-    room,
+    commonRoom.room,
     el('div', { className: 'bar-talk-box' }, icon('mug'), talk),
     tabs.nav,
     ...pages.map((p) => p.node),
   );
 
-  // The common room: plaques for the trophies hung, the window showing the time of day, and every
-  // hero on the roster standing about. Redrawn only when one of those changes.
+  // The common room (js/ui/common-room.js): the hearth, the wall, and the heroes walking about; the
+  // window shows the time of day. And one line overheard at the bar.
   function drawRoom(state) {
-    room.dataset.time = timeOfDay();
-    const hung = trophyWall(state).hung;
-    const looks = state.heroes.map((h) => portraitOf(h));
-    const key = JSON.stringify([hung, looks]);
-    if (key !== roomKey) {
-      roomKey = key;
-      plaques.replaceChildren(...hung.map((id) => { const i = el('i', { title: TROPHIES[id] }); i.style.setProperty('--trophy', TROPHY_COLORS[id]); return i; }));
-      regulars.replaceChildren(...state.heroes.map((h, n) => {
-        const c = el('canvas', { className: 'regular', attrs: { title: h.name } });
-        drawPortrait(c, looks[n], 2);
-        return c;
-      }));
-    }
+    commonRoom.setTime(timeOfDay());
+    commonRoom.update(state);
     const at = Math.floor(Date.now() / 1000 / TALK_SECONDS);
     if (at !== talkAt) {
       talkAt = at;
@@ -382,9 +373,38 @@ export function mountTavern(root, app) {
     tabs.badge('bard', '');
   }
 
+  // The glass case: every named Legendary a hero of this tavern has outgrown, one shelf each.
+  function drawCase(state) {
+    const relics = state.tavern.relics ?? [];
+    const key = JSON.stringify(relics);
+    if (key === caseKey) return;
+    caseKey = key;
+    const shelves = REGIONS.map((r) => {
+      const l = LEGENDARIES[r.id];
+      const got = relics.find((x) => x.legend === r.id);
+      if (!got) {
+        return el('li', { className: 'shelf empty' },
+          el('span', { className: 'slot-icon' }, icon(l.slot)),
+          el('div', {}, el('p', { className: 'shelf-name', textContent: 'An empty shelf' }), el('p', { className: 'hint', textContent: `For ${l.name}, from ${DUNGEONS[r.id].name}, once a hero outgrows it.` })));
+      }
+      const li = el('li', { className: 'shelf' },
+        el('span', { className: 'slot-icon' }, icon(l.slot)),
+        el('div', {},
+          el('p', { className: 'shelf-name', textContent: l.name }),
+          el('p', { className: 'shelf-meta', textContent: `Legendary ${SLOT_BY_ID[l.slot].name.toLowerCase()}, level ${got.level}${got.hero ? `. Brought home by ${got.hero}` : ''}.` }),
+          el('p', { className: 'shelf-flavor', textContent: l.flavor })));
+      li.style.setProperty('--tier', TIERS[4].color);
+      return li;
+    });
+    caseBox.replaceChildren(
+      el('p', { className: 'hint', textContent: `${relics.length} of ${REGIONS.length} named Legendaries on display. When a hero finds something better than a named Legendary, the Legendary comes here instead of going to a pedlar.` }),
+      el('ul', { className: 'shelves' }, ...shelves));
+  }
+
   function update(state, hero) {
     current = { state, hero };
     drawRoom(state);
+    drawCase(state);
     drawBard(state);
     drawUpgrades(state, hero);
     drawTrophies(state);

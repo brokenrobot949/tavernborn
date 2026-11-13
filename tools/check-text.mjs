@@ -75,7 +75,7 @@ export async function gather() {
       collect(value, `${name}.${exp}`, lines, exp);
     }
   }
-  const code = ['js/ui/hero.js', 'js/ui/map.js', 'js/ui/skills.js', 'js/ui/gear.js', 'js/ui/tavern.js', 'js/ui/create.js', 'js/ui/away.js', 'js/ui/story.js', 'js/ui/legacy.js', 'js/ui/settings.js', 'js/ui/credits.js', 'js/ui/scene-fx.js', 'js/tasks.js', 'js/tavern.js', 'js/loot.js', 'js/skills.js', 'js/hero.js', 'js/state.js', 'js/main.js'];
+  const code = ['js/ui/hero.js', 'js/ui/map.js', 'js/ui/skills.js', 'js/ui/gear.js', 'js/ui/tavern.js', 'js/ui/create.js', 'js/ui/away.js', 'js/ui/story.js', 'js/ui/legacy.js', 'js/ui/settings.js', 'js/ui/credits.js', 'js/ui/scene-fx.js', 'js/ui/foes.js', 'js/ui/common-room.js', 'js/tasks.js', 'js/tavern.js', 'js/loot.js', 'js/skills.js', 'js/hero.js', 'js/state.js', 'js/main.js'];
   for (const f of code) if (fs.existsSync(ROOT + f)) lines.push(...codeStrings(f));
   return lines;
 }

@@ -48,11 +48,12 @@ import {
   OUTMATCHED_DC, OUTMATCHED_DAMAGE, GRUDGE_BONUS, WHAT_IF, grownDc, grownDamage,
   QUEST_STEP_SECONDS, QUEST_XP_PER_SECOND, QUEST_DONE_XP, QUEST_DAMAGE, QUEST_GOLD, questDoneGold, STORY_QUESTS,
   DELVE_XP_PER_SECOND, DELVE_GOLD, BOSS_SECONDS, BOSS_XP, BOSS_LOSS_SHARE, bossGold, DUNGEON_POTIONS, CONFIDENCE_LIMIT,
-  TRAVEL_SECONDS_PER_REGION, RETURN_SECONDS_PER_REGION, LOOT, MAX_LEVEL, RIFT,
+  TRAVEL_SECONDS_PER_REGION, RETURN_SECONDS_PER_REGION, LOOT, MAX_LEVEL, RIFT, sellPrice,
 } from './rules.js';
 import { chronicle, gainXp, maxHp, regionOpen } from './hero.js';
 import { skillMods, SUBCLASS_LEVEL } from './skills.js';
 import { gearMods, rollItem, weakestSlot, legendItem, wearsLegend, receive, dropChance, startingCloak, describe, rarityName, flavorOf, SLOT_BY_ID } from './loot.js';
+import { displayLegend } from './tavern.js';
 import { LOOT_LINES, LEGENDARIES, MILESTONES, TITLES } from '../data/loot.js';
 import { RIFT_TEXT, TROPHIES, TROPHY_HUNG, TROPHY_WAITING, PARAGON_LINE, RIFTS_OPEN } from '../data/tavern.js';
 import { tavernMods, recordTrophy, paragonRank, paragonTitle } from './tavern.js';
@@ -98,11 +99,19 @@ function loot(state, hero, events, opts) {
   const { slot, item } = opts.legend ? legendItem(opts.legend, opts.legendLevel) : rollItem(state, hero, { ...opts, quality: sk.n.quality + (opts.quality ?? 0) });
   const before = maxHp(hero);
   const got = receive(hero, slot, item);
+  // A named Legendary that lost its place goes into the tavern's glass case, unless the case has one
+  // as good already: then it is sold like anything else.
+  const shelved = got.kept ? displayLegend(state, hero, got.kept) : false;
+  if (got.kept && !shelved) { got.gold = sellPrice(got.kept); hero.gold += got.gold; hero.stats.soldFor += got.gold; }
   const gained = maxHp(hero) - before; // a better helm adds its hit points at once
   if (gained > 0 && hero.knockedOutUntil == null) hero.hp += gained;
   const values = { item: item.name, old: got.old?.name, gold: got.gold, slot: SLOT_BY_ID[slot].name, name: hero.name, flavor: flavorOf(item) };
-  const text = item.legend ? fill(LOOT_LINES.legend, values) + (got.old ? ' ' + fill(LOOT_LINES.legendOver, values) : '')
+  values.gold = got.gold;
+  const oldShelved = got.equipped && got.old?.legend && shelved;
+  const text = item.legend && !got.equipped ? fill(shelved ? LOOT_LINES.legendShelved : LOOT_LINES.legendSpare, values)
+    : item.legend ? fill(LOOT_LINES.legend, values) + (got.old ? ' ' + fill(oldShelved ? LOOT_LINES.shelved : LOOT_LINES.legendOver, values) : '')
     : !got.equipped ? fill(pick(state, LOOT_LINES.sold), values)
+    : oldShelved ? fill(LOOT_LINES.upgradeShelved, values)
     : got.old ? fill(pick(state, LOOT_LINES.upgrade), values)
     : fill(pick(state, LOOT_LINES.first), values);
   const does = describe(slot, item);
