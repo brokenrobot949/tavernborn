@@ -1,5 +1,6 @@
 // Map tab: the world map (drawn in code, nothing to download), the details of the region tapped,
 // travel, and the standing order: Roam, Quest, or Delve, and from level 20 the Planar Rifts.
+// While the hero is on the road, they walk along it on the map, in their own gear.
 //
 // The page is rebuilt only when something it shows has changed, so a tap is never lost to the
 // once-a-second redraw.
@@ -15,6 +16,8 @@ import { RIFT_NAME, RIFT_TEXT } from '../../data/tavern.js';
 import { el } from './dom.js';
 import { showChapter } from './story.js';
 import { icon, ICONS } from './icons.js';
+import { SpriteView, heroLook } from '../sprite.js';
+import { portraitOf } from '../tavern.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const svg = (tag, attrs = {}, ...kids) => {
@@ -114,6 +117,15 @@ export function mountMap(root, app) {
   let selected = null; // region id whose details are showing; follows the hero until tapped
   let followed = null;
   let key = '';
+  // The hero on the road: a small walking sprite placed along the road by how far the journey has got.
+  const walkCanvas = el('canvas', {});
+  const walker = el('div', { className: 'map-walker', hidden: true }, walkCanvas);
+  const walkView = new SpriteView(walkCanvas, { stageW: 64, stageH: 64, ground: 1 });
+  let walkLook = '';
+  let walkFacing = '';
+  let svgNow = null; // the map drawn last, for measuring the road
+  let frameNow = null;
+  let legs = []; // the road's legs as path elements, for measuring
 
   function draw(hero) {
     const here = REGION_INDEX[hero.region];
@@ -133,6 +145,9 @@ export function mountMap(root, app) {
       svg('path', { d: roadPath(), class: 'road' }),
       svg('path', { d: SPOTS.slice(1, openUpTo + 1).map((_, i) => roadLeg(i)).join(' '), class: 'road-done' }),
       compass());
+    // The road leg by leg, unseen, so the walker can be placed along it.
+    legs = SPOTS.slice(1).map((_, i) => svg('path', { d: roadLeg(i), fill: 'none', stroke: 'none' }));
+    map.append(svg('g', { class: 'legs', 'aria-hidden': 'true' }, ...legs));
     REGIONS.forEach((r, i) => {
       const s = SPOTS[i];
       const open = regionOpen(hero, r.id);
@@ -257,11 +272,57 @@ export function mountMap(root, app) {
     ]);
     if (next === key) return;
     key = next;
+    svgNow = draw(hero);
+    frameNow = el('div', { className: 'map-frame' }, svgNow, walker);
     root.replaceChildren(
       el('h2', { className: 'view-title', textContent: 'The road from The Wobbly Griffin' }),
-      el('div', { className: 'map-frame' }, draw(hero)),
+      frameNow,
       details(state, hero),
       orders(hero));
   }
-  return { update };
+
+  // Where along the road the hero is: from one spot to another, a share of the way there.
+  function placeWalker(hero) {
+    const t = hero.currentTask;
+    const going = t && (t.kind === 'travel' || t.kind === 'return');
+    walker.hidden = !going || !svgNow || root.hidden;
+    if (walker.hidden) return;
+    const from = t.kind === 'return' ? REGION_INDEX[hero.region] : hero.returning ? 0 : REGION_INDEX[hero.region];
+    const to = t.kind === 'return' ? 0 : REGION_INDEX[t.to];
+    const share = Math.min(1, (t.elapsed + 1) / t.duration); // a second ahead; the CSS eases the rest
+    const step = to >= from ? 1 : -1;
+    const lens = [];
+    for (let i = from; i !== to; i += step) lens.push(legs[Math.min(i, i + step)].getTotalLength());
+    let d = share * lens.reduce((a, b) => a + b, 0);
+    let pt = SPOTS[from];
+    let facing = 'right';
+    for (let k = 0, i = from; i !== to; k++, i += step) {
+      const leg = legs[Math.min(i, i + step)];
+      if (d <= lens[k] || i + step === to) {
+        const along = Math.min(d, lens[k]);
+        pt = leg.getPointAtLength(step > 0 ? along : lens[k] - along);
+        facing = SPOTS[i + step].x < SPOTS[i].x ? 'left' : 'right'; // the way this stretch of road goes
+        break;
+      }
+      d -= lens[k];
+    }
+    // From the map's own units (340 by 400) to pixels in the frame.
+    const box = svgNow.getBoundingClientRect();
+    const frame = frameNow.getBoundingClientRect();
+    if (!box.width) return;
+    walker.style.left = `${box.left - frame.left + (pt.x / 340) * box.width}px`;
+    walker.style.top = `${box.top - frame.top + (pt.y / 400) * box.height}px`;
+    const look = JSON.stringify(portraitOf(hero));
+    if (look !== walkLook || facing !== walkFacing) {
+      walkLook = look;
+      walkFacing = facing;
+      walkView.set({ look: heroLook(portraitOf(hero)), anim: 'walk', facing });
+    }
+  }
+
+  function updateAll(state, hero) {
+    update(state, hero);
+    placeWalker(hero);
+  }
+  return { update: updateAll };
 }

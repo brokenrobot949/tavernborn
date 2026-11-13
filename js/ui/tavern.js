@@ -1,5 +1,6 @@
 // Tavern tab: the inn sign, the common room (the roster standing about, the trophy plaques, and a
-// line overheard at the bar), then six sections behind tabs: upgrades; heroes; the Hall of
+// line overheard at the bar), a festival card while one runs, then sections behind tabs: the
+// travelling merchant; upgrades; heroes; the Hall of
 // Legends and the trophy wall; the bard, who sings back the story chapters the tavern has heard;
 // the cleric and respec; and settings, the save string, and the workshop links.
 //
@@ -29,6 +30,9 @@ import { icon } from './icons.js';
 import { timeOfDay } from './hero.js';
 import { mountSettings } from './settings.js';
 import { sfx } from '../audio.js';
+import { MERCHANT_TEXT, BOON_TEXT } from '../../data/market.js';
+import { merchantOn, nextVisit, warePrice, boughtToday, buyWare, festivalOn, hasJoined, joinFestival } from '../road.js';
+import { checkDeeds } from '../deeds.js';
 
 const pct = (v) => `${Math.round(v * 100)}%`;
 const UPGRADE_ICONS = { room: 'bed', stable: 'horse', notice: 'board', trophies: 'trophy' };
@@ -103,8 +107,17 @@ export function mountTavern(root, app) {
   const caseBox = el('div', {});
   let caseKey = '';
 
+  // ----- a festival, while one runs -----
+  const festivalBox = el('section', { className: 'panel festival-card', hidden: true });
+  let festivalKey = '';
+  // ----- the travelling merchant -----
+  const merchantBox = el('div', {});
+  let merchantKey = '';
+
   const page = (id, label, glyph, ...kids) => ({ id, label, icon: icon(glyph), node: el('div', {}, ...kids) });
   const pages = [
+    page('merchant', 'Merchant', 'cart',
+      el('section', { className: 'panel' }, merchantBox)),
     page('upgrades', 'Upgrades', 'hammer',
       el('section', { className: 'panel' },
         el('h3', { textContent: 'Upgrades' }),
@@ -166,20 +179,91 @@ export function mountTavern(root, app) {
       el('div', { className: 'sign-board' }, el('small', { textContent: 'Rooms, ale, and a cleric' }), el('h2', { textContent: 'The Wobbly Griffin' }))),
     commonRoom.room,
     el('div', { className: 'bar-talk-box' }, icon('mug'), talk),
+    festivalBox,
     tabs.nav,
     ...pages.map((p) => p.node),
   );
 
   // The common room (js/ui/common-room.js): the hearth, the wall, and the heroes walking about; the
   // window shows the time of day. And one line overheard at the bar.
+  // While a festival runs, every other line overheard is about it.
   function drawRoom(state) {
+    const fest = festivalOn(new Date());
     commonRoom.setTime(timeOfDay());
+    commonRoom.setFestival(fest?.deco);
     commonRoom.update(state);
     const at = Math.floor(Date.now() / 1000 / TALK_SECONDS);
     if (at !== talkAt) {
       talkAt = at;
-      talk.textContent = BAR_TALK[at % BAR_TALK.length];
+      talk.textContent = fest && at % 2 ? fest.talk[Math.floor(at / 2) % fest.talk.length] : BAR_TALK[at % BAR_TALK.length];
     }
+  }
+
+  // The festival card: what it is, and joining in once this year for a day of festive spirits.
+  function drawFestival(state, hero) {
+    const now = new Date();
+    const f = festivalOn(now);
+    const joined = f ? hasJoined(hero, f, now) : false;
+    const key = f ? [f.id, hero.id, joined].join('|') : '';
+    if (key === festivalKey) return;
+    festivalKey = key;
+    festivalBox.hidden = !f;
+    if (!f) return;
+    const until = new Date(now.getFullYear() + (f.to[0] < now.getMonth() + 1 ? 1 : 0), f.to[0] - 1, f.to[1]);
+    const kids = [
+      el('h3', {}, icon('lantern'), el('span', { textContent: f.name })),
+      el('p', { className: 'festival-about', textContent: f.about }),
+      el('p', { className: 'hint', textContent: `Until ${until.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}. Joining in gives ${hero.name} a day of festive spirits: ${BOON_TEXT.festive.does}. Each hero may join once a year.` }),
+    ];
+    if (joined) kids.push(el('p', { className: 'hint', textContent: `${hero.name} has joined in this year already.` }));
+    else kids.push(el('div', { className: 'row' }, el('button', { className: 'btn primary', type: 'button', textContent: f.join, onclick: () => {
+      if (current && joinFestival(current.state, current.hero, new Date())) { checkDeeds(current.hero); sfx('levelup'); app.changed(); }
+    } })));
+    festivalBox.replaceChildren(...kids);
+  }
+
+  // The merchant's cart: in the yard today with four wares, or out on the road until a named day.
+  function drawMerchant(state, hero) {
+    const now = new Date();
+    const visit = merchantOn(now);
+    const bought = boughtToday(state, now);
+    const key = JSON.stringify([visit.day, visit.here, bought, hero.id, hero.level, visit.wares.map((w) => hero.gold >= warePrice(hero, w))]);
+    if (key === merchantKey) return;
+    merchantKey = key;
+    const head = el('div', { className: 'merchant-head' },
+      el('span', { className: 'cart' }, icon('cart')),
+      el('div', {}, el('p', { className: 'merchant-name', textContent: MERCHANT_TEXT.name }), el('p', { className: 'hint', textContent: MERCHANT_TEXT.about })));
+    if (!visit.here) {
+      const days = nextVisit(now);
+      const when = days === 1 ? 'tomorrow' : days ? `on ${new Date(now.getFullYear(), now.getMonth(), now.getDate() + days).toLocaleDateString('en-GB', { weekday: 'long' })}` : 'some day soon';
+      merchantBox.replaceChildren(el('h3', { textContent: 'The travelling merchant' }), head, el('p', { className: 'region-line', textContent: MERCHANT_TEXT.away.replace('{when}', when) }));
+      tabs.badge('merchant', '');
+      return;
+    }
+    const wares = visit.wares.map((w) => {
+      const price = warePrice(hero, w);
+      const sold = bought.includes(w.id);
+      const b = sold ? el('span', { className: 'tag', textContent: 'Sold' })
+        : confirmBtn(`${num(price)} gp`, 'Tap again: buy', () => {
+          if (!current) return;
+          const r = buyWare(current.state, current.hero, w.id, new Date());
+          if (r) { checkDeeds(current.hero); sfx('coins'); app.changed(); }
+        }, 'btn primary');
+      if (!sold) b.disabled = hero.gold < price;
+      const boon = w.boon ? BOON_TEXT[w.boon[0]].does : '';
+      const does = w.boon ? `${boon[0].toUpperCase() + boon.slice(1)} for ${w.boon[1]} hours.` : w.potions ? `${w.potions} more potions on the next dungeon or Rifts run.` : `One piece of gear of level ${hero.level}, worn at once if it is better.`;
+      return el('li', { className: 'ware' + (sold ? ' sold' : '') },
+        el('span', { className: 'ware-name', textContent: w.name }), b,
+        el('p', { className: 'hint', textContent: `${w.about.replace(/\{name\}/g, hero.name)} ${does}` }));
+    });
+    const left = visit.wares.filter((w) => !bought.includes(w.id));
+    merchantBox.replaceChildren(
+      el('h3', { textContent: 'The travelling merchant' }), head,
+      el('p', { className: 'region-line', textContent: `${MERCHANT_TEXT.here} ${visit.greeting}` }),
+      el('p', { className: 'hint', textContent: `Bought from the purse of ${hero.name} (${num(hero.gold)} gp). Prices rise with level. One of each, each visit.` }),
+      left.length ? el('span', {}) : el('p', { className: 'hint', textContent: MERCHANT_TEXT.soldOut }),
+      el('ul', { className: 'wares' }, ...wares));
+    tabs.badge('merchant', left.filter((w) => hero.gold >= warePrice(hero, w)).length || '');
   }
 
   // ---------- panels ----------
@@ -316,7 +400,7 @@ export function mountTavern(root, app) {
         el('div', { className: 'legend-top' },
           el('div', { className: 'portrait-frame' }, canvas),
           el('div', {},
-            el('p', { className: 'legend-name', textContent: l.name }),
+            el('p', { className: 'legend-name', textContent: l.title ? `${l.name} ${l.title}` : l.name }),
             el('p', { className: 'hint', textContent: `${who(l)}${sub ? ', ' + sub : ''}${l.paragon ? `. Paragon ${l.paragon}, ${paragonTitle(l.paragon)}` : ''}.` }),
             el('p', { className: 'legend-line', textContent: l.line }))),
         el('ul', { className: 'stats' },
@@ -404,6 +488,8 @@ export function mountTavern(root, app) {
   function update(state, hero) {
     current = { state, hero };
     drawRoom(state);
+    drawFestival(state, hero);
+    drawMerchant(state, hero);
     drawCase(state);
     drawBard(state);
     drawUpgrades(state, hero);

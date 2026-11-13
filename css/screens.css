@@ -484,3 +484,183 @@
 .panel.glass-case h3 { display: flex; align-items: center; gap: 8px; }
 .panel.glass-case h3 .icon { color: #c9962c; }
 @media (prefers-reduced-motion: reduce) { .hearth-glow, .relic-case i { animation: none; } }
+
+/* =====================================================================================================
+   Round four (after Phase 7): choices on the road, boons, fight bars, class effects, bosses, loot
+   arriving, healing, festivals, the merchant, deeds, the hero on the map, and the barkeep.
+   ===================================================================================================== */
+
+/* ----- Hero tab: boons and the meeting on the road ----- */
+.boons { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 2px; }
+.boons[hidden] { display: none; }
+.boon { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px 3px 6px; border-radius: 12px; font-size: 0.78rem; background: #fff3cf; border: 1px solid #d9b45a; color: #5a3e10; }
+.boon .icon { width: 14px; height: 14px; color: #b07a10; flex: none; }
+.boon.bad { background: #f4dcd6; border-color: #c9857a; color: #6a2a20; }
+.boon.bad .icon { color: #a8372b; }
+.panel.choice { border-color: #6a8a4a; box-shadow: inset 4px 0 0 #6a8a4a; background: linear-gradient(170deg, #f3f6e6, var(--panel) 60%); }
+.panel.choice h3 { display: flex; align-items: center; gap: 8px; color: #3e5a28; }
+.panel.choice h3 .icon { color: #6a8a4a; }
+.choice-text { font: italic 1rem/1.4 var(--display); margin: 6px 0 10px; }
+.choice-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.choice-btns .btn { min-height: var(--tap); display: grid; place-content: center; gap: 1px; text-align: center; line-height: 1.2; }
+.choice-btns .btn small { font-size: 0.72rem; opacity: 0.85; font-weight: 400; }
+@media (max-width: 340px) { .choice-btns { grid-template-columns: 1fr; } }
+
+/* ----- The fight bars: the hero's hit points over their head, the foe's over theirs ----- */
+.fight-bars { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.fight-bars[hidden] { display: none; }
+.fb { position: absolute; display: grid; justify-items: center; gap: 2px; }
+.hero-fb { left: 50%; top: 4%; width: 64px; margin-left: -32px; }
+.foe-fb { right: 4%; top: 9%; width: 36%; max-width: 150px; }
+.fb-name { font: 700 0.68rem var(--display); color: #fff; text-shadow: 0 1px 2px #000, 0 0 3px #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.fb-track { width: 100%; height: 7px; border-radius: 4px; background: rgba(20, 12, 6, 0.65); border: 1px solid rgba(0, 0, 0, 0.7); overflow: hidden; position: relative; }
+.fb-track i { display: block; height: 100%; background: linear-gradient(#7fd26a, #3f9a3a); transition: width 0.9s linear; }
+.hero-fb .fb-track.low i { background: linear-gradient(#ff9a6a, #c8402a); }
+.foe-fb .fb-track i { background: linear-gradient(#ff7a5a, #b0302a); }
+.fight-bars.boss .foe-fb .fb-track { height: 10px; border-color: #c9962c; }
+.fight-bars.boss .foe-fb .fb-track::after { content: ''; position: absolute; inset: 0;
+  background: repeating-linear-gradient(90deg, transparent 0 calc(100% / var(--blows) - 2px), rgba(20, 12, 6, 0.9) calc(100% / var(--blows) - 2px) calc(100% / var(--blows))); }
+.fight-bars.boss .fb-name { color: #f6dc8c; font-size: 0.74rem; }
+
+/* ----- Class effects while the hero swings ----- */
+.class-fx { position: absolute; inset: 0; z-index: 2; pointer-events: none; overflow: hidden; }
+.class-fx i { position: absolute; display: none; }
+.scene.attacking .class-fx i { display: block; }
+/* Fighter: a bright sword arc at the foe, and a glint on the way back. */
+.scene[data-cls='fighter'] .class-fx i:nth-child(1) { left: 60%; bottom: 20%; width: 84px; height: 84px; border-radius: 50%; border: 6px solid transparent; border-top-color: #fff; border-right-color: rgba(220, 235, 255, 0.75); filter: drop-shadow(0 0 4px rgba(200, 230, 255, 0.9)); opacity: 0; animation: fx-arc 0.9s ease-out infinite; }
+.scene[data-cls='fighter'] .class-fx i:nth-child(2) { left: 70%; bottom: 40%; width: 10px; height: 10px; background: radial-gradient(#fff, rgba(255, 255, 255, 0) 70%); opacity: 0; animation: fx-glint 0.9s ease-out 0.25s infinite; }
+@keyframes fx-arc { 0% { opacity: 0; transform: rotate(-80deg) scale(0.7); } 20% { opacity: 1; } 60% { opacity: 0.8; transform: rotate(40deg) scale(1); } 100% { opacity: 0; transform: rotate(60deg) scale(1.05); } }
+@keyframes fx-glint { 0%, 100% { opacity: 0; transform: scale(0.4); } 30% { opacity: 1; transform: scale(2.2); } }
+/* Rogue: two quick crossing cuts. */
+.scene[data-cls='rogue'] .class-fx i:nth-child(-n+2) { left: 68%; bottom: 34%; width: 72px; height: 5px; border-radius: 3px; background: linear-gradient(90deg, transparent, #fff 35%, #cfe8ff 65%, transparent); filter: drop-shadow(0 0 3px #bfe0ff); opacity: 0; animation: fx-cut 0.7s ease-out infinite; }
+.scene[data-cls='rogue'] .class-fx i:nth-child(1) { rotate: 35deg; }
+.scene[data-cls='rogue'] .class-fx i:nth-child(2) { rotate: -35deg; animation-delay: 0.35s; }
+@keyframes fx-cut { 0% { opacity: 0; clip-path: inset(0 100% 0 0); } 30% { opacity: 1; clip-path: inset(0 0 0 0); } 100% { opacity: 0; clip-path: inset(0 0 0 100%); } }
+/* Wizard: a fireball from the hero's hands to the foe, and the flash where it lands. */
+.scene[data-cls='wizard'] .class-fx i:nth-child(1) { left: 56%; bottom: 32%; width: 28px; height: 28px; border-radius: 50%; background: radial-gradient(circle at 40% 40%, #fffbe0, #ffc040 35%, #f0602a 65%, #c03010 80%, rgba(192, 48, 16, 0) 82%); box-shadow: 0 0 16px 8px rgba(255, 140, 40, 0.75), -14px 0 12px 2px rgba(255, 120, 30, 0.45); opacity: 0; animation: fx-fireball 1.2s ease-in infinite; }
+.scene[data-cls='wizard'] .class-fx i:nth-child(2) { left: 72%; bottom: 22%; width: 76px; height: 76px; border-radius: 50%; background: radial-gradient(#fffbe0, rgba(255, 170, 50, 0.95) 30%, rgba(224, 80, 42, 0.6) 55%, rgba(224, 80, 42, 0) 72%); opacity: 0; animation: fx-boom 1.2s ease-out infinite; }
+@keyframes fx-fireball { 0% { opacity: 0; left: 56%; transform: scale(0.5); } 10% { opacity: 1; } 55% { opacity: 1; left: 76%; transform: scale(1); } 56%, 100% { opacity: 0; left: 76%; } }
+@keyframes fx-boom { 0%, 52% { opacity: 0; transform: scale(0.3); } 62% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.5); } }
+/* Cleric: a burst of holy light on the foe, and a halo over the hero. */
+.scene[data-cls='cleric'] .class-fx i:nth-child(1) { left: 72%; bottom: 24%; width: 70px; height: 70px; border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 230, 140, 0.9) 0 8deg, transparent 8deg 30deg); -webkit-mask: radial-gradient(transparent 18%, #000 20%, transparent 70%); mask: radial-gradient(transparent 18%, #000 20%, transparent 70%); opacity: 0; animation: fx-holy 1.1s ease-out infinite; }
+.scene[data-cls='cleric'] .class-fx i:nth-child(2) { left: 72%; bottom: 24%; width: 70px; height: 70px; border-radius: 50%; background: radial-gradient(rgba(255, 245, 200, 0.95), rgba(255, 220, 120, 0) 60%); opacity: 0; animation: fx-boom 1.1s ease-out infinite; animation-delay: -0.6s; }
+.scene[data-cls='cleric'] .class-fx i:nth-child(3) { left: 50%; top: 15%; width: 40px; height: 10px; margin-left: -20px; border-radius: 50%; border: 2px solid rgba(255, 224, 120, 0.9); box-shadow: 0 0 8px rgba(255, 224, 120, 0.8); animation: fx-halo 1.1s ease-in-out infinite alternate; }
+@keyframes fx-holy { 0% { opacity: 0; transform: rotate(0) scale(0.5); } 30% { opacity: 1; } 100% { opacity: 0; transform: rotate(40deg) scale(1.3); } }
+@keyframes fx-halo { from { opacity: 0.5; } to { opacity: 1; } }
+
+/* ----- Bosses: the shudder on arrival, and the banner ----- */
+.scene.shake { animation: scene-shake 0.6s steps(6); }
+@keyframes scene-shake { 0%, 100% { transform: none; } 20% { transform: translate(-3px, 1px); } 40% { transform: translate(3px, -1px); } 60% { transform: translate(-2px, 0); } 80% { transform: translate(2px, 1px); } }
+.boss-banner { background: linear-gradient(90deg, transparent, rgba(40, 6, 4, 0.82) 18%, rgba(40, 6, 4, 0.82) 82%, transparent); animation-duration: 3.6s; }
+.boss-banner strong { color: #ffb38a; }
+/* A beaten foe sinking where it stood. */
+.foe.gone { animation: foe-gone 0.9s ease-in forwards; z-index: 0; }
+.foe.gone .foe-px { filter: brightness(1.6) saturate(0.4); }
+@keyframes foe-gone { 0% { opacity: 1; transform: none; } 30% { opacity: 1; transform: translateX(6px); } 100% { opacity: 0; transform: translate(12px, 18px) scaleY(0.7); } }
+
+/* ----- Gear arriving: a chest by the foe, the piece flying to the hero, and a beam for the rare ones ----- */
+.loot-drop { position: absolute; inset: 0; pointer-events: none; }
+.loot-drop .chest { position: absolute; left: 74%; bottom: 12%; width: 26px; height: 18px; background: linear-gradient(#8a5a2a, #6a4020); border: 2px solid #2b1a0c; border-radius: 2px; box-shadow: inset 0 -5px 0 rgba(0, 0, 0, 0.25), 0 0 10px var(--tier); opacity: 0; animation: chest-life 2.4s ease-out forwards; }
+.loot-drop .chest::after { content: ''; position: absolute; left: 9px; top: 3px; width: 4px; height: 5px; background: #e0b040; }
+.loot-drop .lid { position: absolute; left: -2px; right: -2px; top: -9px; height: 9px; background: #7a4a22; border: 2px solid #2b1a0c; border-radius: 6px 6px 0 0; transform-origin: 0 100%; animation: lid-open 2.4s ease-out forwards; }
+.loot-drop .piece { position: absolute; left: 74%; bottom: 18%; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: radial-gradient(#fff, var(--tier) 70%); border: 2px solid #2b1a0c; box-shadow: 0 0 12px 3px var(--tier); color: #1e1710; opacity: 0; animation: piece-fly 2.4s cubic-bezier(0.3, 0, 0.5, 1) forwards; }
+.loot-drop .piece .icon { width: 18px; height: 18px; }
+@keyframes chest-life { 0% { opacity: 0; transform: translateY(-30px); } 12% { opacity: 1; transform: translateY(0); } 18% { transform: translateY(-4px); } 24% { transform: none; } 80% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes lid-open { 0%, 26% { transform: none; } 36%, 100% { transform: rotate(-110deg); } }
+@keyframes piece-fly { 0%, 30% { opacity: 0; left: 74%; transform: translate(0, 0) scale(0.4); } 42% { opacity: 1; left: 74%; transform: translate(0, -46px) scale(1.15); } 58% { left: 72%; transform: translate(0, -52px) scale(1); } 90% { opacity: 1; left: 48%; transform: translate(0, -96px) scale(0.8); } 100% { opacity: 0; left: 48%; transform: translate(0, -96px) scale(0.3); } }
+.loot-beam { position: absolute; top: 0; bottom: 10%; left: 74%; width: 34px; margin-left: -4px; background: linear-gradient(transparent, color-mix(in srgb, var(--tier) 70%, #fff) 40%, var(--tier)); filter: blur(2px); opacity: 0; transform-origin: 50% 0; animation: beam 2.2s ease-out forwards; }
+.loot-beam.legend { width: 52px; margin-left: -13px; box-shadow: 0 0 30px 10px var(--tier); }
+@keyframes beam { 0% { opacity: 0; transform: scaleY(0); } 25% { opacity: 0.9; transform: scaleY(1); } 70% { opacity: 0.7; } 100% { opacity: 0; } }
+
+/* ----- Healing: motes rising round the hero ----- */
+.heal-glow { position: absolute; left: 50%; bottom: 14%; width: 90px; height: 140px; margin-left: -45px; pointer-events: none; }
+.heal-glow::before { content: ''; position: absolute; inset: 20% 10% 0; border-radius: 50%; background: radial-gradient(rgba(120, 230, 140, 0.45), transparent 70%); animation: heal-pulse 1.8s ease-out forwards; }
+.heal-glow.holy::before { background: radial-gradient(rgba(255, 225, 130, 0.55), transparent 70%); }
+.heal-glow i { position: absolute; bottom: 10%; width: 6px; height: 6px; border-radius: 50%; background: #9af0a0; box-shadow: 0 0 6px #9af0a0; opacity: 0; animation: mote 1.6s ease-out forwards; }
+.heal-glow.holy i { background: #ffe58a; box-shadow: 0 0 6px #ffe58a; }
+.heal-glow i:nth-child(1) { left: 20%; } .heal-glow i:nth-child(2) { left: 45%; animation-delay: 0.2s; } .heal-glow i:nth-child(3) { left: 65%; animation-delay: 0.1s; } .heal-glow i:nth-child(4) { left: 80%; animation-delay: 0.3s; }
+@keyframes heal-pulse { 0% { opacity: 0; } 30% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes mote { 0% { opacity: 0; transform: translateY(0); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-100px); } }
+
+/* ----- Festivals: bunting and lanterns across the top of the scene and the common room ----- */
+.festive { position: absolute; left: 0; right: 0; top: 0; height: 64px; z-index: 0; pointer-events: none; display: none; overflow: hidden; }
+.festive[data-deco]:not([data-deco='']) { display: block; }
+.festive::before, .festive::after { content: ''; position: absolute; left: 0; right: 0; }
+/* A string of pennants: two rows of triangles, offset so the colours alternate. */
+.festive[data-deco='holly']::before, .festive[data-deco='blossom']::before, .festive[data-deco='sun']::before, .festive[data-deco='harvest']::before {
+  top: 4px; height: 22px; background:
+    linear-gradient(#3a2a1a, #3a2a1a) 0 1px / 100% 2px no-repeat,
+    conic-gradient(from 150deg at 50% 0, var(--p1) 0 60deg, transparent 60deg) 0 3px / 32px 18px repeat-x,
+    conic-gradient(from 150deg at 50% 0, var(--p2) 0 60deg, transparent 60deg) 16px 3px / 32px 18px repeat-x;
+  filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.3)); }
+.festive[data-deco='holly'] { --p1: #2f7a3a; --p2: #b0302a; }
+.festive[data-deco='blossom'] { --p1: #f2a6c0; --p2: #fbf5e6; height: 100%; }
+.festive[data-deco='sun'] { --p1: #f2c03a; --p2: #e0702a; }
+.festive[data-deco='harvest'] { --p1: #d07a2a; --p2: #8a5a2a; }
+/* Blossom drifts down. */
+.festive[data-deco='blossom']::after { top: 0; height: 100%; background-image: radial-gradient(4px 3px at 10% 30%, #f6c0d4 98%, transparent), radial-gradient(4px 3px at 40% 60%, #fbe0ea 98%, transparent), radial-gradient(4px 3px at 70% 20%, #f2a6c0 98%, transparent), radial-gradient(4px 3px at 88% 70%, #fbe0ea 98%, transparent); animation: petals 9s linear infinite; }
+@keyframes petals { from { transform: translate(0, -40%); } to { transform: translate(-30px, 60%); } }
+/* Lantern Night: paper lanterns hanging from a line, glowing and swaying. */
+.festive[data-deco='lanterns']::before { top: 4px; height: 2px; background: #3a2a1a; }
+.festive[data-deco='lanterns']::after { top: 5px; height: 44px; transform-origin: 50% 0;
+  background:
+    linear-gradient(90deg, transparent 35px, #3a2a1a 35px 37px, transparent 37px) 0 0 / 72px 14px repeat-x,
+    linear-gradient(90deg, transparent 35px, #3a2a1a 35px 37px, transparent 37px) 36px 0 / 72px 22px repeat-x,
+    radial-gradient(ellipse 9px 12px at 50% 50%, #fff0b0 0 35%, #f08a2a 68%, transparent 72%) 0 8px / 72px 26px repeat-x,
+    radial-gradient(ellipse 8px 11px at 50% 50%, #ffe08a 0 35%, #d0402a 68%, transparent 72%) 36px 16px / 72px 26px repeat-x;
+  filter: drop-shadow(0 0 6px rgba(255, 170, 60, 0.8)); animation: lantern-sway 4s ease-in-out infinite alternate; }
+@keyframes lantern-sway { from { transform: skewX(-2deg); } to { transform: skewX(2deg); } }
+
+/* ----- The merchant, festivals, and deeds on the Tavern and Gear tabs ----- */
+.festival-card { border-color: #c9962c; background: linear-gradient(170deg, #fff4d6, var(--panel) 60%); box-shadow: inset 4px 0 0 #c9962c; }
+.festival-card h3 { display: flex; align-items: center; gap: 8px; color: #7a4f00; }
+.festival-card h3 .icon { color: #d07a2a; }
+.festival-about { font: italic 0.92rem/1.4 var(--display); margin: 4px 0 8px; }
+.merchant-head { display: grid; grid-template-columns: 44px 1fr; gap: 10px; align-items: center; }
+.merchant-head .cart { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: #6a4020; color: #f6dc8c; }
+.merchant-head .cart .icon { width: 26px; height: 26px; }
+.merchant-name { font: 700 1.05rem var(--display); }
+.wares { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.ware { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.ware-name { font: 700 0.98rem var(--display); }
+.ware .hint { grid-column: 1; margin: 0; }
+.ware .btn { grid-row: 1 / span 2; grid-column: 2; min-width: 96px; }
+.ware.sold { opacity: 0.6; background: transparent; }
+.deeds { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.deed { display: grid; grid-template-columns: 32px 1fr; gap: 6px 10px; align-items: center; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+.deed .deed-icon { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--parchment-deep); color: var(--ink-soft); }
+.deed.done .deed-icon { background: #e0b040; color: #3a2a00; box-shadow: 0 0 8px rgba(224, 176, 64, 0.6); }
+.deed.done { border-color: #d9b45a; background: linear-gradient(160deg, #fff6dc, #fff 70%); }
+.deed-name { font: 700 0.95rem var(--display); }
+.deed-title { font: italic 0.85rem var(--display); color: #7a4f00; }
+.deed:not(.done) .deed-name, .deed:not(.done) .deed-title { color: var(--ink-soft); }
+.deed .hint { margin: 0; }
+.deed .btn { grid-column: 1 / -1; justify-self: start; }
+.deed.wearing { border-color: #8a2f24; box-shadow: inset 4px 0 0 #8a2f24; }
+
+/* ----- The hero walking the road on the Map tab ----- */
+.map-frame { position: relative; }
+.map-walker { position: absolute; width: 64px; height: 64px; margin: -58px 0 0 -32px; pointer-events: none; z-index: 2; transition: left 1s linear, top 1s linear; }
+.map-walker canvas { width: 64px !important; height: 64px !important; image-rendering: pixelated; image-rendering: crisp-edges; filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.45)); }
+.map-walker[hidden] { display: none; }
+
+/* ----- The barkeep behind the bar in the common room ----- */
+.common-room .bar-counter { position: absolute; left: 6%; width: 34%; bottom: 4px; height: 46px; z-index: 2; pointer-events: none;
+  background: linear-gradient(#8a6038 0 6px, #2b1a0c 6px 8px, transparent 8px), repeating-linear-gradient(90deg, #5a3e26 0 22px, #4a321e 22px 24px);
+  border: 2px solid #2b1a0c; border-bottom: 0; border-radius: 3px 3px 0 0; box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.25); }
+.common-room .bar-counter::after { content: ''; position: absolute; left: 14%; top: -11px; width: 8px; height: 10px; background: linear-gradient(90deg, #c9962c, #f0d070); border: 1px solid #2b1a0c; border-bottom: 0; }
+.common-room .barkeep { position: absolute; left: 0; bottom: 18px; width: 128px; height: 128px; z-index: 1; will-change: transform; }
+.common-room .barkeep canvas { width: 128px !important; height: 128px !important; image-rendering: pixelated; image-rendering: crisp-edges; }
+.common-room .room-floor { z-index: 3; }
+
+@media (prefers-reduced-motion: reduce) {
+  .festive::after, .scene.shake { animation: none !important; }
+  .class-fx i { display: none !important; }
+}
+/* A boss is bigger, so the hero steps back a little to give it room. */
+.foe.boss { max-width: 52%; right: 1%; }
+.scene > canvas:not(.still) { transition: transform 0.6s ease-out; }
+.scene.vs-boss > canvas:not(.still) { transform: translateX(-11%); }
+.scene.vs-boss .hero-fb { left: 39%; }
+.scene.vs-boss .heal-glow { left: 39%; }

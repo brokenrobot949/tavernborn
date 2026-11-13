@@ -178,6 +178,10 @@ export function runHero({ seed, cls, race, subclass = TREES[cls].branches[0].id 
   out.banked = hero.skillPoints;
   out.abilityPoints = hero.abilityPoints;
   out.age = hero.age;
+  out.deeds = [...(hero.deeds ?? [])];
+  out.choicesAlone = hero.stats.choicesAlone ?? 0;
+  out.n20 = hero.stats.natural20s;
+  out.n1 = hero.stats.natural1s;
   return out;
 }
 

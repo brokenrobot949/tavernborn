@@ -5,7 +5,10 @@
 import { RACES } from '../data/races.js';
 import { CLASSES } from '../data/classes.js';
 import { REGION_BY_ID, START_REGION } from '../data/regions.js';
-import { ADVENTURE_FIELDS, GROWTH_FIELDS, LEGACY_FIELDS, STATS, abilityPointsBy } from './hero.js';
+import { ADVENTURE_FIELDS, GROWTH_FIELDS, LEGACY_FIELDS, ROAD_FIELDS, STATS, abilityPointsBy } from './hero.js';
+import { CHOICE_BY_ID } from '../data/road.js';
+import { DEED_BY_ID } from '../data/deeds.js';
+import { BOONS } from './rules.js';
 import { startingGear, startingCloak, SLOT_IDS, MAX_TIER } from './loot.js';
 import { LEGENDARIES } from '../data/loot.js';
 import { SKILL_BY_ID, BRANCH_BY_ID, MAX_SKILLS } from './skills.js';
@@ -14,7 +17,7 @@ import { paragonRank } from './tavern.js';
 import { TROPHIES } from '../data/tavern.js';
 import { REGIONS } from '../data/regions.js';
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 const SAVE_KEY = 'tavernborn.save.v1';
 const EXPORT_PREFIX = 'TVB1.';
 
@@ -23,7 +26,7 @@ export function newSave(seed = (Date.now() ^ Math.floor(Math.random() * 0x100000
     version: SAVE_VERSION,
     lastSavedAt: now,
     rngSeed: seed >>> 0,
-    tavern: { upgrades: {}, legends: [], legacyBonus: 0, trophies: [], relics: [] },
+    tavern: { upgrades: {}, legends: [], legacyBonus: 0, trophies: [], relics: [], merchant: null },
     activeHeroId: null,
     heroes: [],
   };
@@ -92,7 +95,23 @@ function tavernFields(save) {
   // The glass case (after Phase 7): one entry per named Legendary at most, each one that exists.
   const relics = (Array.isArray(t.relics) ? t.relics : []).filter((r, i, all) => r && LEGENDARIES[r.legend] && all.findIndex((x) => x?.legend === r.legend) === i)
     .map((r) => ({ legend: r.legend, level: Math.max(1, Math.min(MAX_LEVEL, Math.floor(r.level) || 1)), hero: typeof r.hero === 'string' ? r.hero : '' }));
-  save.tavern = { ...t, upgrades, legends, trophies, relics, legacyBonus: legacyFor(legends.length) };
+  // The merchant's visit (version 6): what has been bought today, kept only if readable.
+  const m = t.merchant;
+  const merchant = m && Number.isInteger(m.day) && Array.isArray(m.bought) ? { day: m.day, bought: m.bought.filter((id) => typeof id === 'string') } : null;
+  save.tavern = { ...t, upgrades, legends, trophies, relics, merchant, legacyBonus: legacyFor(legends.length) };
+}
+
+// After Phase 7 (version 6): choices on the road, boons, the merchant's potions, festivals, and
+// deeds. Anything unreadable is dropped; a hero from an older save starts with none of them and earns
+// every deed they have already done on their next task, each with its Chronicle line.
+function roadFields(h) {
+  for (const [key, value] of Object.entries(ROAD_FIELDS())) h[key] ??= value;
+  if (h.choice && (!CHOICE_BY_ID[h.choice.id] || !Number.isFinite(h.choice.until))) h.choice = null;
+  h.boons = Array.isArray(h.boons) ? h.boons.filter((b) => b && BOONS[b.id] && Number.isFinite(b.until)) : [];
+  h.supplies = { potions: Math.max(0, Math.floor(Number(h.supplies?.potions) || 0)) };
+  h.joined = Array.isArray(h.joined) ? h.joined.filter((k) => typeof k === 'string') : [];
+  h.deeds = Array.isArray(h.deeds) ? [...new Set(h.deeds)].filter((id) => DEED_BY_ID[id]) : [];
+  if (!h.deeds.includes(h.title)) h.title = null;
 }
 
 // Bring an older or partial save up to the current shape, or throw if it is not a save at all.
@@ -110,6 +129,7 @@ export function migrate(save) {
     growthFields(h, save.version);
     gearFields(h);
     for (const [key, value] of Object.entries(LEGACY_FIELDS())) h[key] ??= value;
+    roadFields(h);
     if (!['roam', 'quest', 'delve', 'rift'].includes(h.focus) || (h.focus === 'rift' && h.level < MAX_LEVEL)) h.focus = 'roam';
     // XP never sits below the hero's own level, whatever happened to the curve.
     h.xp = Math.max(Number(h.xp) || 0, xpForLevel(Math.min(h.level, MAX_LEVEL)));

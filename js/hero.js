@@ -15,7 +15,7 @@ export const CHRONICLE_MAX = 200;
 // Highlights (level-ups, dungeons, finished quests, knockouts, Very Rare and Legendary gear) are
 // trimmed last, so up to KEPT_MAX of them outlive the ordinary lines of a busy day.
 export const KEPT_MAX = 60;
-const KEPT_KINDS = new Set(['levelup', 'milestone', 'paragon', 'feat', 'knockout', 'boss', 'cleared', 'chapter', 'unlock', 'trophy', 'questdone']);
+const KEPT_KINDS = new Set(['deed', 'festival', 'levelup', 'milestone', 'paragon', 'feat', 'knockout', 'boss', 'cleared', 'chapter', 'unlock', 'trophy', 'questdone']);
 export const isHighlight = (line) => KEPT_KINDS.has(line.k) || (line.k === 'upgrade' && line.tier >= 3);
 
 export const activeHero = (state) => state.heroes.find((h) => h.id === state.activeHeroId) ?? null;
@@ -98,12 +98,21 @@ export const GROWTH_FIELDS = () => ({ abilityPoints: 0, raised: {}, cooldowns: {
 // Ability points a hero of this level has been granted in all.
 export const abilityPointsBy = (level) => ABILITY_POINTS * ABILITY_LEVELS.filter((l) => l <= level).length;
 
-export const STATS = { knockouts: 0, mostEmbarrassingDefeat: null, natural20s: 0, natural1s: 0, tasks: 0, quests: 0, oddJobs: 0, dungeonRuns: 0, dungeonClears: 0, itemsFound: 0, upgrades: 0, soldFor: 0, riftRuns: 0, riftFloors: 0, riftBest: 0 };
+export const STATS = { knockouts: 0, mostEmbarrassingDefeat: null, natural20s: 0, natural1s: 0, tasks: 0, quests: 0, oddJobs: 0, dungeonRuns: 0, dungeonClears: 0, itemsFound: 0, upgrades: 0, soldFor: 0, riftRuns: 0, riftFloors: 0, riftBest: 0, choices: 0, choicesAlone: 0, bought: 0, festivals: 0 };
 // What Phase 6 keeps on a hero.
 //   rift           the Planar Rifts run in progress: { floor }, or null
 //   paragon        Paragon ranks already announced in the Chronicle (titles only)
 //   retireOffered  true once the level 20 retirement card has been shown
 export const LEGACY_FIELDS = () => ({ rift: null, paragon: 0, retireOffered: false });
+// What the road, the merchant, festivals, and deeds keep on a hero (after Phase 7).
+//   choice        the meeting on the road waiting for word: { id, at, until }, or null
+//   nextChoiceAt  the hero's age at which the next one may turn up (null: not yet set)
+//   lastChoice    the last meeting, so the same one does not come twice running
+//   boons         short spells of luck: [{ id, until }] (js/boons.js)
+//   supplies      { potions }: bought from the merchant, carried into the next dungeon or Rifts run
+//   joined        festivals joined, as 'id-year'
+//   deeds, title  deeds done (ids) and the one whose title is worn, or null
+export const ROAD_FIELDS = () => ({ choice: null, nextChoiceAt: null, lastChoice: null, boons: [], supplies: { potions: 0 }, joined: [], deeds: [], title: null });
 
 // A region is open once the dungeon of the region before it has been cleared. The first always is.
 export function regionOpen(hero, regionId) {
@@ -136,6 +145,7 @@ export function createHero(state, { name, race, cls, appearance, baseScores }) {
     ...ADVENTURE_FIELDS(),
     ...GROWTH_FIELDS(),
     ...LEGACY_FIELDS(),
+    ...ROAD_FIELDS(),
     bestiary: {},
     feats: [],
     stats: { ...STATS },

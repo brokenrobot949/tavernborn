@@ -262,3 +262,36 @@ export function paragonRankFor(extraXp) {
   while (r > 0 && paragonXpFor(r) > x) r -= 1;
   return r;
 }
+
+// ----- after Phase 7: the road, the merchant, festivals, deeds -----
+// Boons: short spells of luck that come from a choice on the road, the travelling merchant, or a
+// festival. Each is a handful of the same numbers skills and gear change (FX_KEYS in js/skills.js),
+// held on the hero until a time on the hero's own clock (`hero.boons`). The same boon again
+// extends the old one rather than stacking on it.
+export const BOONS = {
+  luck: { roll: 1 },
+  scholar: { xp: 0.1 },
+  fortune: { gold: 0.15 },
+  swift: { travel: 0.3 },
+  hardy: { dr: 0.1 },
+  keen: { crit: 1 },
+  blessed: { roll: 1, rest: 0.3 },
+  festive: { xp: 0.1, gold: 0.1 },
+  cursed: { roll: -1 },
+};
+// Choices on the road. Now and then, between tasks out in the open, the hero meets something and
+// waits for word from the player. If none comes within `wait`, the hero picks on their own.
+export const ROAD = {
+  first: [3600, 7200], // the first meeting, in seconds of the hero's age
+  every: [3 * 3600, 6 * 3600], // and then one every this many seconds
+  wait: 4 * 3600,
+  fromLevel: 2,
+};
+// What a choice pays in XP is worth so many minutes of work at the hero's level. Gold, and what the
+// merchant charges, is counted in units that grow with level (25 gp at level 1, about 5,000 at 10,
+// and 40,000 at 20) because a hero's purse does.
+export const workXp = (level, minutes) => Math.round(minutes * 60 * XP_RATE[Math.max(2, Math.min(MAX_LEVEL, level))]);
+export const goldUnit = (level) => Math.round(5 * level ** 3 + 20);
+// The travelling merchant: in the Vale on about six days in ten (by the device's calendar), four
+// wares on each visit, one of each per visit.
+export const MERCHANT = { chance: 0.6, wares: 4 };

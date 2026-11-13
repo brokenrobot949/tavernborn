@@ -19,6 +19,7 @@ import { TAVERN, MAX_HEROES, MAX_LEVEL, legacyFor, paragonRankFor, paragonXpFor,
 import { chronicle } from './hero.js';
 import { SLOT_IDS, better } from './loot.js';
 import { LEGENDARIES } from '../data/loot.js';
+import { DEED_BY_ID } from '../data/deeds.js';
 
 export const UPGRADE_IDS = UPGRADES.map((u) => u.id);
 const fill = (text, values) => text.replace(/\{(\w+)\}/g, (_, key) => values[key] ?? '');
@@ -170,6 +171,8 @@ export function retire(state, id) {
   const legend = {
     id: hero.id,
     name: hero.name,
+    title: hero.title && DEED_BY_ID[hero.title] ? DEED_BY_ID[hero.title].title : null,
+    deeds: (hero.deeds ?? []).length,
     race: hero.race,
     class: hero.class,
     subclass: hero.subclass,

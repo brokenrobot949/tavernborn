@@ -46,6 +46,11 @@ export const ICONS = {
   lock: ['M6 11h12v10H6z', 'M8.5 11V8a3.5 3.5 0 0 1 7 0v3'],
   check: ['M4 12.5l5 5L20 6.5'],
   lute: ['M8.5 11a6 6 0 1 0 4.5 4.5l2-2L10.5 9z', 'M13 11l6.5-6.5', 'M18 3l3 3', '*M8.5 16a1.4 1.4 0 1 0 .01 0z'],
+  // after Phase 7: the road, deeds, festivals, and the merchant
+  signpost: ['M12 2v20', 'M12 5h7l2 2.5-2 2.5h-7', 'M12 12H5l-2 2.5L5 17h7', 'M9 22h6'],
+  medal: ['M8 2l4 7 4-7', 'M12 9a6 6 0 1 0 .01 0z', '*M12 12l1 2.2 2.3.2-1.8 1.5.6 2.3-2.1-1.3-2.1 1.3.6-2.3-1.8-1.5 2.3-.2z'],
+  lantern: ['M12 2v3', 'M9 5h6', 'M8 8c0-1.7 1.8-3 4-3s4 1.3 4 3v9c0 1.7-1.8 3-4 3s-4-1.3-4-3z', 'M8 8h8', 'M8 17h8', '*M12 10.5c1 1.2 1.5 2 1.5 3a1.5 1.5 0 0 1-3 0c0-1 .5-1.8 1.5-3z', 'M12 20v2'],
+  cart: ['M2 13h16l-1.5-6H4z', 'M18 9h3', 'M6 17a2.5 2.5 0 1 0 .01 0z', 'M15 17a2.5 2.5 0 1 0 .01 0z', 'M8.5 19.5h4'],
 };
 
 // An <svg> for one icon. `cls` adds classes (for colour and size, set in CSS).

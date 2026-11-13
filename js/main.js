@@ -93,7 +93,7 @@ function start(firstTab = 'hero') {
     el('nav', { className: 'tabbar', attrs: { role: 'tablist', 'aria-label': 'Sections' } }, ...Object.values(buttons)));
   screen = {
     sections, buttons,
-    views: { hero: mountHero(sections.hero, app), map: mountMap(sections.map, app), skills: mountSkills(sections.skills, app), gear: mountGear(sections.gear), tavern: mountTavern(sections.tavern, app) },
+    views: { hero: mountHero(sections.hero, app), map: mountMap(sections.map, app), skills: mountSkills(sections.skills, app), gear: mountGear(sections.gear, app), tavern: mountTavern(sections.tavern, app) },
   };
   tab = firstTab;
   sideTab = firstTab === 'hero' ? sideTab : firstTab;
@@ -123,6 +123,13 @@ function render() {
   if (!screen || !hero) return;
   for (const id of shownTabs()) screen.views[id].update(save, hero);
   // The badge on the Skills tab: skill points, a subclass, or ability points waiting to be spent.
+  // The badge on the Hero tab: a meeting on the road, waiting for word.
+  const heroBtn = screen.buttons.hero;
+  const meeting = hero.choice ? '1' : '';
+  if (heroBtn.dataset.badge !== meeting) {
+    heroBtn.dataset.badge = meeting;
+    heroBtn.setAttribute('aria-label', meeting ? 'Hero, a choice waiting' : 'Hero');
+  }
   const waiting = pending(hero).total;
   const skills = screen.buttons.skills;
   if (skills.dataset.badge !== String(waiting || '')) {

@@ -11,6 +11,8 @@
 
 import { activeHero } from './hero.js';
 import { nextTask, resolveTask } from './tasks.js';
+import { afterTask } from './road.js';
+import { checkDeeds } from './deeds.js';
 
 export function advance(state, seconds) {
   const events = [];
@@ -26,6 +28,8 @@ export function advance(state, seconds) {
     left -= step;
     if (task.elapsed >= task.duration) {
       resolveTask(state, hero, task, events);
+      afterTask(state, hero, task, events); // choices on the road, and boons running out
+      checkDeeds(hero, events);
       hero.currentTask = nextTask(state, hero, events);
     }
   }
@@ -37,7 +41,7 @@ export function summarize(events) {
   const s = {
     tasks: 0, xp: 0, gold: 0, natural20s: 0, natural1s: 0, knockouts: 0, potions: 0, levels: [], newMonsters: [], knockedOutBy: [],
     quests: [], oddJobs: 0, feats: [], clears: [], chapters: [], opened: [], arrived: [], runsLost: 0, confidence: [], moves: 0,
-    found: 0, upgrades: [], soldFor: 0, trophies: [], paragon: [], riftFloors: 0,
+    found: 0, upgrades: [], soldFor: 0, trophies: [], paragon: [], riftFloors: 0, choicesAlone: 0, deeds: [],
   };
   for (const e of events) {
     if (e.xp) s.xp += e.xp;
@@ -61,6 +65,8 @@ export function summarize(events) {
     else if (e.type === 'skill') s.moves += 1;
     else if (e.type === 'trophy') s.trophies.push(e.region);
     else if (e.type === 'paragon') s.paragon.push(e.rank);
+    else if (e.type === 'choice' && e.alone) s.choicesAlone += 1;
+    else if (e.type === 'deed') s.deeds.push(e.deed);
     else if (e.type === 'loot') { s.found += 1; s.soldFor += e.gold; if (e.equipped) s.upgrades.push({ slot: e.slot, tier: e.tier, name: e.name }); }
   }
   return s;

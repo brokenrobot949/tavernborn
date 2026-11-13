@@ -6,6 +6,7 @@ import { foeName } from '../tasks.js';
 import { pending } from '../skills.js';
 import { TIERS } from '../../data/items.js';
 import { el, num, duration } from './dom.js';
+import { DEED_BY_ID } from '../../data/deeds.js';
 
 export function showAway(root, { seconds, summary: s, hero }) {
   root.querySelector('.overlay')?.remove();
@@ -44,6 +45,9 @@ export function showAway(root, { seconds, summary: s, hero }) {
     s.paragon.length ? item('Paragon', `Rank ${Math.max(...s.paragon)}`) : null,
     s.trophies.length ? item('Trophies won', num(s.trophies.length)) : null,
     s.moves ? item('Signature moves used', num(s.moves)) : null,
+    s.choicesAlone ? item('Decided alone on the road', `${num(s.choicesAlone)} time${s.choicesAlone === 1 ? '' : 's'}`) : null,
+    s.deeds.length ? item('Deeds done', s.deeds.map((id) => DEED_BY_ID[id]?.name).filter(Boolean).join(', ')) : null,
+    hero.choice ? item('On the road now', 'A choice is waiting for word, on the Hero tab') : null,
     waiting.points ? item('Skill points to spend', num(waiting.points)) : null,
     waiting.subclass ? item('Subclass', 'Ready to choose') : null,
     waiting.abilities ? item('Ability points to place', num(waiting.abilities)) : null,

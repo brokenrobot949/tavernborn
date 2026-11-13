@@ -1,5 +1,5 @@
 // Gear tab: the eight slots (what is worn, its rarity, and what it does), ability scores,
-// lifetime stats, and the Bestiary, each behind its own section tab. There is nothing to manage
+// lifetime stats, deeds and titles, and the Bestiary, each behind its own section tab. There is nothing to manage
 // here: gear equips and sells itself. A named Legendary's card is full width, with its story line.
 //
 // Each section is rebuilt only when something it shows changes, so a tap is never lost to the
@@ -22,13 +22,16 @@ import { drawStill } from '../sprite.js';
 import { el, num, signed, duration, sectionTabs } from './dom.js';
 import { icon } from './icons.js';
 import { heroSpriteLook } from './hero.js';
+import { DEEDS, DEED_TEXT } from '../../data/deeds.js';
+import { wearTitle } from '../deeds.js';
 
 // 'travel 21% quicker' -> 'Travel 21% quicker.'
 const sentence = (text) => text[0].toUpperCase() + text.slice(1) + (text.endsWith('.') ? '' : '.');
 const capital = (text) => text[0].toUpperCase() + text.slice(1);
 
-export function mountGear(root) {
+export function mountGear(root, app) {
   const gearPage = el('div', {});
+  const deedPage = el('div', {});
   const abilityPage = el('div', {});
   const lifePage = el('div', {});
   const beastPage = el('div', {});
@@ -36,9 +39,10 @@ export function mountGear(root) {
     { id: 'gear', label: 'Gear', icon: icon('weapon'), node: gearPage },
     { id: 'abilities', label: 'Abilities', icon: icon('d20'), node: abilityPage },
     { id: 'lifetime', label: 'Lifetime', icon: icon('book'), node: lifePage },
+    { id: 'deeds', label: 'Deeds', icon: icon('medal'), node: deedPage },
     { id: 'bestiary', label: 'Bestiary', icon: icon('eye'), node: beastPage },
   ]);
-  root.append(el('h2', { className: 'view-title', textContent: 'Gear and records' }), tabs.nav, gearPage, abilityPage, lifePage, beastPage);
+  root.append(el('h2', { className: 'view-title', textContent: 'Gear and records' }), tabs.nav, gearPage, abilityPage, lifePage, deedPage, beastPage);
 
   const keys = {};
   const changed = (name, value) => { const k = JSON.stringify(value); if (keys[name] === k) return false; keys[name] = k; return true; };
@@ -128,6 +132,33 @@ export function mountGear(root) {
         stat('skull', 'Most Embarrassing Defeat', worst ?? 'None yet', 'wide red'))));
   }
 
+  // ----- deeds and titles -----
+  // Every deed, done ones first. A deed done offers its title, worn after the hero's name.
+  function drawDeeds(hero) {
+    const done = hero.deeds ?? [];
+    if (!changed('deeds', [hero.id, done, hero.title])) return;
+    const order = [...DEEDS].sort((a, b) => Number(done.includes(b.id)) - Number(done.includes(a.id)));
+    const rows = order.map((d) => {
+      const got = done.includes(d.id);
+      const wearing = hero.title === d.id;
+      const kids = [
+        el('span', { className: 'deed-icon' }, icon(got ? 'medal' : 'lock')),
+        el('div', {},
+          el('p', { className: 'deed-name', textContent: d.name }),
+          el('p', { className: 'deed-title', textContent: `${hero.name} ${d.title}` }),
+          el('p', { className: 'hint', textContent: d.about })),
+      ];
+      if (got) kids.push(el('button', { className: 'btn' + (wearing ? '' : ' primary'), type: 'button', textContent: wearing ? 'Take the title off' : 'Wear this title',
+        onclick: () => { if (wearTitle(hero, wearing ? null : d.id)) app?.changed(); } }));
+      return el('li', { className: 'deed' + (got ? ' done' : '') + (wearing ? ' wearing' : '') }, ...kids);
+    });
+    deedPage.replaceChildren(el('section', { className: 'panel' },
+      el('h3', { textContent: 'Deeds and titles' }),
+      el('p', { className: 'hint', textContent: `${done.length} of ${DEEDS.length} deeds done. Each one done offers a title to wear after the name, on the Hero tab and in the Hall of Legends. ${hero.title ? '' : DEED_TEXT.none + ' is worn at the moment.'}`.trim() }),
+      el('ul', { className: 'deeds' }, ...rows)));
+    tabs.badge('deeds', '');
+  }
+
   // ----- bestiary -----
   // Every region, in road order, each a fold-out with its monsters and its dungeon's boss. The region
   // the hero is in starts open; what is opened or closed by hand stays that way until the hero moves on.
@@ -187,6 +218,7 @@ export function mountGear(root) {
     drawGear(hero);
     drawAbilities(hero);
     drawLifetime(hero);
+    drawDeeds(hero);
     drawBestiary(hero);
   }
   return { update };

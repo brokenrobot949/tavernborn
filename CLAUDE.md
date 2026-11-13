@@ -33,6 +33,9 @@ Rob is the game designer and does not write code.
   growth choices (`learnSkill`, `chooseSubclass`, `respec`, `raiseAbility`)
 - `js/tavern.js` the tavern and legacy: upgrades (`buyUpgrade`, `tavernMods`), the trophy wall, the roster
   (`switchHero`, `dismissHero`), retirement and the Hall (`retire`, `portraitOf`), Paragon ranks. Text in `data/tavern.js`
+- `js/road.js` choices on the road (`afterTask`, `answerChoice`), the travelling merchant (`merchantOn`, `buyWare`),
+  and festivals (`festivalOn`, `joinFestival`); `js/boons.js` timed boons; `js/deeds.js` deeds and titles
+  (`checkDeeds`, `wearTitle`). Text in `data/road.js`, `data/market.js`, `data/deeds.js`
 - `js/sprite.js` LPC layer compositing and animation
 - `js/audio.js` sound: effects and the tavern tune, synthesised with the Web Audio API (no audio files), and the
   sound settings, kept in localStorage under `tavernborn.settings`, apart from the save
@@ -235,6 +238,61 @@ Rob is the game designer and does not write code.
   glass case (unsold, one of each, the higher copy, in the save string).
 - Spec departures to raise with Rob: the time of day comes from the phone's clock, not from the hero's own day
   count; the Highlights list keeps 60 lines at most.
+
+## Round four after Phase 7 (waiting on Rob's phone test)
+Rob picked eleven of a list of suggestions: choice cards, the merchant, deeds and titles, festivals, fight bars, class
+effects, bosses, loot arriving, the hero on the map, and the barkeep (no other patrons).
+- Choices on the road (`data/road.js`, 18 meetings; `js/road.js`): from level 2, between roam, quest, and travel
+  tasks, one turns up every 3 to 6 hours of the hero's age (the first after 1 to 2). It waits 4 hours in
+  `hero.choice` while work carries on; the Hero tab shows a card with two buttons and a badge on the Hero tab.
+  With no word, the hero takes the option in character (`auto`), unless they cannot pay for it. Options pay XP
+  in minutes of work (`workXp`), gold in level-scaled units (`goldUnit`: 25 gp at 1, about 5,000 at 10, 40,000 at
+  20), boons, a piece of gear (as from a chest), or hit points (never below 1), some on a chance. `afterTask` is
+  called by `advance` after every task. Events `meeting` and `choice`; Chronicle kind `choice`.
+- Boons (`BOONS` in `js/rules.js`, names in `data/market.js`): short spells of the same numbers skills and gear
+  change, on the hero's own clock (`hero.boons`), added in `modsOf` (`withBoons`). The same boon again extends it.
+  Shown as chips under the hero's name.
+- The travelling merchant, Odlin Farthingale (Tavern tab, first section): in the yard on about 6 days in 10 by
+  the device's calendar (`merchantOn`, a hash of the day), four of eight wares a visit, one of each per visit
+  (`state.tavern.merchant`), priced in gold units. Wares: five boons, a crate of three potions for the next
+  dungeon or Rifts run (`hero.supplies`), and a mystery crate (one piece at the hero's level). The simulator's
+  player never shops there.
+- Festivals by the device's calendar (`FESTIVALS`): Lantern Night 5 to 25 November, Midwinter 18 December to
+  6 January, the Blossom Fair 10 to 30 April, Midsummer 14 June to 4 July, the Harvest Fair 20 September to
+  10 October. Bunting or lanterns over the Hero tab's scene (not dungeons or the Rifts) and the common room,
+  every other bar line about it, and a card on the Tavern tab: each hero may join once a year (`hero.joined`) for
+  24 hours of festive spirits (+10% XP and gold).
+- Deeds (`data/deeds.js`, 24): checked after every task and after buying or joining; each writes a Chronicle line
+  (kind `deed`, a highlight) and offers a title, chosen on the Gear tab's Deeds section (`hero.title`), shown
+  after the name on the Hero tab and kept in the Hall. Thresholds were set from the simulator: a career rolls about
+  3,000 natural 20s and as many 1s.
+- Fight bars (`.fight-bars`): the hero's real hit points over their head and the foe's bar over theirs, which
+  wears down with the fight's progress (the roll at the end decides). A boss's bar is in as many parts as it
+  takes blows. A foe beaten live sinks and fades (`defeatGhost`).
+- Class effects while swinging (CSS only, `.scene.attacking[data-cls]`): a sword arc (Fighter), two crossing cuts
+  (Rogue), a fireball and its flash (Wizard), a burst of holy light and a halo (Cleric). Healing shows motes round
+  the hero (`healGlow`), gold for a Cleric.
+- Bosses (`js/ui/bosses.js`): eight hand-drawn maps at 6 screen pixels to a map pixel (an ordinary foe is 4 or
+  5), each in its own colours. A boss arriving live gets a banner and a shudder (`bossEntrance`); during a boss
+  fight the hero steps back a little (`.vs-boss`).
+- Loot arriving (`lootDrop`): a chest by the foe opens and the piece, in its rarity's colour, flies to the hero.
+  Very Rare and Legendary come in a beam of light. At most two shown per tick.
+- The map walker: during travel and the walk back after a knockout, the hero's sprite walks the road on the Map
+  tab, placed along the road by the journey's progress and facing along the current stretch.
+- The barkeep: a balding grey-bearded dwarf in a vest behind a new bar counter in the common room, who wanders
+  along the bar now and then. Heroes walk in front of the counter.
+- Saves: version 6 (`roadFields` in `js/state.js`): unreadable choices, boons, and deeds are dropped; a hero from
+  an older save starts with none and earns the deeds already done on the next task.
+- `node tools/check-sim.mjs` (229 checks) adds 19 for this round: every choice whole, meetings turning up and
+  being decided alone, answering, boons, the merchant's days, stock and prices, festivals and the new year,
+  deeds and titles, the save string, and a version 5 save. Two older checks changed: the story quest piece check
+  now compares names with the starting kit (the trinket has none), and check 15's hero uses seed base 2, since the
+  road draws from the same dice and the old seed's hero now ends without a Legendary.
+- Measured after the change (`node tools/simulate.mjs`, 500 heroes, nobody answering choices or shopping): median level
+  20 at 29.2 days (10th to 90th: 27.3 to 31.7), about half a day quicker than before from choices the heroes
+  decide alone; every level within 5% of its target except level 3 (+11%, as before); all 500 clear the last dungeon.
+- Spec departures to raise with Rob: none of this round is in the design doc. The merchant and festivals follow
+  the phone's calendar, not the hero's days; the hero keeps working while a choice waits.
 
 ## Known gaps closed after Phase 7
 - All 26 LPC hair colours are baked (`HAIR_COLORS` in `data/races.js`, natural shades first). The art is now

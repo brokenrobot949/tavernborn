@@ -1,7 +1,9 @@
 // The common room at the top of the Tavern tab: the tavern backdrop, a pixel-art hearth with a fire
 // that burns, the trophy plaques and the glass case of Legendaries on the wall, and every hero on
 // the roster walking about the room: over to the fire, to the window, to the bar, standing a while,
-// and off again. Drawn in code at two screen pixels to a sprite pixel; nothing to download.
+// and off again. Behind the bar stands the barkeep, a dwarf in a vest, who wanders up and down it
+// now and then to polish something. Drawn in code at two screen pixels to a sprite pixel; nothing
+// to download. While a festival runs, the room is dressed for it.
 
 import { el } from './dom.js';
 import { SpriteView, heroLook } from '../sprite.js';
@@ -12,6 +14,9 @@ import { REGION_COLORS } from './map.js';
 
 const PX = 2; // screen pixels to a sprite pixel in the room
 const WALK = 34; // screen pixels a second, a stroll
+// The barkeep: one of the game's own LPC looks, with nothing in the hands.
+const BARKEEP = { race: 'dwarf', build: 'muscular', skin: 'light', hairStyle: 'balding', hairColor: 'gray', beard: true, cls: 'rogue', tiers: { body: 0, feet: 0 } };
+const BAR_FROM = 0.1, BAR_TO = 0.3; // where along the room the barkeep keeps to, as shares of its width
 // Places a regular heads for, as a share of the room's width, and which way they face on arrival.
 const SPOTS = [
   { x: 0.84, face: 'up', why: 'the fire' },
@@ -75,8 +80,14 @@ export function mountCommonRoom() {
   const plaques = el('div', { className: 'trophy-wall' });
   const relics = el('div', { className: 'relic-case', attrs: { title: 'The glass case' } });
   const floor = el('div', { className: 'room-floor' });
+  const festive = el('div', { className: 'festive' });
+  const keepCanvas = el('canvas', { className: 'regular' });
+  const keepNode = el('div', { className: 'barkeep' }, keepCanvas);
+  const keepView = new SpriteView(keepCanvas, { stageW: 64, stageH: 64, ground: 1 });
+  keepView.set({ look: heroLook(BARKEEP), anim: 'walk', facing: 'down', still: true });
+  const keep = { x: 0, target: 0.18, wait: 0, standing: true, placed: false };
   const room = el('div', { className: 'scene mini common-room', attrs: { 'data-bg': 'tavern', 'aria-hidden': 'true' } },
-    el('div', { className: 'bd' }), el('div', { className: 'tavern-window' }), plaques, relics, glow, hearth, floor);
+    el('div', { className: 'bd' }), el('div', { className: 'tavern-window' }), festive, plaques, relics, glow, hearth, keepNode, el('div', { className: 'bar-counter' }), floor);
 
   let walkers = []; // { id, view, node, x, target, wait, face }
   let key = '';
@@ -98,6 +109,7 @@ export function mountCommonRoom() {
     last = now;
     drawHearth(hg, now);
     const width = room.clientWidth;
+    stepBarkeep(now, dt, width);
     for (const w of walkers) {
       if (w.wait > now) continue;
       const goal = Math.max(52, Math.min(width - 52, w.target * width)); // keep the whole sprite in the room
@@ -114,6 +126,25 @@ export function mountCommonRoom() {
       w.x += Math.sign(dx) * Math.min(Math.abs(dx), WALK * dt);
       w.node.style.transform = `translateX(${Math.round((w.x - 64) / PX) * PX}px)`; // x is the middle of the sprite
     }
+  }
+
+  // The barkeep: stands behind the bar facing the room, and every so often walks a little way along
+  // it, polishes, and comes back.
+  function stepBarkeep(now, dt, width) {
+    if (!keep.placed && width) { keep.x = keep.target * width; keep.placed = true; keep.wait = now + 4000; keepNode.style.transform = `translateX(${Math.round((keep.x - 64) / PX) * PX}px)`; }
+    if (keep.wait > now) return;
+    const goal = keep.target * width;
+    const dx = goal - keep.x;
+    if (Math.abs(dx) < 2) {
+      if (!keep.standing) { keep.standing = true; keepView.set({ anim: 'walk', facing: 'down', still: true }); keep.wait = now + 5000 + Math.random() * 9000; return; }
+      keep.standing = false;
+      keep.target = BAR_FROM + Math.random() * (BAR_TO - BAR_FROM);
+      return;
+    }
+    const facing = dx < 0 ? 'left' : 'right';
+    if (keep.facing !== facing || keepView.still) { keep.facing = facing; keepView.set({ anim: 'walk', facing, still: false }); }
+    keep.x += Math.sign(dx) * Math.min(Math.abs(dx), WALK * 0.7 * dt);
+    keepNode.style.transform = `translateX(${Math.round((keep.x - 64) / PX) * PX}px)`;
   }
 
   // Redraw the plaques, the case, and the regulars when one of them changes.
@@ -149,5 +180,5 @@ export function mountCommonRoom() {
     if (!frame) frame = requestAnimationFrame(step);
   }
 
-  return { room, update, setTime(time) { room.dataset.time = time; } };
+  return { room, update, setTime(time) { room.dataset.time = time; }, setFestival(deco) { festive.dataset.deco = deco ?? ''; } };
 }

@@ -57,6 +57,7 @@ import { displayLegend } from './tavern.js';
 import { LOOT_LINES, LEGENDARIES, MILESTONES, TITLES } from '../data/loot.js';
 import { RIFT_TEXT, TROPHIES, TROPHY_HUNG, TROPHY_WAITING, PARAGON_LINE, RIFTS_OPEN } from '../data/tavern.js';
 import { tavernMods, recordTrophy, paragonRank, paragonTitle } from './tavern.js';
+import { boonMods } from './boons.js';
 
 export const FOCUSES = ['roam', 'quest', 'delve', 'rift'];
 
@@ -79,12 +80,26 @@ function modsOf(hero) {
   const sk = skillMods(hero);
   const g = gearMods(hero);
   const hit = modsCache.get(hero);
-  if (hit && hit.sk === sk && hit.g === g) return hit.mods;
+  if (hit && hit.sk === sk && hit.g === g) return withBoons(hero, hit.mods);
   const n = { ...sk.n };
   for (const [k, v] of Object.entries(g)) n[k] += v;
   const mods = { n, sigs: sk.sigs };
   modsCache.set(hero, { sk, g, mods });
-  return mods;
+  return withBoons(hero, mods);
+}
+// Boons (js/boons.js) run out on the hero's clock, so they are added on top of the cached numbers.
+function withBoons(hero, mods) {
+  const b = boonMods(hero);
+  if (!b) return mods;
+  const n = { ...mods.n };
+  for (const [k, v] of Object.entries(b)) n[k] = (n[k] ?? 0) + v;
+  return { n, sigs: mods.sigs };
+}
+// Potions bought from the travelling merchant go into the next dungeon or Rifts run.
+function takeSupplies(hero) {
+  const n = hero.supplies?.potions ?? 0;
+  if (n) hero.supplies.potions = 0;
+  return n;
 }
 
 // ---------- loot: something was found ----------
@@ -94,6 +109,7 @@ function modsOf(hero) {
 // a second piece wherever one was given (never from a monster on the road, and never a third).
 //   opts: { level, source ('roam' | 'room' | 'chest' | 'quest' | 'odd' | 'boss'), slot, legend, second,
 //           quality (added to the skills' own), legendLevel (a named Legendary found away from its dungeon) }
+export function giveLoot(state, hero, events, opts) { return loot(state, hero, events, opts); }
 function loot(state, hero, events, opts) {
   const sk = modsOf(hero);
   const { slot, item } = opts.legend ? legendItem(opts.legend, opts.legendLevel) : rollItem(state, hero, { ...opts, quality: sk.n.quality + (opts.quality ?? 0) });
@@ -310,7 +326,7 @@ function delveTask(state, hero, events) {
     }
     const cut = sk.sigs.shortcut?.[0];
     const rooms = Math.max(MIN_ROOMS, randInt(state, d.rooms[0], d.rooms[1]) - sk.n.rooms - (cut?.rooms ?? 0));
-    hero.delve = { region: hero.region, room: 0, rooms, potions: DUNGEON_POTIONS + sk.n.potions, stubborn: false, used: {}, hidden: null };
+    hero.delve = { region: hero.region, room: 0, rooms, potions: DUNGEON_POTIONS + sk.n.potions + takeSupplies(hero), stubborn: false, used: {}, hidden: null };
     // A hidden room, if a skill finds one this run, is paid out when the hero reaches it.
     const finder = (sk.sigs.hiddenRoom ?? []).find((s) => random(state) < s.chance);
     if (finder) hero.delve.hidden = { room: randInt(state, 0, rooms - 1), by: finder.id };
@@ -336,7 +352,7 @@ const random50 = (state) => randInt(state, 0, 1) === 1;
 // The Planar Rifts: one floor per task, wherever the hero happens to be standing.
 function riftTask(state, hero, events) {
   if (!hero.rift) {
-    hero.rift = { floor: 1, potions: DUNGEON_POTIONS + modsOf(hero).n.potions }; // potions are carried in, as into a dungeon
+    hero.rift = { floor: 1, potions: DUNGEON_POTIONS + modsOf(hero).n.potions + takeSupplies(hero) }; // potions are carried in, as into a dungeon
     hero.fresh = true;
     hero.stats.riftRuns = (hero.stats.riftRuns ?? 0) + 1;
     emit(hero, events, 'story', RIFT_TEXT.enter);
@@ -493,6 +509,7 @@ function takeDamage(hero, amount, sk, ctx) {
   return { damage: Math.max(0, damage), stubborn, saved };
 }
 
+export function giveXp(state, hero, xp, events) { return levelUps(state, hero, xp, events); }
 function levelUps(state, hero, xp, events) {
   for (const level of gainXp(hero, xp)) {
     emit(hero, events, 'levelup', fill(pick(state, LEVEL_UP), { level, name: hero.name }), { level });

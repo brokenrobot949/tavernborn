@@ -78,3 +78,60 @@ export function weatherFor(region, now = Date.now()) {
   const roll = ((spell * 2654435761 + region.length * 97 + region.charCodeAt(0) * 13) >>> 0) % 1000 / 1000;
   return roll < w.chance ? w.kind : '';
 }
+
+// ----- after Phase 7: bosses, loot arriving, healing, and a foe going down -----
+
+// A boss arriving: its name in a banner, as a region's is on arrival.
+export function bossEntrance(layer, name) {
+  layer.querySelector('.boss-banner')?.remove();
+  const b = el('div', { className: 'arrival boss-banner' }, el('small', { textContent: 'At the bottom of the dungeon' }), el('strong', { textContent: name }), el('span', { textContent: 'stirs' }));
+  layer.append(b);
+  setTimeout(() => b.remove(), 3600);
+}
+
+// Gear found: a chest by the foe springs open and the piece, in its rarity's colour, flies to the
+// hero. Very Rare and Legendary come down in a beam of light first. `back` is behind the hero.
+const TIER_COLORS = ['#b8b0a0', '#4caf50', '#3d8bff', '#b05cff', '#ff8000'];
+export function lootDrop(layer, back, e, delay = 0) {
+  const color = TIER_COLORS[e.tier] ?? TIER_COLORS[0];
+  const node = el('div', { className: 'loot-drop t' + e.tier },
+    el('span', { className: 'chest' }, el('i', { className: 'lid' })),
+    el('span', { className: 'piece' }, icon(e.slot)));
+  node.style.setProperty('--tier', color);
+  node.style.animationDelay = `${delay}ms`;
+  for (const k of node.querySelectorAll('.lid, .piece')) k.style.animationDelay = `${delay}ms`;
+  layer.append(node);
+  let beam = null;
+  if (e.tier >= 3) {
+    beam = el('div', { className: 'loot-beam' + (e.tier >= 4 ? ' legend' : '') });
+    beam.style.setProperty('--tier', color);
+    beam.style.animationDelay = `${delay}ms`;
+    back.append(beam);
+  }
+  setTimeout(() => { node.remove(); beam?.remove(); }, 2600 + delay);
+}
+
+// Hit points coming back: a soft glow rising round the hero, gold for a Cleric and green otherwise.
+export function healGlow(layer, cls) {
+  layer.querySelector('.heal-glow')?.remove();
+  const g = el('div', { className: 'heal-glow' + (cls === 'cleric' ? ' holy' : '') }, el('i'), el('i'), el('i'), el('i'));
+  layer.append(g);
+  setTimeout(() => g.remove(), 1800);
+}
+
+// A foe beaten, seen live: a copy of it, with an empty bar, sinks and fades where it stood while the
+// scene moves on. `foe` is the scene's foe box; nothing is shown if it is empty.
+export function defeatGhost(scene, foe, bar) {
+  const src = foe.querySelector('canvas');
+  if (!src) return;
+  bar.style.width = '0%';
+  const copy = document.createElement('canvas');
+  copy.width = src.width;
+  copy.height = src.height;
+  copy.className = src.className;
+  copy.style.width = src.style.width;
+  copy.getContext('2d').drawImage(src, 0, 0);
+  const ghost = el('div', { className: foe.className.replace(/\b(flinch|here)\b/g, '') + ' gone' }, copy);
+  scene.append(ghost);
+  setTimeout(() => ghost.remove(), 900);
+}

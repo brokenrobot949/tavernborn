@@ -17,10 +17,15 @@ import { currentQuest, clericFee, payCleric } from '../tasks.js';
 import { subclassName } from '../skills.js';
 import { el, num, heroClock, confirmBtn } from './dom.js';
 import { icon } from './icons.js';
-import { shapeFor, pickBy, popRoll, burst, arrival, weatherFor } from './scene-fx.js';
+import { shapeFor, pickBy, popRoll, burst, arrival, weatherFor, lootDrop, bossEntrance, healGlow, defeatGhost } from './scene-fx.js';
 import { foeCanvas } from './foes.js';
 import { MONSTERS } from '../../data/monsters.js';
 import { sfx } from '../audio.js';
+import { CHOICE_BY_ID } from '../../data/road.js';
+import { BOON_TEXT } from '../../data/market.js';
+import { answerChoice, optionCost, canAfford, festivalOn } from '../road.js';
+import { activeBoons } from '../boons.js';
+import { titled } from '../deeds.js';
 
 const STAGE_H = 70; // sprite pixels; the scene is this tall times 4
 const SHOWN_LINES = 80;
@@ -38,7 +43,7 @@ const POPS_UP_TO = 3; // dice rise only for what happened in the last few second
 function foeOf(hero, t) {
   if (!t) return null;
   if ((t.kind === 'roam' || t.kind === 'delve') && t.monster) { const m = MONSTER_BY_ID[t.monster]; return m ? [shapeFor(m.name), m.name, '', t.monster] : null; }
-  if (t.kind === 'boss') { const b = DUNGEONS[hero.region].boss; return [shapeFor(b.name), b.name, 'boss', 'boss:' + b.name]; }
+  if (t.kind === 'boss') { const b = DUNGEONS[hero.region].boss; return [shapeFor(b.name), b.name, 'boss', 'boss:' + b.name, b.id, b.hits]; }
   if (t.kind === 'rift') return [pickBy(t.text, ['eye', 'flame', 'humanoid', 'blob']), '', 'rift', 'rift:' + t.text];
   if (t.kind === 'quest') return [pickBy(t.text, ['humanoid', 'beast', 'small', 'critter', 'humanoid']), '', '', 'quest:' + t.text];
   return null;
@@ -100,6 +105,7 @@ const LINE_LOOK = {
   potion: ['heal', 'potion'], recovered: ['heal', 'heart'],
   tavern: ['tavern', 'mug'], rift: ['rift', 'vortex'],
   story: ['story', 'book'], confidence: ['story', 'eye'], bestiary: ['story', 'eye'],
+  choice: ['road', 'signpost'], deed: ['grow', 'medal'], festival: ['tavern', 'lantern'],
 };
 const lookOf = (line) => LINE_LOOK[line.k] ?? ['plain', 'd20'];
 
@@ -138,7 +144,16 @@ export function mountHero(root, app) {
   const fx = el('div', { className: 'scene-fx', attrs: { 'aria-hidden': 'true' } });
   const fxBack = el('div', { className: 'scene-fx back', attrs: { 'aria-hidden': 'true' } }); // behind the hero
   let foeKey = '';
-  const scene = el('div', { className: 'scene' }, ...backdropTracks(), el('div', { className: 'sky-tint' }), el('div', { className: 'stars' }), el('div', { className: 'tavern-window' }), wall, fxBack, foe, canvas, still, weather, place, fx);
+  // Fight bars over the hero and the foe, and the class's own effects while it swings.
+  const heroBar = el('i');
+  const foeBar = el('i');
+  const foeName = el('span', { className: 'fb-name' });
+  const bars = el('div', { className: 'fight-bars', attrs: { 'aria-hidden': 'true' } },
+    el('div', { className: 'fb hero-fb' }, el('div', { className: 'fb-track' }, heroBar)),
+    el('div', { className: 'fb foe-fb' }, foeName, el('div', { className: 'fb-track' }, foeBar)));
+  const classFx = el('div', { className: 'class-fx', attrs: { 'aria-hidden': 'true' } }, el('i'), el('i'), el('i'));
+  const festive = el('div', { className: 'festive', attrs: { 'aria-hidden': 'true' } });
+  const scene = el('div', { className: 'scene' }, ...backdropTracks(), el('div', { className: 'sky-tint' }), el('div', { className: 'stars' }), el('div', { className: 'tavern-window' }), festive, wall, fxBack, foe, canvas, still, classFx, weather, bars, place, fx);
   const view = new SpriteView(canvas, { stageW: 80, stageH: STAGE_H, ground: 8, shadow: true });
   new ResizeObserver(() => {
     const w = Math.max(64, Math.min(130, Math.floor(scene.clientWidth / 4)));
@@ -174,6 +189,16 @@ export function mountHero(root, app) {
   const cleric = el('div', { className: 'panel cleric', hidden: true }, el('div', { className: 'row' }, clericBtn), clericNote);
   let current = null; // { state, hero } as of the last update
   clericBtn.onclick = () => { if (current && payCleric(current.state, current.hero) != null) { sfx('coins'); app.changed(); } };
+  // A meeting on the road, waiting for word: the two options, and how long the hero will wait.
+  const choiceText = el('p', { className: 'choice-text' });
+  const choiceRow = el('div', { className: 'choice-btns' });
+  const choiceNote = el('p', { className: 'hint' });
+  const choiceBox = el('div', { className: 'panel choice', hidden: true },
+    el('h3', {}, icon('signpost'), el('span', { textContent: 'On the road' })), choiceText, choiceRow, choiceNote);
+  let choiceKey = '';
+  // Boons running: a chip each, with the time left.
+  const boonRow = el('div', { className: 'boons' });
+  let boonKey = '';
   // Retirement: offered once by a card at level 20, then always here. No penalty for ignoring it.
   const retireNote = el('p', { className: 'hint' });
   const retireRow = el('div', { className: 'row' });
@@ -198,7 +223,7 @@ export function mountHero(root, app) {
   root.append(
     scene,
     el('div', { className: 'hero-head' }, el('div', {}, name, sub), gold),
-    hp.wrap, xp.wrap, task, cleric, retirePanel,
+    boonRow, hp.wrap, xp.wrap, task, choiceBox, cleric, retirePanel,
     el('div', { className: 'chronicle-head' }, el('h3', { className: 'section', textContent: 'Chronicle' }), el('div', { className: 'segs', attrs: { role: 'group', 'aria-label': 'Show' } }, allBtn, hlBtn)),
     list, highlights, noHighlights,
   );
@@ -211,6 +236,7 @@ export function mountHero(root, app) {
   let wasTavern = null; // whether the last update found the hero in the tavern (null: not seen yet)
   let lastUpdate = 0;
   let fallUntil = 0; // while a knockout's fall is playing, the scene stays where it happened
+  let seenSince = 0; // when this hero was first drawn: a boss already there on opening is not announced
 
   const lineNode = (line) => {
     const [family, glyph] = lookOf(line);
@@ -228,7 +254,7 @@ export function mountHero(root, app) {
 
   function update(state, hero) {
     current = { state, hero };
-    if (hero.id !== heroId) { heroId = hero.id; lookKey = sceneKey = taskKey = ''; lastLine = 0; highlightKey = -1; wasTavern = null; fallUntil = 0; list.replaceChildren(); }
+    if (hero.id !== heroId) { heroId = hero.id; lookKey = sceneKey = taskKey = ''; lastLine = 0; highlightKey = -1; wasTavern = null; fallUntil = 0; seenSince = performance.now(); list.replaceChildren(); }
 
     // sprite: walk up to the monster, then attack; stand in the tavern while recovering
     const t = hero.currentTask;
@@ -270,9 +296,32 @@ export function mountHero(root, app) {
       const fk = f ? f[3] + t.text : '';
       if (fk !== foeKey) {
         foeKey = fk;
-        foe.replaceChildren(...(f ? [foeCanvas(f[0], f[1], f[2])] : []));
+        foe.replaceChildren(...(f ? [foeCanvas(f[0], f[1], f[2], f[4])] : []));
         foe.className = 'foe' + (f ? ' here ' + f[0] + (f[2] === 'boss' ? ' boss' : '') : '');
+        // A boss arriving, seen live: a banner and a shudder.
+        if (f?.[2] === 'boss' && now - seenSince > 1500 && !root.hidden) { bossEntrance(fx, f[1]); scene.classList.remove('shake'); void scene.offsetWidth; scene.classList.add('shake'); }
       }
+      // The bars: the hero's real hit points, and the foe worn down as the fight goes on. The roll at
+      // the end decides; the foe's bar only shows how long it has been going. A boss's bar is in as
+      // many parts as the blows it takes.
+      bars.hidden = !f;
+      if (f) {
+        const p = PATTERNS[t.kind];
+        const start = Math.ceil(t.duration * (p?.approach ?? 0));
+        const done = Math.max(0, Math.min(1, (t.elapsed - start) / Math.max(1, t.duration - start)));
+        foeBar.style.width = `${Math.round(100 * (1 - 0.85 * done))}%`;
+        foeName.textContent = f[1] || (t.kind === 'rift' ? `Floor ${t.floor}` : '');
+        bars.classList.toggle('boss', f[2] === 'boss');
+        bars.style.setProperty('--blows', String(f[5] ?? 1));
+      }
+      // While swinging, the class's own effect plays at the foe: a sword arc, a fireball, quick
+      // dagger cuts, or a burst of holy light.
+      scene.dataset.cls = hero.class;
+      scene.classList.toggle('attacking', !!f && actionFor(t) === 'attack');
+      scene.classList.toggle('vs-boss', f?.[2] === 'boss'); // the hero gives a boss a little more room
+      // A festival dresses the open air and the tavern, not the dungeons or the Rifts.
+      const fest = !inDungeon && !inRift ? festivalOn(new Date()) : null;
+      festive.dataset.deco = fest?.deco ?? '';
       const hung = inTavern ? trophyWall(state).hung : [];
       if (hung.join() !== wallKey) {
         wallKey = hung.join();
@@ -290,7 +339,7 @@ export function mountHero(root, app) {
     }
     if (!falling) place.textContent = inTavern ? 'The Wobbly Griffin' : inRift ? RIFT_NAME : t?.kind === 'travel' || t?.kind === 'return' ? 'On the road' : inDungeon ? DUNGEONS[hero.region].name : REGION_BY_ID[hero.region].name;
 
-    name.textContent = hero.name;
+    name.textContent = titled(hero);
     const subclass = subclassName(hero);
     const rank = paragonRank(hero);
     sub.textContent = `Level ${hero.level} ${RACES[hero.race].name} ${CLASSES[hero.class].name}${subclass ? ', ' + subclass : ''}${hero.level >= EMBLEM_LEVEL ? '. ' + TITLES[hero.class] : ''}${rank ? `. Paragon ${rank}, ${paragonTitle(rank)}` : ''}`;
@@ -298,6 +347,8 @@ export function mountHero(root, app) {
 
     const max = maxHp(hero);
     hp.fill.style.width = (100 * hero.hp) / max + '%';
+    heroBar.style.width = (100 * hero.hp) / max + '%';
+    heroBar.parentNode.classList.toggle('low', hero.hp < max * 0.35);
     hp.text.textContent = knockedOut ? `${hero.hp} / ${max} (recovering)` : `${hero.hp} / ${max}`;
     const next = xpToNext(hero);
     const floor = xpForLevel(hero.level);
@@ -332,6 +383,41 @@ export function mountHero(root, app) {
       clericBtn.textContent = `Pay the cleric ${num(fee)} gp`;
       clericBtn.disabled = hero.gold < fee;
       clericNote.textContent = `${hero.name} gets up unaided in ${Math.ceil(left / 60)} min. The cleric will see to it now for a fee${hero.gold < fee ? ', which is more gold than there is' : ''}. Waiting costs nothing.`;
+    }
+
+    // The meeting on the road. Rebuilt only when something on it changes, so taps are not lost.
+    const c = CHOICE_BY_ID[hero.choice?.id];
+    const left = c ? Math.max(0, hero.choice.until - hero.age) : 0;
+    const cKey = c ? [hero.id, c.id, hero.choice.at, c.options.map((o) => canAfford(hero, o) + ':' + optionCost(hero, o))].join('|') : '';
+    if (cKey !== choiceKey) {
+      choiceKey = cKey;
+      choiceBox.hidden = !c;
+      if (c) {
+        choiceText.textContent = c.text.replace(/\{name\}/g, hero.name);
+        choiceRow.replaceChildren(...c.options.map((o, i) => {
+          const cost = optionCost(hero, o);
+          const b = el('button', { className: 'btn' + (i === 0 ? ' primary' : ''), type: 'button', onclick: () => {
+            if (current && answerChoice(current.state, current.hero, i)) { if (cost) sfx('coins'); app.changed(); }
+          } }, el('span', { textContent: o.label }), cost ? el('small', { textContent: `${num(cost)} gp` }) : null);
+          b.disabled = !canAfford(hero, o);
+          return b;
+        }));
+      }
+    }
+    if (c) choiceNote.textContent = `With no word in ${left >= 3600 ? `${Math.floor(left / 3600)} h ${Math.floor((left % 3600) / 60)} min` : `${Math.ceil(left / 60)} min`}, ${hero.name} will decide alone: ${c.options[c.auto ?? 0].label.toLowerCase()}, most likely. Work carries on meanwhile.`;
+
+    // Boons running, with the time left in whole minutes.
+    const boons = activeBoons(hero);
+    const bKey = boons.map((b) => b.id + Math.ceil((b.until - hero.age) / 60)).join() + (hero.supplies?.potions ?? 0);
+    if (bKey !== boonKey) {
+      boonKey = bKey;
+      const until = (b) => { const s = b.until - hero.age; return s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min` : `${Math.ceil(s / 60)} min`; };
+      const chips = boons.map((b) => el('span', { className: 'boon' + (b.id === 'cursed' ? ' bad' : ''), title: BOON_TEXT[b.id].does },
+        icon(b.id === 'cursed' ? 'skull' : b.id === 'festive' ? 'lantern' : 'spark'),
+        el('span', { textContent: `${BOON_TEXT[b.id].title}: ${BOON_TEXT[b.id].does}, ${until(b)}` })));
+      if (hero.supplies?.potions) chips.push(el('span', { className: 'boon' }, icon('potion'), el('span', { textContent: `${hero.supplies.potions} spare potions for the next dungeon or Rifts run` })));
+      boonRow.replaceChildren(...chips);
+      boonRow.hidden = !chips.length;
     }
 
     // Retirement, from level 20. Rebuilt only when something on it changes, so taps are not lost.
@@ -378,8 +464,19 @@ export function mountHero(root, app) {
         const landed = e.roll.outcome === 'hit' || e.roll.outcome === 'crit' || e.won;
         const cls = landed ? 'flinch' : '';
         if (cls) { foe.classList.remove(cls); void foe.offsetWidth; foe.classList.add(cls); }
+        if (landed && e.monster) defeatGhost(scene, foe, foeBar);
         if (e.damage > 0) { canvas.classList.remove('hurt-flash'); void canvas.offsetWidth; canvas.classList.add('hurt-flash'); }
       }
+    }
+    // A boss beaten: it goes down whatever the roll text says.
+    const boss = events.find((e) => e.type === 'task' && e.source === 'boss' && e.won);
+    if (boss && gap <= POPS_UP_TO) defeatGhost(scene, foe, foeBar);
+    // Gear arriving: a chest, and the piece flying to the hero; Very Rare and Legendary in a beam.
+    if (gap <= POPS_UP_TO) {
+      const found = events.filter((e) => e.type === 'loot').sort((a, b) => b.tier - a.tier).slice(0, 2);
+      found.forEach((e, i) => lootDrop(fx, fxBack, e, 500 + i * 900));
+      // Healing: a potion, a heal from a skill, or getting up again.
+      if (events.some((e) => e.type === 'potion' || e.heal > 0 || (e.type === 'choice' && e.boon))) healGlow(fx, hero.class);
     }
     const level = events.filter((e) => e.type === 'levelup').at(-1);
     const paragon = events.filter((e) => e.type === 'paragon').at(-1);

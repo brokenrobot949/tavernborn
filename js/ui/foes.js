@@ -7,6 +7,8 @@
 // Map letters: a main, b shade, c light, d second colour, e eyes, f skin, k dark, w bone, teeth,
 // or metal. '.' is empty.
 
+import { BOSS_MAPS } from './bosses.js';
+
 const OUTLINE = '#1c1418';
 
 const MAPS = {
@@ -271,12 +273,15 @@ const BOSS_EYES = '#ffcf4a';
 
 // A canvas with one foe drawn on it, one canvas pixel per map pixel plus a pixel of outline all
 // round. `name` picks the colours; `kind` is 'rift' or 'boss' for those palettes.
-export function foeCanvas(shape, name = '', kind = '') {
-  const m = MAPS[shape] ?? MAPS.humanoid;
+// A dungeon boss (`boss`, its id) has its own map and colours (js/ui/bosses.js).
+export function foeCanvas(shape, name = '', kind = '', boss = null) {
+  const own = kind === 'boss' ? BOSS_MAPS[boss] : null;
+  const m = own ?? MAPS[shape] ?? MAPS.humanoid;
   let pal = { ...m.pal };
-  if (kind === 'rift') pal = { ...pal, ...RIFT_PAL };
+  if (own) { /* a boss keeps its own colours */ }
+  else if (kind === 'rift') pal = { ...pal, ...RIFT_PAL };
   else for (const [re, over] of VARIANTS) if (re.test(name)) { pal = { ...pal, ...over }; break; }
-  if (kind === 'boss') pal.e = BOSS_EYES;
+  if (kind === 'boss' && !own) pal.e = BOSS_EYES;
   const w = Math.max(...m.map.map((r) => r.length));
   const h = m.map.length;
   const at = (x, y) => (y >= 0 && y < h && x >= 0 && x < w ? m.map[y][x] ?? '.' : '.');
