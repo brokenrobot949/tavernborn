@@ -11,7 +11,7 @@
 // `switchHero`, `retire`, and `dismissHero`. Each returns null or false when it cannot be done.
 // The simulator calls the same ones.
 
-import { UPGRADES, UPGRADE_BY_ID, TROPHIES, PARAGON_TITLES, RETIRED, LEGEND_LINES, LEGEND_UNBEATEN } from '../data/tavern.js';
+import { UPGRADES, UPGRADE_BY_ID, TROPHIES, PARAGON_TITLES, RETIRED, LEGEND_LINES, LEGEND_UNBEATEN, RENAMED, SIGN } from '../data/tavern.js';
 import { SLOTS, EMBLEM_LEVEL, WISP_LEVEL, GLOW_LEVEL, WISP_COLOR } from '../data/items.js';
 import { MONSTER_BY_ID } from '../data/monsters.js';
 import { BOSS_BY_ID } from '../data/dungeons.js';
@@ -64,6 +64,45 @@ export function buyUpgrade(state, hero, id) {
   const name = u.ranks[rank - 1];
   chronicle(hero, 'tavern', fill(u.bought, { rank: name[0].toLowerCase() + name.slice(1) }), { gain: `-${price.toLocaleString('en-US')} gp`, upgrade: id, rank });
   return price;
+}
+
+// ---------- the name and the sign ----------
+
+export const DEFAULT_TAVERN_NAME = 'The Wobbly Griffin';
+export const TAVERN_NAME_MAX = 28;
+export const DEFAULT_SIGN = { board: 'oak', ink: 'gold', emblem: 'none', motto: 0 };
+
+// A name as the game keeps it: trimmed, single-spaced, at most 28 characters, or null for the
+// tavern's own name (an empty box, or the default typed out).
+export function cleanTavernName(name) {
+  const n = String(name ?? '').replace(/\s+/g, ' ').trim().slice(0, TAVERN_NAME_MAX).trim();
+  return n && n !== DEFAULT_TAVERN_NAME ? n : null;
+}
+export const tavernName = (state) => state.tavern?.name || DEFAULT_TAVERN_NAME;
+
+// Rename the tavern. Writes a Chronicle line for the hero who is out, if there is one. Returns
+// true if the name changed.
+export function nameTavern(state, name, hero = null) {
+  const next = cleanTavernName(name);
+  if (next === (state.tavern.name ?? null)) return false;
+  state.tavern.name = next;
+  if (hero) chronicle(hero, 'tavern', fill(RENAMED, { tavern: tavernName(state) }), {});
+  return true;
+}
+
+// The sign: board, letters, emblem, and motto, each one of the choices in SIGN.
+export function signOf(state) {
+  const s = state.tavern?.sign ?? {};
+  return {
+    board: SIGN.boards.some((b) => b.id === s.board) ? s.board : DEFAULT_SIGN.board,
+    ink: SIGN.inks.some((b) => b.id === s.ink) ? s.ink : DEFAULT_SIGN.ink,
+    emblem: SIGN.emblems.some((b) => b.id === s.emblem) ? s.emblem : DEFAULT_SIGN.emblem,
+    motto: Number.isInteger(s.motto) && s.motto >= 0 && s.motto < SIGN.mottos.length ? s.motto : DEFAULT_SIGN.motto,
+  };
+}
+export function paintSign(state, change) {
+  state.tavern.sign = signOf({ tavern: { sign: { ...signOf(state), ...change } } });
+  return state.tavern.sign;
 }
 
 // ---------- the trophy wall ----------

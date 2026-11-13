@@ -10,7 +10,8 @@ import {
   STANDARD_ARRAY, MAX_ROLLS, assignScores, rollScores, withRaceBonus, randomName, randomAppearance,
   defaultAppearance, createHero, maxHp,
 } from '../hero.js';
-import { el, pressBtn, signed } from './dom.js';
+import { el, pressBtn, signed, setTavernName } from './dom.js';
+import { nameTavern, tavernName, TAVERN_NAME_MAX } from '../tavern.js';
 
 const STEPS = ['Race', 'Class', 'Ability scores', 'Name'];
 // The preview leaves the hat off so the hair being chosen can be seen.
@@ -35,6 +36,10 @@ export function mountCreate(root, state, onDone, onCancel = null) {
   const draft = { name: '', race: 'human', cls: 'fighter', scores: [...STANDARD_ARRAY], rolled: false, rollsLeft: MAX_ROLLS, ...defaultAppearance('human') };
   let suggested = (draft.name = randomName(state, draft.race));
   let step = 0;
+  // A brand-new tavern (no heroes, no legends) is named along with its first hero.
+  const newTavern = !state.heroes.length && !(state.tavern?.legends?.length);
+  draft.tavern = tavernName(state);
+  const arrives = el('p', { textContent: `A new hero arrives at ${draft.tavern}.` });
 
   const canvas = el('canvas', { attrs: { 'aria-label': 'Hero preview' } });
   const stage = el('div', { className: 'stage create-stage' }, canvas);
@@ -44,7 +49,7 @@ export function mountCreate(root, state, onDone, onCancel = null) {
   const nav = el('div', { className: 'create-nav' });
 
   root.append(el('div', { className: 'create' },
-    el('header', { className: 'create-head' }, el('h1', { textContent: 'Tavernborn' }), el('p', { textContent: 'A new hero arrives at The Wobbly Griffin.' }),
+    el('header', { className: 'create-head' }, el('h1', { textContent: 'Tavernborn' }), arrives,
       legacyNote(state)),
     el('div', { className: 'stage-wrap' }, stage),
     stepLabel, body, nav));
@@ -73,6 +78,17 @@ export function mountCreate(root, state, onDone, onCancel = null) {
       input,
       el('div', { className: 'row' }, el('button', { className: 'btn', type: 'button', textContent: 'Suggest another', onclick: () => { draft.name = suggested = randomName(state, draft.race); render(); } })),
       el('p', { className: 'hint', textContent: `Type a name, or tap for another ${RACES[draft.race].name} name.` }),
+      ...(newTavern ? tavernField() : []),
+    ];
+  }
+
+  function tavernField() {
+    const input = el('input', { className: 'text-input', type: 'text', value: draft.tavern, maxLength: TAVERN_NAME_MAX, autocomplete: 'off', attrs: { 'aria-label': 'Tavern name' } });
+    input.oninput = () => { draft.tavern = input.value; arrives.textContent = `A new hero arrives at ${input.value.trim() || tavernName({})}.`; };
+    return [
+      el('h2', { className: 'tavern-name-head', textContent: 'And the tavern?' }),
+      input,
+      el('p', { className: 'hint', textContent: 'Every hero sets out from here. Keep the old name or paint a new one; it can be changed later by tapping the sign on the Tavern tab.' }),
     ];
   }
 
@@ -132,6 +148,7 @@ export function mountCreate(root, state, onDone, onCancel = null) {
     nextBtn = el('button', { className: 'btn primary', type: 'button', textContent: last ? 'Begin the adventure' : 'Next', disabled: last && !draft.name.trim(), onclick: () => {
       if (!last) { step += 1; render(); window.scrollTo(0, 0); return; }
       cancelAnimationFrame(view.frameReq);
+      if (newTavern) { nameTavern(state, draft.tavern); setTavernName(state.tavern.name); }
       const { name, race, cls, build, skin, hairStyle, hairColor, beard } = draft;
       onDone(createHero(state, { name, race, cls, appearance: { build, skin, hairStyle, hairColor, beard }, baseScores: assignScores(cls, draft.scores) }));
     } });

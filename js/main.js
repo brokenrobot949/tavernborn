@@ -8,7 +8,7 @@ import { loadSave, newSave, storeSave } from './state.js';
 import { activeHero } from './hero.js';
 import { pending } from './skills.js';
 import { switchHero, dismissHero, retire, canRecruit, canRetire, portraitOf } from './tavern.js';
-import { el } from './ui/dom.js';
+import { el, setTavernName } from './ui/dom.js';
 import { mountCreate } from './ui/create.js';
 import { mountHero } from './ui/hero.js';
 import { mountMap } from './ui/map.js';
@@ -66,12 +66,15 @@ const app = {
   },
   // A standing order was given or a choice made (focus, travel, the cleric, a skill, a respec): keep it and redraw.
   changed() { storeSave(save); render(); },
+  // The tavern was renamed: redraw every screen so the new name is everywhere.
+  renamed() { storeSave(save); start('tavern'); },
 };
 
 function start(firstTab = 'hero') {
   screen?.views.hero.destroy();
   screen = null;
   root.replaceChildren();
+  setTavernName(save.tavern?.name);
   if (!activeHero(save)) {
     // Creation. With other heroes waiting it can be called off, back to whoever was out.
     const cancel = save.heroes.length ? () => { save.activeHeroId = save.heroes.some((h) => h.id === returnTo) ? returnTo : save.heroes[0].id; returnTo = null; save.lastSavedAt = Date.now(); start(); } : null;

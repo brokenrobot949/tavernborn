@@ -991,5 +991,26 @@ for (const [level, times] of Object.entries(reach)) {
   console.log(`  level ${level}: ${fmt(times[Math.floor(times.length / 2)])} [${target[level] ?? '-'}] (${times.length}/200 heroes)`);
 }
 
+
+// ---------- The tavern's name and sign ----------
+{
+  console.log('\nThe tavern name and sign:');
+  const { cleanTavernName, nameTavern, tavernName, signOf, paintSign } = await import('../js/tavern.js');
+  ok(cleanTavernName('  The   Rusty  Anchor ') === 'The Rusty Anchor' && cleanTavernName('') === null && cleanTavernName('The Wobbly Griffin') === null && cleanTavernName('x'.repeat(40)).length === 28,
+    'a tavern name is trimmed, single-spaced, at most 28 characters, and empty means the old name');
+  const ns = fresh(5);
+  const nh = ns.heroes[0];
+  const lines0 = nh.lines;
+  ok(tavernName(ns) === 'The Wobbly Griffin' && nameTavern(ns, 'The Rusty Anchor', nh) && tavernName(ns) === 'The Rusty Anchor' && nh.lines === lines0 + 1 && nh.chronicle.at(-1).text.includes('The Rusty Anchor') && !nameTavern(ns, 'The Rusty Anchor', nh),
+    'renaming changes the name once and writes one Chronicle line');
+  paintSign(ns, { board: 'red', emblem: 'mug', motto: 3 });
+  const nb = importSave(exportSave(ns));
+  ok(nb.tavern.name === 'The Rusty Anchor' && signOf(nb).board === 'red' && signOf(nb).emblem === 'mug' && signOf(nb).motto === 3 && signOf(nb).ink === 'gold', 'the name and sign travel in the save string');
+  const bad = JSON.parse(JSON.stringify(ns));
+  bad.tavern.name = 42; bad.tavern.sign = { board: 'plaid', motto: 99 };
+  const fixed = migrate(bad);
+  ok(fixed.tavern.name === null && fixed.tavern.sign.board === 'oak' && fixed.tavern.sign.motto === 0, 'an unreadable name or sign falls back to the old one');
+}
+
 console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll checks passed.');
 process.exit(failed ? 1 : 0);

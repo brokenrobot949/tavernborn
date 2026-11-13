@@ -1,11 +1,21 @@
 // Small page helpers shared by the screens.
 
+// The tavern's name. The game's text says "The Wobbly Griffin"; when the player has named the tavern
+// something else, the name is swapped in as the text is put on the page (`named`), so a rename
+// reaches every line, old Chronicle lines included. `main.js` sets it from the save on each start.
+export const DEFAULT_TAVERN = 'The Wobbly Griffin';
+let tavernName = DEFAULT_TAVERN;
+export function setTavernName(name) { tavernName = name || DEFAULT_TAVERN; }
+export const getTavernName = () => tavernName;
+export const named = (s) => (typeof s === 'string' && tavernName !== DEFAULT_TAVERN ? s.replaceAll(DEFAULT_TAVERN, tavernName) : s);
+
 // el('div', { className: 'x', attrs: { role: 'tab' } }, child, 'text', ...)
 export function el(tag, props = {}, ...kids) {
   const { attrs, ...rest } = props;
+  if (typeof rest.textContent === 'string') rest.textContent = named(rest.textContent);
   const node = Object.assign(document.createElement(tag), rest);
-  for (const [k, v] of Object.entries(attrs ?? {})) node.setAttribute(k, v);
-  node.append(...kids.flat().filter((k) => k != null && k !== false));
+  for (const [k, v] of Object.entries(attrs ?? {})) node.setAttribute(k, named(v));
+  node.append(...kids.flat().filter((k) => k != null && k !== false).map(named));
   return node;
 }
 

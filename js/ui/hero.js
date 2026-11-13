@@ -15,7 +15,7 @@ import { xpForLevel, paragonXpFor, legacyFor } from '../rules.js';
 import { portraitOf, paragonRank, paragonTitle, paragonXp, canRetire, trophyWall } from '../tavern.js';
 import { currentQuest, clericFee, payCleric } from '../tasks.js';
 import { subclassName } from '../skills.js';
-import { el, num, heroClock, confirmBtn } from './dom.js';
+import { el, num, heroClock, confirmBtn, named } from './dom.js';
 import { icon } from './icons.js';
 import { shapeFor, pickBy, popRoll, burst, arrival, weatherFor, lootDrop, bossEntrance, healGlow, defeatGhost } from './scene-fx.js';
 import { foeCanvas } from './foes.js';
@@ -58,7 +58,7 @@ function backdropTracks() {
 // Write a data attribute or text only when it changes. The scene is redrawn every second, and a
 // needless write makes the browser restyle (and on a phone sometimes repaint) the whole backdrop.
 function setData(node, key, value) { if (node.dataset[key] !== value) node.dataset[key] = value; }
-function setText(node, value) { if (node.textContent !== value) node.textContent = value; }
+function setText(node, value) { value = named(value); if (node.textContent !== value) node.textContent = value; }
 
 // The time of day on this device: dawn 5 to 7, day 7 to 18, dusk 18 to 21, night after that.
 export function timeOfDay(date = new Date()) {
@@ -375,8 +375,8 @@ export function mountHero(root, app) {
       taskKey = newKey;
       if (restart) { taskFill.style.transition = 'none'; taskFill.style.width = (100 * t.elapsed) / t.duration + '%'; void taskFill.offsetWidth; taskFill.style.transition = ''; }
       taskFill.style.width = (100 * Math.min(t.duration, t.elapsed + 1)) / t.duration + '%';
-      taskText.textContent = t.text;
-      taskCtx.textContent = taskContext(hero, t);
+      taskText.textContent = named(t.text);
+      taskCtx.textContent = named(taskContext(hero, t));
       const left = t.duration - t.elapsed;
       taskLeft.textContent = left >= 60 ? `${Math.floor(left / 60)}m ${left % 60}s` : `${left}s`;
     }
@@ -398,7 +398,7 @@ export function mountHero(root, app) {
       choiceKey = cKey;
       choiceBox.hidden = !c;
       if (c) {
-        choiceText.textContent = c.text.replace(/\{name\}/g, hero.name);
+        choiceText.textContent = named(c.text).replace(/\{name\}/g, hero.name);
         choiceRow.replaceChildren(...c.options.map((o, i) => {
           const cost = optionCost(hero, o);
           const b = el('button', { className: 'btn' + (i === 0 ? ' primary' : ''), type: 'button', onclick: () => {

@@ -295,6 +295,20 @@ effects, bosses, loot arriving, the hero on the map, and the barkeep (no other p
 - Spec departures to raise with Rob: none of this round is in the design doc. The merchant and festivals follow
   the phone's calendar, not the hero's days; the hero keeps working while a choice waits.
 
+## The tavern's name and sign (waiting on Rob's phone test)
+- The player names the tavern. A brand-new tavern (no heroes, no legends) asks on creation's Name step ("And
+  the tavern?"); after that, tap the sign on the Tavern tab to rename it or repaint it. `state.tavern.name` is
+  null for the old name; `cleanTavernName` trims it to 28 characters. A rename writes a Chronicle line (`RENAMED`).
+- The game's text still says "The Wobbly Griffin". `named` in `js/ui/dom.js` swaps the chosen name in as text is
+  put on the page (`el`, the Hero tab's `setText`, and a few direct assignments), so a rename reaches every line,
+  old Chronicle lines included. A rename redraws every screen (`app.renamed`). Write new text with the old name
+  and it will follow.
+- The sign (`state.tavern.sign`, choices in `SIGN` in `data/tavern.js`): seven boards, four colours of letters,
+  ten emblems (icons from `js/ui/icons.js`), nine mottos. `signOf` falls back to the defaults for anything
+  unreadable. No save version change: older saves get the old name and the oak sign.
+- The bar counter now stands on the line where the floor meets the back wall (`bottom: 25%`), with the barkeep
+  behind it, so heroes pass in front of it rather than over it.
+
 ## Known gaps closed after Phase 7
 - All 26 LPC hair colours are baked (`HAIR_COLORS` in `data/races.js`, natural shades first). The art is now
   7.6 MB; the credits did not change, since no new artwork was added.

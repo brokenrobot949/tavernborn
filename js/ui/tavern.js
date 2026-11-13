@@ -11,7 +11,7 @@ import { exportSave, importSave } from '../state.js';
 import { clericFee, payCleric, foeName } from '../tasks.js';
 import { respec, respecCost, subclassName, BRANCH_BY_ID } from '../skills.js';
 import { respecPrice, MAX_HEROES, MAX_LEVEL } from '../rules.js';
-import { UPGRADES, TROPHIES, TROPHY_COLORS, BAR_TALK, BARD } from '../../data/tavern.js';
+import { UPGRADES, TROPHIES, TROPHY_COLORS, BAR_TALK, BARD, SIGN } from '../../data/tavern.js';
 import { CHAPTERS, STORY_TITLE } from '../../data/story.js';
 import { REGIONS } from '../../data/regions.js';
 import { DUNGEONS } from '../../data/dungeons.js';
@@ -23,8 +23,8 @@ import { RACES } from '../../data/races.js';
 import { CLASSES } from '../../data/classes.js';
 import { TIERS } from '../../data/items.js';
 import { SLOT_BY_ID } from '../loot.js';
-import { upgradeRank, upgradePrice, upgradeEffect, maxRank, buyUpgrade, trophyWall, canRecruit, canRetire, paragonTitle, portraitOf } from '../tavern.js';
-import { el, confirmBtn, num, sectionTabs } from './dom.js';
+import { upgradeRank, upgradePrice, upgradeEffect, maxRank, buyUpgrade, trophyWall, canRecruit, canRetire, paragonTitle, portraitOf, nameTavern, signOf, paintSign, TAVERN_NAME_MAX } from '../tavern.js';
+import { el, confirmBtn, num, sectionTabs, named, getTavernName, DEFAULT_TAVERN, pressBtn } from './dom.js';
 import { drawPortrait } from './legacy.js';
 import { icon } from './icons.js';
 import { timeOfDay } from './hero.js';
@@ -107,6 +107,64 @@ export function mountTavern(root, app) {
   const caseBox = el('div', {});
   let caseKey = '';
 
+  // ----- the sign: tap it to rename the tavern and repaint the board -----
+  const signTitle = el('h2', {});
+  const signMotto = el('small', {});
+  const signEmblem = el('span', { className: 'sign-emblem' });
+  const signBoard = el('button', { className: 'sign-board', type: 'button', attrs: { 'aria-label': 'The tavern sign. Tap to rename the tavern or repaint the sign.', 'aria-expanded': 'false' } }, signEmblem, signTitle, signMotto);
+  const signEditor = el('section', { className: 'panel sign-editor', hidden: true });
+  let signKey = '';
+  signBoard.onclick = () => {
+    signEditor.hidden = !signEditor.hidden;
+    signBoard.setAttribute('aria-expanded', String(!signEditor.hidden));
+    signKey = '';
+    if (current) drawSign(current.state, current.hero);
+  };
+  function drawSign(state, hero) {
+    const s = signOf(state);
+    const board = SIGN.boards.find((b) => b.id === s.board);
+    const ink = SIGN.inks.find((b) => b.id === s.ink);
+    const key = JSON.stringify([s, getTavernName(), signEditor.hidden]);
+    if (key === signKey) return;
+    signKey = key;
+    for (const [k, v] of Object.entries({ '--sign-wood': board.wood, '--sign-grain': board.grain, '--sign-rim': board.rim, '--sign-ink': ink.ink, '--sign-trim': ink.trim })) signBoard.style.setProperty(k, v);
+    signTitle.textContent = getTavernName();
+    signMotto.textContent = SIGN.mottos[s.motto];
+    signEmblem.replaceChildren(...(s.emblem === 'none' ? [] : [icon(s.emblem)]));
+    if (signEditor.hidden) return;
+    const paint = (change) => { paintSign(state, change); signKey = ''; app.changed(); };
+    const input = el('input', { className: 'text-input', type: 'text', value: getTavernName(), maxLength: TAVERN_NAME_MAX, autocomplete: 'off', attrs: { 'aria-label': 'Tavern name' } });
+    const rename = el('button', { className: 'btn primary', type: 'button', textContent: 'Put up new letters', disabled: true });
+    input.oninput = () => { rename.disabled = (input.value.replace(/\s+/g, ' ').trim() || DEFAULT_TAVERN) === getTavernName(); };
+    rename.onclick = () => { if (nameTavern(state, input.value, hero)) app.renamed(); };
+    const row = (label, ...kids) => el('div', { className: 'row' }, el('span', { className: 'label', textContent: label }), ...kids);
+    const swatch = (on, color, label, onClick) => {
+      const b = pressBtn('', on, onClick, 'btn swatch');
+      b.style.background = color;
+      b.setAttribute('aria-label', label);
+      b.title = label;
+      return b;
+    };
+    const motto = el('select', { className: 'pick', attrs: { 'aria-label': 'Motto' }, onchange: () => paint({ motto: Number(motto.value) }) },
+      ...SIGN.mottos.map((m, i) => el('option', { value: String(i), textContent: m, selected: i === s.motto })));
+    signEditor.replaceChildren(
+      el('h3', {}, icon('hammer'), el('span', { textContent: 'The sign over the door' })),
+      el('p', { className: 'hint', textContent: 'A new name changes it everywhere, the Chronicle included. Leave the box empty for the old name.' }),
+      input,
+      el('div', { className: 'row' }, rename, el('button', { className: 'btn', type: 'button', textContent: 'Done', onclick: () => signBoard.onclick() })),
+      row('Board', ...SIGN.boards.map((b) => swatch(s.board === b.id, b.wood, b.name, () => paint({ board: b.id })))),
+      row('Letters', ...SIGN.inks.map((b) => swatch(s.ink === b.id, b.ink, b.name, () => paint({ ink: b.id })))),
+      row('Emblem', el('div', { className: 'emblem-picks' }, ...SIGN.emblems.map((e) => {
+        const b = pressBtn('', s.emblem === e.id, () => paint({ emblem: e.id }), 'btn emblem-pick');
+        b.append(e.id === 'none' ? el('span', { textContent: 'None' }) : icon(e.id));
+        b.setAttribute('aria-label', e.name);
+        b.title = e.name;
+        return b;
+      }))),
+      row('Motto', motto),
+    );
+  }
+
   // ----- a festival, while one runs -----
   const festivalBox = el('section', { className: 'panel festival-card', hidden: true });
   let festivalKey = '';
@@ -177,7 +235,8 @@ export function mountTavern(root, app) {
   tabs.nav.classList.add('two-rows'); // seven sections: four pills above, three below, so the names have room
   root.append(
     el('header', { className: 'inn-sign' }, el('span', { className: 'sign-chain left' }), el('span', { className: 'sign-chain right' }),
-      el('div', { className: 'sign-board' }, el('small', { textContent: 'Rooms, ale, and a cleric' }), el('h2', { textContent: 'The Wobbly Griffin' }))),
+      signBoard),
+    signEditor,
     commonRoom.room,
     el('div', { className: 'bar-talk-box' }, icon('mug'), talk),
     festivalBox,
@@ -196,7 +255,7 @@ export function mountTavern(root, app) {
     const at = Math.floor(Date.now() / 1000 / TALK_SECONDS);
     if (at !== talkAt) {
       talkAt = at;
-      talk.textContent = fest && at % 2 ? fest.talk[Math.floor(at / 2) % fest.talk.length] : BAR_TALK[at % BAR_TALK.length];
+      talk.textContent = named(fest && at % 2 ? fest.talk[Math.floor(at / 2) % fest.talk.length] : BAR_TALK[at % BAR_TALK.length]);
     }
   }
 
@@ -489,6 +548,7 @@ export function mountTavern(root, app) {
   function update(state, hero) {
     current = { state, hero };
     drawRoom(state);
+    drawSign(state, hero);
     drawFestival(state, hero);
     drawMerchant(state, hero);
     drawCase(state);

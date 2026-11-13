@@ -209,13 +209,23 @@
 .sign-chain { position: absolute; top: 0; width: 4px; height: 22px; background: repeating-linear-gradient(#6a5a48 0 5px, #3a3026 5px 7px); border-radius: 2px; }
 .sign-chain.left { left: 22%; } .sign-chain.right { right: 22%; }
 .sign-board {
-  width: 82%; text-align: center; padding: 8px 12px 10px; border-radius: 10px;
-  background: repeating-linear-gradient(0deg, #6b4a2b 0 9px, #5e4025 9px 10px), #6b4a2b;
-  border: 3px solid #3a2616; box-shadow: inset 0 0 0 2px #c9962c, 0 4px 10px rgba(43, 33, 24, 0.35);
-  transform: rotate(-1.2deg); color: #f6dc8c;
+  --sign-wood: #6b4a2b; --sign-grain: #5e4025; --sign-rim: #3a2616; --sign-ink: #f6dc8c; --sign-trim: #c9962c;
+  display: block; width: 82%; min-height: 44px; text-align: center; padding: 8px 12px 10px; border-radius: 10px; cursor: pointer; font: inherit;
+  background: repeating-linear-gradient(0deg, var(--sign-wood) 0 9px, var(--sign-grain) 9px 10px), var(--sign-wood);
+  border: 3px solid var(--sign-rim); box-shadow: inset 0 0 0 2px var(--sign-trim), 0 4px 10px rgba(43, 33, 24, 0.35);
+  transform: rotate(-1.2deg); color: var(--sign-ink); transition: transform 0.2s;
 }
-.sign-board h2 { font-size: 1.45rem; letter-spacing: 0.02em; text-shadow: 0 2px 0 #2b1a0c; }
-.sign-board small { display: block; font: italic 0.75rem var(--display); color: #e6cf98; opacity: 0.9; }
+.sign-board:active, .sign-board[aria-expanded='true'] { transform: rotate(0.6deg); }
+.sign-board h2 { font-size: 1.45rem; letter-spacing: 0.02em; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.55); overflow-wrap: anywhere; }
+.sign-board small { display: block; font: italic 0.75rem var(--display); color: var(--sign-ink); opacity: 0.8; }
+.sign-emblem { display: block; color: var(--sign-trim); font-size: 1.3rem; line-height: 1; }
+.sign-emblem:empty { display: none; }
+.sign-editor { margin-top: 10px; }
+.sign-editor h3 { display: flex; align-items: center; gap: 8px; }
+.sign-editor .text-input { width: 100%; }
+.emblem-picks { display: flex; flex-wrap: wrap; gap: 6px; }
+.emblem-pick { min-width: var(--tap); min-height: var(--tap); padding: 0 8px; display: grid; place-items: center; font-size: 1.2rem; }
+.emblem-pick span { font-size: 0.8rem; }
 
 .scene.common-room { height: 168px; border: 2px solid var(--ink); }
 .common-room .trophy-wall { top: 7%; left: 9%; }
@@ -646,11 +656,11 @@
 .map-walker[hidden] { display: none; }
 
 /* ----- The barkeep behind the bar in the common room ----- */
-.common-room .bar-counter { position: absolute; left: 6%; width: 34%; bottom: 4px; height: 46px; z-index: 2; pointer-events: none;
+.common-room .bar-counter { position: absolute; left: 6%; width: 34%; bottom: 25%; height: 34px; z-index: 2; pointer-events: none;
   background: linear-gradient(#8a6038 0 6px, #2b1a0c 6px 8px, transparent 8px), repeating-linear-gradient(90deg, #5a3e26 0 22px, #4a321e 22px 24px);
   border: 2px solid #2b1a0c; border-bottom: 0; border-radius: 3px 3px 0 0; box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.25); }
 .common-room .bar-counter::after { content: ''; position: absolute; left: 14%; top: -11px; width: 8px; height: 10px; background: linear-gradient(90deg, #c9962c, #f0d070); border: 1px solid #2b1a0c; border-bottom: 0; }
-.common-room .barkeep { position: absolute; left: 0; bottom: 18px; width: 128px; height: 128px; z-index: 1; will-change: transform; }
+.common-room .barkeep { position: absolute; left: 0; bottom: calc(25% + 10px); width: 128px; height: 128px; z-index: 1; will-change: transform; }
 .common-room .barkeep canvas { width: 128px !important; height: 128px !important; image-rendering: pixelated; image-rendering: crisp-edges; }
 .common-room .room-floor { z-index: 3; }
 
@@ -668,3 +678,4 @@
 /* The Tavern tab's seven sections: two rows of pills (four, then three) instead of one crowded row. */
 .subnav.two-rows { flex-wrap: wrap; overflow-x: visible; }
 .subnav.two-rows button { flex: 1 1 calc(25% - 6px); min-width: 0; min-height: 48px; font-size: 0.8rem; }
+.create .tavern-name-head { margin-top: 18px; }

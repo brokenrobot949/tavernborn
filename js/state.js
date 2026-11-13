@@ -13,7 +13,7 @@ import { startingGear, startingCloak, SLOT_IDS, MAX_TIER } from './loot.js';
 import { LEGENDARIES } from '../data/loot.js';
 import { SKILL_BY_ID, BRANCH_BY_ID, MAX_SKILLS } from './skills.js';
 import { MAX_LEVEL, MAX_HEROES, PAST_CURVES, LOOT, TAVERN, xpForLevel, legacyFor } from './rules.js';
-import { paragonRank } from './tavern.js';
+import { paragonRank, cleanTavernName, signOf } from './tavern.js';
 import { TROPHIES } from '../data/tavern.js';
 import { REGIONS } from '../data/regions.js';
 
@@ -26,7 +26,7 @@ export function newSave(seed = (Date.now() ^ Math.floor(Math.random() * 0x100000
     version: SAVE_VERSION,
     lastSavedAt: now,
     rngSeed: seed >>> 0,
-    tavern: { upgrades: {}, legends: [], legacyBonus: 0, trophies: [], relics: [], merchant: null },
+    tavern: { upgrades: {}, legends: [], legacyBonus: 0, trophies: [], relics: [], merchant: null, name: null, sign: { board: 'oak', ink: 'gold', emblem: 'none', motto: 0 } },
     activeHeroId: null,
     heroes: [],
   };
@@ -98,7 +98,10 @@ function tavernFields(save) {
   // The merchant's visit (version 6): what has been bought today, kept only if readable.
   const m = t.merchant;
   const merchant = m && Number.isInteger(m.day) && Array.isArray(m.bought) ? { day: m.day, bought: m.bought.filter((id) => typeof id === 'string') } : null;
-  save.tavern = { ...t, upgrades, legends, trophies, relics, merchant, legacyBonus: legacyFor(legends.length) };
+  // The name and the sign (after round four): kept if readable, else the tavern's own.
+  const name = typeof t.name === 'string' ? cleanTavernName(t.name) : null;
+  const sign = signOf({ tavern: t });
+  save.tavern = { ...t, upgrades, legends, trophies, relics, merchant, name, sign, legacyBonus: legacyFor(legends.length) };
 }
 
 // After Phase 7 (version 6): choices on the road, boons, the merchant's potions, festivals, and

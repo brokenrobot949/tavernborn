@@ -137,3 +137,44 @@ export const LEGEND_LINES = [
   'Feared by dragons. Avoided, on balance, by {worst}.',
 ];
 export const LEGEND_UNBEATEN = 'Never once carried home. The good bench was kept for nobody.';
+
+// The sign over the door (after Phase 7): the player names the tavern and paints the sign. The
+// game's text says "The Wobbly Griffin" throughout; a chosen name is swapped in as text is shown.
+// {tavern} is the new name.
+export const RENAMED = 'New letters go up over the door. The tavern is {tavern} now. The barkeep keeps the old sign, in case.';
+export const SIGN = {
+  // The board's wood or paint, and the colour of the letters, as CSS colours for the Tavern tab.
+  boards: [
+    { id: 'oak', name: 'Oak', wood: '#6b4a2b', grain: '#5e4025', rim: '#3a2616' },
+    { id: 'walnut', name: 'Walnut', wood: '#3f2a1a', grain: '#352215', rim: '#1e130a' },
+    { id: 'pine', name: 'Pine', wood: '#a77b48', grain: '#96693a', rim: '#5a3e1e' },
+    { id: 'green', name: 'Painted green', wood: '#2f5a3c', grain: '#284e33', rim: '#15291b' },
+    { id: 'red', name: 'Painted red', wood: '#7c2a22', grain: '#6c231c', rim: '#3a120e' },
+    { id: 'blue', name: 'Painted blue', wood: '#29466b', grain: '#223c5d', rim: '#121f33' },
+    { id: 'grey', name: 'Weathered', wood: '#6e6a62', grain: '#625e57', rim: '#34312c' },
+  ],
+  inks: [
+    { id: 'gold', name: 'Gold leaf', ink: '#f6dc8c', trim: '#c9962c' },
+    { id: 'cream', name: 'Cream', ink: '#f3ead2', trim: '#cbbf9f' },
+    { id: 'silver', name: 'Silver', ink: '#e1e6ea', trim: '#9aa6ae' },
+    { id: 'copper', name: 'Copper', ink: '#f0a46a', trim: '#b8693a' },
+  ],
+  // A small picture over the name: an icon from js/ui/icons.js, or none.
+  emblems: [
+    { id: 'none', name: 'None' }, { id: 'mug', name: 'Tankard' }, { id: 'swords', name: 'Crossed swords' },
+    { id: 'crown', name: 'Crown' }, { id: 'horse', name: 'Horse' }, { id: 'lute', name: 'Lute' },
+    { id: 'star', name: 'Star' }, { id: 'lantern', name: 'Lantern' }, { id: 'trophy', name: 'Cup' }, { id: 'skull', name: 'Skull' },
+  ],
+  // The small line under the name.
+  mottos: [
+    'Rooms, ale, and a cleric',
+    'Adventurers welcome, mostly',
+    'Ale of the first quality, stew of the second',
+    'No geese past this point',
+    'Rent paid, eventually',
+    'Under the same management as ever',
+    'Mind the step on the way out',
+    'Credit given to heroes of good standing',
+    'Est. some time ago',
+  ],
+};

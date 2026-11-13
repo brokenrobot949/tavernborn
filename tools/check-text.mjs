@@ -25,7 +25,7 @@ const TASK_KEYS = new Set(['tasks', 'roomTasks', 'TAVERN_TASKS', 'TRAVEL_TASKS',
 // Keys whose text is a full sentence in the Chronicle or the Bestiary.
 const SENTENCE_KEYS = new Set(['hit', 'miss', 'crit', 'fumble', 'ko', 'about', 'learn', 'fire', 'done', 'win', 'enter', 'chosen', 'flavor', 'arrive', 'bought']);
 // Placeholders the game fills in.
-const FILLED = new Set(['deed', 'when', 'name', 'level', 'cost', 'points', 'monster', 'place', 'dungeon', 'quest', 'breath', 'notice', 'item', 'old', 'gold', 'slot', 'flavor', 'title', 'rank', 'floor', 'worst', 'weapon', 'trophy', 'done', 'does', 'he', 'she']);
+const FILLED = new Set(['tavern', 'deed', 'when', 'name', 'level', 'cost', 'points', 'monster', 'place', 'dungeon', 'quest', 'breath', 'notice', 'item', 'old', 'gold', 'slot', 'flavor', 'title', 'rank', 'floor', 'worst', 'weapon', 'trophy', 'done', 'does', 'he', 'she']);
 
 const BANNED = [
   /!/, /\p{Extended_Pictographic}/u,
