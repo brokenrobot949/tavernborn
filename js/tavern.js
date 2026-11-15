@@ -15,7 +15,7 @@ import { UPGRADES, UPGRADE_BY_ID, TROPHIES, PARAGON_TITLES, RETIRED, LEGEND_LINE
 import { SLOTS, EMBLEM_LEVEL, WISP_LEVEL, GLOW_LEVEL, WISP_COLOR } from '../data/items.js';
 import { MONSTER_BY_ID } from '../data/monsters.js';
 import { BOSS_BY_ID } from '../data/dungeons.js';
-import { TAVERN, MAX_HEROES, MAX_LEVEL, legacyFor, paragonRankFor, paragonXpFor, xpForLevel, pick } from './rules.js';
+import { TAVERN, REST, MAX_HEROES, MAX_LEVEL, legacyFor, paragonRankFor, paragonXpFor, xpForLevel, pick } from './rules.js';
 import { chronicle } from './hero.js';
 import { SLOT_IDS, better } from './loot.js';
 import { LEGENDARIES } from '../data/loot.js';
@@ -131,6 +131,24 @@ export function switchHero(state, id) {
   if (!state.heroes.some((h) => h.id === id)) return false;
   state.activeHeroId = id;
   return true;
+}
+
+// ---------- Well Rested ----------
+
+// Rested time banked, in seconds, and what it adds to XP now (0 or REST.xp).
+export const restedOf = (hero) => Math.max(0, Number(hero?.rested) || 0);
+export const restedXp = (hero) => (restedOf(hero) > 0 ? REST.xp : 0);
+// Every hero waiting at the tavern banks rest for the time that passed (called by `advance`).
+export function restWaiting(state, seconds) {
+  for (const h of state.heroes) {
+    if (h.id === state.activeHeroId) continue;
+    h.rested = Math.min(REST.cap, restedOf(h) + seconds * REST.per);
+  }
+}
+// The hero out adventuring uses it up, second for second, but not while recovering at the tavern.
+export function useRest(hero, task, seconds) {
+  if (!hero.rested || task.kind === 'tavern') return;
+  hero.rested = Math.max(0, restedOf(hero) - seconds);
 }
 
 // Send a hero away for good: no legend, no portrait, no bonus. The slot is freed.

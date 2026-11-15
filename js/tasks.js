@@ -53,7 +53,7 @@ import {
 import { chronicle, gainXp, maxHp, regionOpen } from './hero.js';
 import { skillMods, SUBCLASS_LEVEL } from './skills.js';
 import { gearMods, rollItem, weakestSlot, legendItem, wearsLegend, receive, dropChance, startingCloak, describe, rarityName, flavorOf, SLOT_BY_ID } from './loot.js';
-import { displayLegend } from './tavern.js';
+import { displayLegend, restedXp } from './tavern.js';
 import { LOOT_LINES, LEGENDARIES, MILESTONES, TITLES } from '../data/loot.js';
 import { RIFT_TEXT, TROPHIES, TROPHY_HUNG, TROPHY_WAITING, PARAGON_LINE, RIFTS_OPEN } from '../data/tavern.js';
 import { tavernMods, recordTrophy, paragonRank, paragonTitle } from './tavern.js';
@@ -144,7 +144,7 @@ function loot(state, hero, events, opts) {
 // Humans learn 5% faster, Intelligence adds a little XP, retired legends (Phase 6) add theirs, and
 // skills add theirs: `source` is 'roam', 'quest', 'delve', or 'boss'.
 const KEY = { roam: 'Roam', quest: 'Quest', delve: 'Delve', boss: 'Boss', rift: 'Delve' }; // the Rifts count as a dungeon
-const xpBonus = (state, hero, sk, source) => 1 + (hero.race === 'human' ? 0.05 : 0) + INT_XP * Math.max(0, mod(hero.abilities.int)) + (state.tavern.legacyBonus ?? 0) + sk.n.xp + sk.n['xp' + KEY[source]];
+const xpBonus = (state, hero, sk, source) => 1 + (hero.race === 'human' ? 0.05 : 0) + INT_XP * Math.max(0, mod(hero.abilities.int)) + (state.tavern.legacyBonus ?? 0) + restedXp(hero) + sk.n.xp + sk.n['xp' + KEY[source]];
 const goldBonus = (hero, sk, source) => (1 + 0.05 * mod(hero.abilities.cha)) * (1 + sk.n.gold + sk.n['gold' + KEY[source]]);
 const quicker = (seconds, share, least = 5) => Math.max(least, Math.round(seconds * (1 - Math.min(0.75, share))));
 

@@ -17,6 +17,7 @@
 import { CHOICES, CHOICE_BY_ID, ROAD_TEXT } from '../data/road.js';
 import { WARES, WARE_BY_ID, MERCHANT_TEXT, FESTIVALS, FESTIVAL_BY_ID } from '../data/market.js';
 import { ROAD, MERCHANT, workXp, goldUnit, random, randInt, pick } from './rules.js';
+import { restedXp } from './tavern.js';
 import { chronicle, maxHp } from './hero.js';
 import { giveBoon, pruneBoons } from './boons.js';
 import { giveLoot, giveXp } from './tasks.js';
@@ -50,7 +51,7 @@ function apply(state, hero, eff, events) {
     giveBoon(hero, eff.boon[0], eff.boon[1]);
     parts.push(`${eff.boon[1]} h boon`);
   }
-  const xp = eff.xp ? workXp(hero.level, eff.xp) : 0;
+  const xp = eff.xp ? Math.round(workXp(hero.level, eff.xp) * (1 + restedXp(hero))) : 0;
   if (xp) parts.unshift(`+${xp.toLocaleString('en-US')} XP`);
   return { gain: parts.join(', '), xp, after: () => { if (eff.loot) giveLoot(state, hero, events, { level: hero.level, source: 'chest' }); if (xp) giveXp(state, hero, xp, events); } };
 }

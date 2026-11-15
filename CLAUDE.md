@@ -309,6 +309,23 @@ effects, bosses, loot arriving, the hero on the map, and the barkeep (no other p
 - The bar counter now stands on the line where the floor meets the back wall (`bottom: 25%`), with the barkeep
   behind it, so heroes pass in front of it rather than over it.
 
+## Well Rested (waiting on Rob's phone test)
+- A hero waiting at the tavern while another is out banks rested time: an hour for every four hours waited, a full
+  day at most (`REST` in `js/rules.js`: `per` 0.25, `cap` 24 h, `xp` 0.5). `advance` calls `restWaiting` for the
+  waiting heroes, then the active hero's bank runs down second for second on their own clock (`useRest`), except
+  during knockout recovery (task kind `tavern`). While any is left, every XP gain is 50% larger: `restedXp` in
+  `xpBonus` (js/tasks.js) and in the XP from choices on the road (js/road.js). Kept in `hero.rested` (seconds).
+- Shown as a "Well Rested" bar on each hero card in the Tavern tab's Heroes section (filled toward a full day,
+  updated in place by `drawRest` so taps are not lost), and as a chip with the time left under the active hero's
+  name on the Hero tab.
+- Saves stay version 6: `roadFields` sets `rested` to 0 when missing or unreadable and trims it to the cap.
+- The rule "inactive heroes are frozen" now has one exception: they bank rest. Nothing else changes for them.
+- Measured (6 trios rotating every 8 hours, against the same heroes alone): a hero in a rotating trio reaches
+  level 20 in about 23.4 days of their own adventuring against 28.8 alone, rested about half of the time. A lone
+  hero is unchanged, so `node tools/simulate.mjs` (one hero) is unaffected. Rob accepted the quicker pace.
+- `node tools/check-sim.mjs` adds 7 checks: banking while waiting, the cap, the bonus, running out, the good bench,
+  the save string, and mending a bad bank. The roster check now ignores `rested` when comparing a waiting hero.
+
 ## Known gaps closed after Phase 7
 - All 26 LPC hair colours are baked (`HAIR_COLORS` in `data/races.js`, natural shades first). The art is now
   7.6 MB; the credits did not change, since no new artwork was added.

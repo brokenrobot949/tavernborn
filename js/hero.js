@@ -112,7 +112,8 @@ export const LEGACY_FIELDS = () => ({ rift: null, paragon: 0, retireOffered: fal
 //   supplies      { potions }: bought from the merchant, carried into the next dungeon or Rifts run
 //   joined        festivals joined, as 'id-year'
 //   deeds, title  deeds done (ids) and the one whose title is worn, or null
-export const ROAD_FIELDS = () => ({ choice: null, nextChoiceAt: null, lastChoice: null, boons: [], supplies: { potions: 0 }, joined: [], deeds: [], title: null });
+//   rested        Well Rested seconds banked while waiting at the tavern (js/tavern.js, REST in rules.js)
+export const ROAD_FIELDS = () => ({ choice: null, nextChoiceAt: null, lastChoice: null, boons: [], supplies: { potions: 0 }, joined: [], deeds: [], title: null, rested: 0 });
 
 // A region is open once the dungeon of the region before it has been cleared. The first always is.
 export function regionOpen(hero, regionId) {

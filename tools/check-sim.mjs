@@ -733,9 +733,10 @@ ok(itemStats('weapon', { tier: 4, level: 20 }).roll === 4 && steps.every(([t, l]
   ok(!canRecruit(ro) && MAX_HEROES === 3, 'three heroes fill the roster');
   ok(new Set(ro.heroes.map((h) => h.id)).size === 3, 'and each has their own id');
   ok(switchHero(ro, second.id) && activeHero(ro) === second && !switchHero(ro, 'nobody') && activeHero(ro) === second, 'switching makes another hero the active one (and an unknown id changes nothing)');
-  const waitingBefore = JSON.stringify(first);
+  const asWas = (h) => JSON.stringify({ ...h, rested: 0 });
+  const waitingBefore = asWas(first);
   advance(ro, 3 * HOUR);
-  ok(JSON.stringify(first) === waitingBefore && second.age === 3 * HOUR && third.age === 0, 'only the active hero moves; the others wait exactly as they were');
+  ok(asWas(first) === waitingBefore && second.age === 3 * HOUR && third.age === 0, 'only the active hero moves; the others wait exactly as they were (but for Well Rested)');
   switchHero(ro, first.id);
   advance(ro, HOUR);
   ok(first.age === 3 * HOUR && second.age === 3 * HOUR, 'a hero sent out again picks up where they left off');
@@ -1010,6 +1011,41 @@ for (const [level, times] of Object.entries(reach)) {
   bad.tavern.name = 42; bad.tavern.sign = { board: 'plaid', motto: 99 };
   const fixed = migrate(bad);
   ok(fixed.tavern.name === null && fixed.tavern.sign.board === 'oak' && fixed.tavern.sign.motto === 0, 'an unreadable name or sign falls back to the old one');
+}
+
+// ---------- Well Rested ----------
+{
+  console.log('\nWell Rested:');
+  const { REST } = await import('../js/rules.js');
+  const { restedOf, restedXp } = await import('../js/tavern.js');
+  const ws = fresh(7);
+  const a = ws.heroes[0];
+  const b = createHero(ws, { name: 'Napper', race: 'human', cls: 'fighter', appearance: defaultAppearance('human'), baseScores: assignScores('fighter', STANDARD_ARRAY) });
+  ws.heroes.push(b);
+  advance(ws, 4 * HOUR);
+  ok(restedOf(b) === HOUR && restedOf(a) === 0 && b.age === 0, 'four hours waiting banks one hour of rest; the hero out banks none');
+  advance(ws, 30 * 24 * HOUR);
+  ok(restedOf(b) === REST.cap, 'rest stops at a full day');
+  // Two identical heroes side by side: one rested, one not. The rested one earns half again the XP.
+  const twin = (rest) => { const s = fresh(11); s.heroes[0].rested = rest; advance(s, 20 * 60); return s.heroes[0]; };
+  const plain = twin(0), keen = twin(REST.cap);
+  ok(keen.xp > plain.xp * 1.3 && restedXp(keen) === REST.xp && restedOf(keen) === REST.cap - 20 * 60, 'a rested hero earns more XP and uses up rest second for second');
+  const used = fresh(12);
+  used.heroes[0].rested = 600;
+  advance(used, 3600);
+  ok(restedOf(used.heroes[0]) === 0 && restedXp(used.heroes[0]) === 0, 'rest runs out, and with it the bonus');
+  const ko = fresh(13);
+  const kh = ko.heroes[0];
+  kh.rested = 3600; kh.knockedOutUntil = kh.age + 1800; kh.hp = 0; kh.currentTask = null;
+  advance(ko, 600);
+  ok(restedOf(kh) === 3600, 'recovering on the good bench does not use up rest');
+  switchHero(ws, b.id);
+  const back = importSave(exportSave(ws));
+  ok(back.heroes[1].rested === REST.cap && back.heroes[0].rested === 0, 'rest travels in the save string');
+  const odd = JSON.parse(JSON.stringify(ws));
+  odd.heroes[1].rested = 'lots'; odd.heroes[0].rested = 1e12;
+  const m = migrate(odd);
+  ok(m.heroes[1].rested === 0 && m.heroes[0].rested === REST.cap, 'an unreadable or too-large bank is mended');
 }
 
 console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll checks passed.');

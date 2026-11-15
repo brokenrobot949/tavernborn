@@ -10,7 +10,7 @@
 import { exportSave, importSave } from '../state.js';
 import { clericFee, payCleric, foeName } from '../tasks.js';
 import { respec, respecCost, subclassName, BRANCH_BY_ID } from '../skills.js';
-import { respecPrice, MAX_HEROES, MAX_LEVEL } from '../rules.js';
+import { respecPrice, MAX_HEROES, MAX_LEVEL, REST } from '../rules.js';
 import { UPGRADES, TROPHIES, TROPHY_COLORS, BAR_TALK, BARD, SIGN } from '../../data/tavern.js';
 import { CHAPTERS, STORY_TITLE } from '../../data/story.js';
 import { REGIONS } from '../../data/regions.js';
@@ -23,7 +23,7 @@ import { RACES } from '../../data/races.js';
 import { CLASSES } from '../../data/classes.js';
 import { TIERS } from '../../data/items.js';
 import { SLOT_BY_ID } from '../loot.js';
-import { upgradeRank, upgradePrice, upgradeEffect, maxRank, buyUpgrade, trophyWall, canRecruit, canRetire, paragonTitle, portraitOf, nameTavern, signOf, paintSign, TAVERN_NAME_MAX } from '../tavern.js';
+import { upgradeRank, upgradePrice, upgradeEffect, maxRank, buyUpgrade, trophyWall, canRecruit, canRetire, paragonTitle, portraitOf, nameTavern, signOf, paintSign, TAVERN_NAME_MAX, restedOf } from '../tavern.js';
 import { el, confirmBtn, num, sectionTabs, named, getTavernName, DEFAULT_TAVERN, pressBtn } from './dom.js';
 import { drawPortrait } from './legacy.js';
 import { icon } from './icons.js';
@@ -37,6 +37,8 @@ import { checkDeeds } from '../deeds.js';
 const pct = (v) => `${Math.round(v * 100)}%`;
 const UPGRADE_ICONS = { room: 'bed', stable: 'horse', notice: 'board', trophies: 'trophy' };
 const TALK_SECONDS = 20; // how long one overheard line stays before the next
+// Rested time in words: "2 h 15 min", "40 min", "a full day".
+const restTime = (s) => (s >= REST.cap ? 'A full day' : s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min` : `${Math.max(1, Math.floor(s / 60))} min`);
 const who = (h) => `Level ${h.level} ${RACES[h.race].name} ${CLASSES[h.class].name}`;
 
 // `app` swaps saves (replaceSave), changes the roster (recruit, switchHero, retire, dismiss), and
@@ -64,6 +66,7 @@ export function mountTavern(root, app) {
   // ----- roster and Hall -----
   const rosterBox = el('div', {});
   let rosterKey = '';
+  const restBars = new Map(); // hero id -> { fill, text, box }: the Well Rested bars, redrawn in place
   const hallBox = el('div', {});
   let hallKey = '';
   const bardBox = el('div', {});
@@ -410,6 +413,7 @@ export function mountTavern(root, app) {
     const key = JSON.stringify([state.activeHeroId, state.heroes.map((h) => [h.id, h.name, h.level, h.knockedOutUntil != null, h.subclass, portraitOf(h)]), state.tavern.legends.length]);
     if (key === rosterKey) return;
     rosterKey = key;
+    restBars.clear();
     const rows = state.heroes.map((h) => {
       const active = h.id === state.activeHeroId;
       const sub = subclassName(h);
@@ -420,22 +424,48 @@ export function mountTavern(root, app) {
       buttons.push(confirmBtn('Dismiss', 'Tap again: gone for good', () => app.dismiss(h.id)));
       const face = el('canvas', { className: 'portrait', attrs: { 'aria-label': `Portrait of ${h.name}` } });
       drawPortrait(face, portraitOf(h), 1);
+      const restFill = el('i');
+      const restText = el('span', { className: 'bar-num' });
+      const restBox = el('div', { className: 'rested' },
+        el('div', { className: 'stat-head' }, el('span', { className: 'rested-label' }, icon('bed'), 'Well Rested'), restText),
+        el('div', { className: 'bar thin', attrs: { role: 'progressbar', 'aria-label': `Well Rested, ${h.name}`, 'aria-valuemin': '0', 'aria-valuemax': '100' } }, restFill));
+      restBars.set(h.id, { fill: restFill, text: restText, box: restBox });
       return el('li', { className: 'roster-hero' + (active ? ' active' : '') },
         el('div', { className: 'roster-top' },
           el('div', { className: 'portrait-frame small' }, face),
           el('div', { className: 'roster-info' },
             el('div', { className: 'roster-head' }, el('span', { className: 'roster-name', textContent: h.name }), el('span', { className: 'tag' + (active ? ' out' : ''), textContent: active ? 'Out adventuring' : 'Waiting' })),
             el('p', { className: 'hint', textContent: `${who(h)}${sub ? ', ' + sub : ''}. ${status}.` }))),
+        restBox,
         el('div', { className: 'row' }, ...buttons));
     });
     const kids = [
-      el('p', { className: 'hint', textContent: `${state.heroes.length} of ${MAX_HEROES} rooms taken. One hero adventures at a time. The others wait at the tavern exactly as you left them: no time passes for them, so they earn nothing and risk nothing until they are sent out again.` }),
+      el('p', { className: 'hint', textContent: `${state.heroes.length} of ${MAX_HEROES} rooms taken. One hero adventures at a time. The others wait at the tavern exactly as you left them: no time passes for them, so they earn nothing and risk nothing until they are sent out again, but they do get some rest.` }),
       el('ul', { className: 'roster' }, ...rows),
+      el('p', { className: 'hint', textContent: `Well Rested: every four hours a hero waits here banks an hour of rest, up to a full day. Sent out, they earn ${pct(REST.xp)} more XP from everything until the rest runs out. Time spent recovering on the good bench does not use it up.` }),
     ];
     if (canRecruit(state)) kids.push(el('div', { className: 'row' }, el('button', { className: 'btn', type: 'button', textContent: 'Recruit a new hero', onclick: () => app.recruit() })));
     else kids.push(el('p', { className: 'hint', textContent: `All ${MAX_HEROES} rooms are taken. A hero who reaches level ${MAX_LEVEL} can retire to the Hall and free a room; dismissing one frees it too, with no legend and no bonus.` }));
     kids.push(el('p', { className: 'hint', textContent: 'Dismissing a hero sends them home for good. Only retirement puts a hero in the Hall.' }));
     rosterBox.replaceChildren(...kids);
+  }
+
+  // The Well Rested bars fill as the minutes pass, so they change in place rather than rebuilding the roster.
+  function drawRest(state) {
+    for (const h of state.heroes) {
+      const bar = restBars.get(h.id);
+      if (!bar) continue;
+      const left = restedOf(h);
+      const share = Math.min(1, left / REST.cap);
+      const active = h.id === state.activeHeroId;
+      const words = left <= 0 ? (active ? 'Used up' : 'Resting') : `${restTime(left)} banked, +${pct(REST.xp)} XP${active ? ' now' : ''}`;
+      if (bar.text.textContent !== words) bar.text.textContent = words;
+      const width = (share * 100).toFixed(1) + '%';
+      if (bar.fill.style.width !== width) bar.fill.style.width = width;
+      bar.box.classList.toggle('full', share >= 1);
+      bar.box.classList.toggle('empty', left <= 0);
+      bar.box.lastChild.setAttribute('aria-valuenow', String(Math.round(share * 100)));
+    }
   }
 
   function drawHall(state) {
@@ -558,6 +588,7 @@ export function mountTavern(root, app) {
     drawCleric(hero);
     drawRespec(hero);
     drawRoster(state);
+    drawRest(state);
     drawHall(state);
   }
   return { update };

@@ -279,6 +279,12 @@ export const BOONS = {
   festive: { xp: 0.1, gold: 0.1 },
   cursed: { roll: -1 },
 };
+// Well Rested: a hero waiting at the tavern while another is out banks rested time, `per` of a
+// second for every second waited, `cap` seconds at most (an hour banked for every four waited, a
+// full day after four days). Out adventuring, the bank runs down second for second on the hero's
+// own clock, except while they recover at the tavern, and while any is left every XP earned is
+// `xp` larger (50%).
+export const REST = { per: 0.25, cap: 24 * 3600, xp: 0.5 };
 // Choices on the road. Now and then, between tasks out in the open, the hero meets something and
 // waits for word from the player. If none comes within `wait`, the hero picks on their own.
 export const ROAD = {

@@ -8,7 +8,7 @@ import { REGION_BY_ID, START_REGION } from '../data/regions.js';
 import { ADVENTURE_FIELDS, GROWTH_FIELDS, LEGACY_FIELDS, ROAD_FIELDS, STATS, abilityPointsBy } from './hero.js';
 import { CHOICE_BY_ID } from '../data/road.js';
 import { DEED_BY_ID } from '../data/deeds.js';
-import { BOONS } from './rules.js';
+import { BOONS, REST } from './rules.js';
 import { startingGear, startingCloak, SLOT_IDS, MAX_TIER } from './loot.js';
 import { LEGENDARIES } from '../data/loot.js';
 import { SKILL_BY_ID, BRANCH_BY_ID, MAX_SKILLS } from './skills.js';
@@ -115,6 +115,8 @@ function roadFields(h) {
   h.joined = Array.isArray(h.joined) ? h.joined.filter((k) => typeof k === 'string') : [];
   h.deeds = Array.isArray(h.deeds) ? [...new Set(h.deeds)].filter((id) => DEED_BY_ID[id]) : [];
   if (!h.deeds.includes(h.title)) h.title = null;
+  // Well Rested (no version change): seconds banked, none for an older save.
+  h.rested = Math.min(REST.cap, Math.max(0, Number(h.rested) || 0));
 }
 
 // Bring an older or partial save up to the current shape, or throw if it is not a save at all.

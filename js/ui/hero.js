@@ -11,8 +11,8 @@ import { RIFT_NAME, TROPHIES, TROPHY_COLORS } from '../../data/tavern.js';
 import { TITLES } from '../../data/loot.js';
 import { SpriteView, heroLook, drawStill } from '../sprite.js';
 import { maxHp, xpToNext, isHighlight } from '../hero.js';
-import { xpForLevel, paragonXpFor, legacyFor } from '../rules.js';
-import { portraitOf, paragonRank, paragonTitle, paragonXp, canRetire, trophyWall } from '../tavern.js';
+import { xpForLevel, paragonXpFor, legacyFor, REST } from '../rules.js';
+import { portraitOf, paragonRank, paragonTitle, paragonXp, canRetire, trophyWall, restedOf } from '../tavern.js';
 import { currentQuest, clericFee, payCleric } from '../tasks.js';
 import { subclassName } from '../skills.js';
 import { el, num, heroClock, confirmBtn, named } from './dom.js';
@@ -413,13 +413,15 @@ export function mountHero(root, app) {
 
     // Boons running, with the time left in whole minutes.
     const boons = activeBoons(hero);
-    const bKey = boons.map((b) => b.id + Math.ceil((b.until - hero.age) / 60)).join() + (hero.supplies?.potions ?? 0);
+    const rested = restedOf(hero);
+    const bKey = boons.map((b) => b.id + Math.ceil((b.until - hero.age) / 60)).join() + (hero.supplies?.potions ?? 0) + '/' + Math.ceil(rested / 60);
     if (bKey !== boonKey) {
       boonKey = bKey;
       const until = (b) => { const s = b.until - hero.age; return s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min` : `${Math.ceil(s / 60)} min`; };
       const chips = boons.map((b) => el('span', { className: 'boon' + (b.id === 'cursed' ? ' bad' : ''), title: BOON_TEXT[b.id].does },
         icon(b.id === 'cursed' ? 'skull' : b.id === 'festive' ? 'lantern' : 'spark'),
         el('span', { textContent: `${BOON_TEXT[b.id].title}: ${BOON_TEXT[b.id].does}, ${until(b)}` })));
+      if (rested > 0) chips.unshift(el('span', { className: 'boon rested-chip' }, icon('bed'), el('span', { textContent: `Well Rested: +${Math.round(REST.xp * 100)}% XP, ${until({ until: hero.age + rested })}` })));
       if (hero.supplies?.potions) chips.push(el('span', { className: 'boon' }, icon('potion'), el('span', { textContent: `${hero.supplies.potions} spare potions for the next dungeon or Rifts run` })));
       boonRow.replaceChildren(...chips);
       boonRow.hidden = !chips.length;

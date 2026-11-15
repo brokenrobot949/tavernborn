@@ -13,6 +13,7 @@ import { activeHero } from './hero.js';
 import { nextTask, resolveTask } from './tasks.js';
 import { afterTask } from './road.js';
 import { checkDeeds } from './deeds.js';
+import { restWaiting, useRest } from './tavern.js';
 
 export function advance(state, seconds) {
   const events = [];
@@ -20,18 +21,21 @@ export function advance(state, seconds) {
   if (!hero) return events;
   if (!hero.currentTask) hero.currentTask = nextTask(state, hero, events);
   let left = Math.max(0, Math.floor(seconds));
+  restWaiting(state, left); // the heroes waiting at the tavern bank Well Rested time
   while (left > 0) {
     const task = hero.currentTask;
     const step = Math.min(left, task.duration - task.elapsed);
     task.elapsed += step;
     hero.age += step;
     left -= step;
+    // A task finished while any rest was left counts as rested, so the rest is used up after it.
     if (task.elapsed >= task.duration) {
       resolveTask(state, hero, task, events);
       afterTask(state, hero, task, events); // choices on the road, and boons running out
       checkDeeds(hero, events);
+      useRest(hero, task, step);
       hero.currentTask = nextTask(state, hero, events);
-    }
+    } else useRest(hero, task, step);
   }
   return events;
 }
