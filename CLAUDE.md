@@ -75,6 +75,8 @@ Rob is the game designer and does not write code.
 - LPC has four blunt weapons, so the Cleric's Uncommon weapon is the mace recoloured to bronze at bake
   time (`force: 'metal', ramp: true` maps the mace's greys onto the bronze palette by brightness).
 - Shields, the cane, and the club have no hurt art, so they vanish for the second and a half of a fall.
+- LPC's cloth hood (Wizard Common, Rogue Rare and Very Rare) has no room for hair; most styles poke through
+  its top, so it hides the hair like the closed helmets (`HIDE_HAIR`).
 
 ## Working rules
 - Build phase by phase. Finish a phase's "done when" before starting the next.

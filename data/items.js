@@ -51,7 +51,7 @@ const L = (def, color, more) => ({ def, color, ...more });
 
 // Almost no LPC torso or leg armour has a muscular sheet, so the muscular body wears the male one.
 export const BODY_FALLBACK = { muscular: 'male' };
-// Closed helmets: hair is not drawn, or it pokes through the metal.
+// Closed helmets and the cloth hood: hair is not drawn, or it pokes through.
 const HIDE_HAIR = { hideHair: true };
 const FEMALE_ONLY = { bodies: { male: 'female', muscular: 'female' } };
 
@@ -124,7 +124,7 @@ export const GEAR = {
       [L('torso_clothes_longsleeve', 'white'), L('legs_pants', 'gray'), L('torso_clothes_robe', 'white', FEMALE_ONLY), L('shoulders_mantal', 'purple')],
     ],
     head: [
-      [L('hat_hood_cloth', 'brown')],
+      [L('hat_hood_cloth', 'brown', HIDE_HAIR)],
       [L('hat_magic_wizard', 'navy')],
       [L('hat_magic_large', 'brown')],
       [L('hat_magic_celestial', 'purple')],
@@ -178,8 +178,8 @@ export const GEAR = {
     head: [
       [L('hat_bandana', 'charcoal')],
       [L('hat_headband_kerchief', 'maroon', { base: 'brown' })],
-      [L('hat_hood_cloth', 'charcoal')],
-      [L('hat_hood_cloth', 'black'), L('facial_mask_plain', 'black')],
+      [L('hat_hood_cloth', 'charcoal', HIDE_HAIR)],
+      [L('hat_hood_cloth', 'black', HIDE_HAIR), L('facial_mask_plain', 'black')],
       [L('hat_cap_cavalier', 'black'), L('facial_mask_plain', 'black')],
     ],
     hands: [
