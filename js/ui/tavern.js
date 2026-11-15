@@ -442,7 +442,7 @@ export function mountTavern(root, app) {
     const kids = [
       el('p', { className: 'hint', textContent: `${state.heroes.length} of ${MAX_HEROES} rooms taken. One hero adventures at a time. The others wait at the tavern exactly as you left them: no time passes for them, so they earn nothing and risk nothing until they are sent out again, but they do get some rest.` }),
       el('ul', { className: 'roster' }, ...rows),
-      el('p', { className: 'hint', textContent: `Well Rested: every four hours a hero waits here banks an hour of rest, up to a full day. Sent out, they earn ${pct(REST.xp)} more XP from everything until the rest runs out. Time spent recovering on the good bench does not use it up.` }),
+      el('p', { className: 'hint', textContent: `Well Rested: every three hours a hero waits here banks an hour of rest, up to a full day. Sent out, they earn ${pct(REST.xp)} more XP from everything until the rest runs out. Time spent recovering on the good bench does not use it up.` }),
     ];
     if (canRecruit(state)) kids.push(el('div', { className: 'row' }, el('button', { className: 'btn', type: 'button', textContent: 'Recruit a new hero', onclick: () => app.recruit() })));
     else kids.push(el('p', { className: 'hint', textContent: `All ${MAX_HEROES} rooms are taken. A hero who reaches level ${MAX_LEVEL} can retire to the Hall and free a room; dismissing one frees it too, with no legend and no bonus.` }));

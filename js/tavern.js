@@ -135,20 +135,22 @@ export function switchHero(state, id) {
 
 // ---------- Well Rested ----------
 
-// Rested time banked, in seconds, and what it adds to XP now (0 or REST.xp).
-export const restedOf = (hero) => Math.max(0, Number(hero?.rested) || 0);
-export const restedXp = (hero) => (restedOf(hero) > 0 ? REST.xp : 0);
+// `hero.rested` is the bank in seconds waited (REST.every of them to a second of rest), a whole
+// number. `restedOf` is the rested time it is worth, in seconds; `restedXp` what it adds to XP now.
+export const REST_FULL = REST.cap * REST.every;
+export const restedOf = (hero) => Math.max(0, Number(hero?.rested) || 0) / REST.every;
+export const restedXp = (hero) => (hero?.rested > 0 ? REST.xp : 0);
 // Every hero waiting at the tavern banks rest for the time that passed (called by `advance`).
 export function restWaiting(state, seconds) {
   for (const h of state.heroes) {
     if (h.id === state.activeHeroId) continue;
-    h.rested = Math.min(REST.cap, restedOf(h) + seconds * REST.per);
+    h.rested = Math.min(REST_FULL, (h.rested || 0) + seconds);
   }
 }
 // The hero out adventuring uses it up, second for second, but not while recovering at the tavern.
 export function useRest(hero, task, seconds) {
   if (!hero.rested || task.kind === 'tavern') return;
-  hero.rested = Math.max(0, restedOf(hero) - seconds);
+  hero.rested = Math.max(0, hero.rested - seconds * REST.every);
 }
 
 // Send a hero away for good: no legend, no portrait, no bonus. The slot is freed.

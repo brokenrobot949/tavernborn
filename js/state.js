@@ -115,8 +115,8 @@ function roadFields(h) {
   h.joined = Array.isArray(h.joined) ? h.joined.filter((k) => typeof k === 'string') : [];
   h.deeds = Array.isArray(h.deeds) ? [...new Set(h.deeds)].filter((id) => DEED_BY_ID[id]) : [];
   if (!h.deeds.includes(h.title)) h.title = null;
-  // Well Rested (no version change): seconds banked, none for an older save.
-  h.rested = Math.min(REST.cap, Math.max(0, Number(h.rested) || 0));
+  // Well Rested (no version change): whole seconds waited, none for an older save.
+  h.rested = Math.min(REST.cap * REST.every, Math.max(0, Math.floor(Number(h.rested) || 0)));
 }
 
 // Bring an older or partial save up to the current shape, or throw if it is not a save at all.
