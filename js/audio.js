@@ -190,11 +190,11 @@ export function pickSound(events) {
   for (const e of events) {
     let name = null, arg;
     if (e.type === 'levelup') name = 'levelup';
-    else if (e.type === 'cleared') name = 'clear';
+    else if (e.type === 'cleared' || e.type === 'sitecleared') name = 'clear';
     else if (e.type === 'paragon') name = 'paragon';
     else if (e.type === 'knockout') name = 'knockout';
     else if (e.type === 'loot' && e.equipped) { name = e.tier >= 4 ? 'legendary' : 'loot'; arg = e.tier; }
-    else if (e.type === 'questdone') name = 'quest';
+    else if (e.type === 'questdone' || e.type === 'bounty') name = 'quest';
     else if (e.type === 'task' && e.outcome === 'crit') name = 'crit';
     else if (e.type === 'task' && e.outcome === 'fumble') name = 'fumble';
     else if (e.type === 'potion') name = 'potion';

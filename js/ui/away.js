@@ -7,6 +7,7 @@ import { pending } from '../skills.js';
 import { TIERS } from '../../data/items.js';
 import { el, num, duration } from './dom.js';
 import { DEED_BY_ID } from '../../data/deeds.js';
+import { SITE_BY_ID } from '../../data/sites.js';
 
 export function showAway(root, { seconds, summary: s, hero }) {
   root.querySelector('.overlay')?.remove();
@@ -28,6 +29,7 @@ export function showAway(root, { seconds, summary: s, hero }) {
     item('Natural 1s', num(s.natural1s)),
     s.quests.length ? item('Story quests finished', s.quests.length <= 2 ? s.quests.join(', ') : num(s.quests.length)) : null,
     s.oddJobs ? item('Odd jobs done', num(s.oddJobs)) : null,
+    s.errands.length ? item('Errands run', s.errands.join(', ')) : null,
     s.feats.length ? item('Feats earned', `${s.feats.length} (a bonus skill point each)`) : null,
     s.clears.length ? item('Dungeons cleared', `${s.clears.length} (${dungeons(s.clears)})`) : null,
     s.chapters.length ? item('Story', `Chapter ${s.chapters.join(' and ')} recovered`) : null,
@@ -41,6 +43,11 @@ export function showAway(root, { seconds, summary: s, hero }) {
     s.found ? item('Sold', `${num(s.soldFor)} gp for the rest`) : null,
     s.potions ? item('Potions drunk', num(s.potions)) : null,
     s.newMonsters.length ? item('New in the Bestiary', names(s.newMonsters)) : null,
+    s.rares.length ? item('Rare monsters beaten', `${s.rares.length} (${names(s.rares)})`) : null,
+    s.mastery ? item('Mastery ranks earned', num(s.mastery)) : null,
+    s.sites.length ? item('Lesser delves cleared', `${s.sites.length} (${[...new Set(s.sites)].map((id) => SITE_BY_ID[id]?.name).filter(Boolean).join(', ')})`) : null,
+    s.bounties ? item('Bounties done', num(s.bounties)) : null,
+    hero.bounty ? item('Bounty in hand', `${hero.bounty.title}, ${Math.min(hero.bounty.have, hero.bounty.need)} of ${hero.bounty.need}`) : null,
     s.riftFloors ? item('Rift floors cleared', `${num(s.riftFloors)} (deepest ever: floor ${hero.stats.riftBest})`) : null,
     s.paragon.length ? item('Paragon', `Rank ${Math.max(...s.paragon)}`) : null,
     s.trophies.length ? item('Trophies won', num(s.trophies.length)) : null,

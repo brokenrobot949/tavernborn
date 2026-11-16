@@ -9,10 +9,11 @@
 // a focus and says when to travel. `steer` plays a sensible one, using the same orders the Map tab
 // uses (setFocus, orderTravel):
 //   - roam until level 2 (a new hero's focus is Roam), then
+//   - clear each of the region's two lesser delves once, on reaching the level it is built for
 //   - try the region's dungeon on reaching the level it is built for
 //   - if the hero loses confidence there (three knockouts running), wait for the next level
 //   - once it is cleared and the hero has reached the next region's range, walk there
-//   - otherwise: 'balanced' does the region's six story quests and then roams;
+//   - otherwise: 'balanced' does each of the region's six story quests as it opens, and roams between;
 //                'roam' only ever roams
 // 'vale' keeps the hero roaming in Mugwick Vale for all 20 levels, to show what staying put costs.
 //
@@ -38,7 +39,8 @@ import { newSave } from '../js/state.js';
 import { createHero, assignScores, defaultAppearance, raiseAbility, STANDARD_ARRAY } from '../js/hero.js';
 import { TREES, BRANCH_BY_ID, canChooseSubclass, chooseSubclass, canLearn, learnSkill } from '../js/skills.js';
 import { ABILITY_MAX } from '../js/rules.js';
-import { setFocus, orderTravel } from '../js/tasks.js';
+import { setFocus, orderTravel, orderDelve, storyReady } from '../js/tasks.js';
+import { SITES } from '../data/sites.js';
 import { MAX_LEVEL, LEVEL_TARGET_HOURS, STORY_QUESTS, WHAT_IF } from '../js/rules.js';
 import { CLASSES } from '../data/classes.js';
 import { RACES } from '../data/races.js';
@@ -119,14 +121,19 @@ export function steer(hero, sim, style) {
   const cleared = (hero.dungeonClears[region.id] ?? 0) > 0;
   if (cleared && next && hero.level >= next.levels[0] && hero.travelTo !== next.id) orderTravel(hero, next.id);
   const ready = hero.level >= Math.max(region.levels[1] - sim.early, sim.retryAt[region.id] ?? 0);
-  const storyLeft = (hero.questProgress[region.id]?.done ?? 0) < STORY_QUESTS;
-  const focus = !cleared && ready ? 'delve' : style === 'balanced' && storyLeft && hero.level >= 2 ? 'quest' : 'roam';
-  if (focus !== hero.focus) setFocus(hero, focus);
+  // A story quest opens when the hero reaches its level. Between them this player roams.
+  const storyLeft = storyReady(hero);
+  // A lesser delve not yet cleared, once the hero is its level (or a level on, after losing confidence there).
+  const site = sim.sites === false ? null : SITES[region.id].find((s) => !hero.siteClears[s.id] && hero.level >= Math.max(s.level, sim.retryAt[s.id] ?? 0));
+  const focus = !cleared && ready ? 'delve' : site && hero.level >= 2 ? 'delve' : style === 'balanced' && storyLeft && hero.level >= 2 ? 'quest' : 'roam';
+  const where = focus === 'delve' && !(!cleared && ready) ? site.id : null;
+  if (focus === 'delve') { if (hero.focus !== 'delve' || (hero.site ?? null) !== where) orderDelve(hero, where); }
+  else if (focus !== hero.focus) setFocus(hero, focus);
 }
 
 // Run one hero from creation until they are level 20 and have cleared the last dungeon (or
 // `maxDays`). `world` is 'road' or 'vale'; `style` is 'balanced' or 'roam'.
-export function runHero({ seed, cls, race, subclass = TREES[cls].branches[0].id }, { world = 'road', style = 'balanced', early = 0, maxDays = 60, chunk = 300, growth = true, shop: shops = true, tavern = null } = {}) {
+export function runHero({ seed, cls, race, subclass = TREES[cls].branches[0].id }, { world = 'road', style = 'balanced', early = 0, maxDays = 60, chunk = 300, growth = true, shop: shops = true, tavern = null, sites = true } = {}) {
   const save = newSave(seed, 0);
   if (tavern) save.tavern = JSON.parse(JSON.stringify(tavern));
   const hero = createHero(save, { name: 'Sim', race, cls, appearance: defaultAppearance(race), baseScores: assignScores(cls, STANDARD_ARRAY) });
@@ -138,7 +145,7 @@ export function runHero({ seed, cls, race, subclass = TREES[cls].branches[0].id 
     tierAt: new Array(MAX_LEVEL + 1).fill(null), worn: Object.fromEntries(SLOT_IDS.map((id) => [id, new Set([0])])), legends: [], worse: 0,
     tavernSpent: 0, upgradesAt: new Array(MAX_LEVEL + 1).fill(null),
   };
-  const sim = { retryAt: {}, early }; // `early`: levels below the dungeon's own at which to first try it
+  const sim = { retryAt: {}, early, sites }; // `early`: levels below the dungeon's own at which to first try it
   const road = world === 'road';
   const limit = maxDays * DAY;
   const finished = () => hero.level >= MAX_LEVEL && (!road || out.clears[LAST_REGION]);
@@ -152,10 +159,10 @@ export function runHero({ seed, cls, race, subclass = TREES[cls].branches[0].id 
       }
       else if (e.type === 'knockout') {
         out.knockouts += 1; out.koSeconds += e.seconds; out.koAtLevel[hero.level] += 1; out.koBy[e.source] += 1;
-        if (e.lost === 'run') out.runsLost[e.region] = (out.runsLost[e.region] ?? 0) + 1;
+        if (e.lost === 'run' && !e.site) out.runsLost[e.region] = (out.runsLost[e.region] ?? 0) + 1;
       } else if (e.type === 'potion') out.potions += 1;
       else if (e.type === 'cleared' && e.first) out.clears[e.region] = { at: e.at, level: hero.level };
-      else if (e.type === 'confidence') sim.retryAt[e.region] = Math.min(MAX_LEVEL, hero.level + 1);
+      else if (e.type === 'confidence') sim.retryAt[e.site ?? e.region] = Math.min(MAX_LEVEL, hero.level + 1);
       else if (e.type === 'questdone' && e.story) out.quests += 1;
       else if (e.type === 'feat') out.feats += 1;
       else if (e.type === 'skill') out.moves += 1;
@@ -180,6 +187,12 @@ export function runHero({ seed, cls, race, subclass = TREES[cls].branches[0].id 
   out.age = hero.age;
   out.deeds = [...(hero.deeds ?? [])];
   out.choicesAlone = hero.stats.choicesAlone ?? 0;
+  out.rares = hero.stats.rares ?? 0;
+  out.siteClears = hero.stats.siteClears ?? 0;
+  out.siteRuns = hero.stats.siteRuns ?? 0;
+  out.errands = hero.stats.errands ?? 0;
+  out.regulars = hero.stats.regulars ?? 0;
+  out.oddJobs = hero.stats.oddJobs ?? 0;
   out.n20 = hero.stats.natural20s;
   out.n1 = hero.stats.natural1s;
   return out;
@@ -262,6 +275,12 @@ export function summarize(results) {
     quests: mean(results.map((r) => r.quests)),
     feats: mean(results.map((r) => r.feats)),
     runs: mean(results.map((r) => r.runs ?? 0)),
+    rares: mean(results.map((r) => r.rares ?? 0)),
+    siteClears: mean(results.map((r) => r.siteClears ?? 0)),
+    siteRuns: mean(results.map((r) => r.siteRuns ?? 0)),
+    errands: mean(results.map((r) => r.errands ?? 0)),
+    regulars: mean(results.map((r) => r.regulars ?? 0)),
+    oddJobs: mean(results.map((r) => r.oddJobs ?? 0)),
   };
 }
 

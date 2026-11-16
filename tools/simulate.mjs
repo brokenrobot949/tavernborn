@@ -48,6 +48,7 @@ console.log(`  At the end: ${s.endShare.map((e) => `${e.name} ${Math.round(e.sha
 console.log(`  Per hero: ${s.itemsFound.toFixed(0)} pieces found, ${s.upgrades.toFixed(0)} equipped, the rest sold for ${Math.round(s.soldFor)} gp in all; ${s.legends.toFixed(2)} named Legendaries.`);
 console.log(`\nPer hero: ${s.knockouts.toFixed(1)} knockouts (${s.koHours.toFixed(1)} h recovering): ${s.koBy.roam.toFixed(1)} roaming, ${s.koBy.quest.toFixed(1)} on quests, ${s.koBy.delve.toFixed(1)} in dungeon rooms, ${s.koBy.boss.toFixed(1)} to bosses.`);
 console.log(`          ${s.potions.toFixed(1)} potions, ${Math.round(s.tasks)} tasks, ${s.quests.toFixed(1)} story quests, ${s.feats.toFixed(1)} feats, ${s.runs.toFixed(1)} dungeon runs. ${s.knockoutFree} of ${heroes} were never knocked out.`);
+console.log(`          ${s.rares.toFixed(1)} rare monsters beaten, ${s.siteClears.toFixed(1)} lesser delves cleared in ${s.siteRuns.toFixed(1)} runs, ${s.oddJobs.toFixed(1)} odd jobs, ${s.errands.toFixed(1)} errands, ${s.regulars.toFixed(1)} regulars' stories finished.`);
 console.log(`          ${s.skills.toFixed(1)} skills learned, ${Math.round(s.moves)} signature moves fired, ${Math.round(s.gold)} gp in the purse at the end.`);
 if (options.shop !== false) {
   console.log(`

@@ -17,7 +17,9 @@ import { CLASSES } from '../../data/classes.js';
 import { ABILITIES, ABILITY_NAMES, mod } from '../rules.js';
 import { GEAR_SLOTS } from '../../data/loot.js';
 import { describe, describeAll, flavorOf } from '../loot.js';
-import { LOOT } from '../rules.js';
+import { LOOT, MASTERY, masteryRank } from '../rules.js';
+import { RARES, RARE_LIST, MASTERY_TEXT } from '../../data/rares.js';
+import { SITES, SITE_LIST } from '../../data/sites.js';
 import { drawStill } from '../sprite.js';
 import { el, num, signed, duration, sectionTabs } from './dom.js';
 import { icon } from './icons.js';
@@ -91,7 +93,7 @@ export function mountGear(root, app) {
       el('ul', { className: 'slot-grid' }, ...slots),
       key,
       el('details', { className: 'panel how' }, el('summary', { textContent: 'How gear works' }),
-        el('p', { className: 'hint', textContent: 'Gear looks after itself. A better piece goes on the moment it is found and everything else is sold. Better means rarer, or the same rarity at a higher level. Rarity sets the size of a piece\'s bonus and its look on the hero; level adds a little on top. Monsters drop gear rarely, every finished quest pays one piece, and dungeon bosses drop the best. Each dungeon also has one named Legendary.' })));
+        el('p', { className: 'hint', textContent: 'Gear looks after itself. A better piece goes on the moment it is found and everything else is sold. Better means rarer, or the same rarity at a higher level. Rarity sets the size of a piece\'s bonus and its look on the hero; level adds a little on top. Monsters drop gear rarely and a rare monster always, every finished quest pays one piece, and dungeon bosses drop the best. Each dungeon also has one named Legendary.' })));
   }
 
   // ----- ability scores -----
@@ -126,6 +128,10 @@ export function mountGear(root, app) {
         stat('board', 'Odd jobs', num(s.oddJobs), 'green'),
         stat('flag', 'Feats', num(hero.feats.length), 'gold'),
         stat('door', 'Dungeons cleared', `${num(s.dungeonClears)} of ${num(s.dungeonRuns)}`, 'purple'),
+        stat('flag', 'Lesser delves cleared', `${num(s.siteClears ?? 0)} of ${num(s.siteRuns ?? 0)}`, 'purple'),
+        stat('eye', 'Rare monsters beaten', num(s.rares ?? 0), 'gold'),
+        stat('board', 'Bounties done', num(s.bounties ?? 0), 'green'),
+        stat('star', 'Errands run', num(s.errands ?? 0), 'green'),
         stat('trinket', 'Gear found', `${num(s.itemsFound)}, ${num(s.upgrades)} worn`, 'blue'),
         stat('coin', 'Sold the rest for', `${num(s.soldFor)} gp`, 'gold'),
         stat('skull', 'Knockouts', num(s.knockouts), 'red'),
@@ -165,11 +171,30 @@ export function mountGear(root, app) {
   const folded = {}; // region id -> open (true) or closed (false), as last tapped
   let foldedFor = '';
   function drawBestiary(hero) {
-    if (!changed('beasts', [hero.id, hero.region, REGIONS.map((r) => [regionOpen(hero, r.id), hero.dungeonClears[r.id] ?? 0, MONSTERS[r.id].map((m) => hero.bestiary[m.id] ?? 0)])])) return;
+    if (!changed('beasts', [hero.id, hero.region, hero.siteClears, REGIONS.map((r) => [regionOpen(hero, r.id), hero.dungeonClears[r.id] ?? 0, [...MONSTERS[r.id], ...RARES[r.id]].map((m) => hero.bestiary[m.id] ?? 0)])])) return;
     if (foldedFor !== hero.id + hero.region) { foldedFor = hero.id + hero.region; for (const k of Object.keys(folded)) delete folded[k]; }
     const all = REGIONS.flatMap((r) => MONSTERS[r.id]);
     const metAll = all.filter((m) => hero.bestiary[m.id]).length;
     const bossesBeaten = REGIONS.filter((r) => hero.dungeonClears[r.id]).length;
+    const raresMet = RARE_LIST.filter((m) => hero.bestiary[m.id]).length;
+    const keepersBeaten = SITE_LIST.filter((s) => hero.siteClears?.[s.id]).length;
+    // One monster's row: its count, its mastery rank as pips, and how far it is to the next rank.
+    const beastRow = (m) => {
+      const count = hero.bestiary[m.id] ?? 0;
+      const at = m.rare ? MASTERY.rareAt : MASTERY.at;
+      const rank = masteryRank(count, m.rare);
+      const next = at[rank];
+      const pips = el('span', { className: 'pips', attrs: { 'aria-label': rank ? MASTERY_TEXT.ranks[rank - 1] : 'No rank yet' } }, ...at.map((_, i) => el('i', { className: i < rank ? 'on' : '' })));
+      const note = count
+        ? `${rank ? MASTERY_TEXT.ranks[rank - 1] + `: ${Math.round(100 * MASTERY.dr * rank)}% less damage from it, ${Math.round(100 * MASTERY.gold * rank)}% more gold. ` : ''}${next ? `${num(next - count)} more to ${MASTERY_TEXT.ranks[rank]}.` : 'Nothing more to learn.'}`
+        : m.rare === 2 ? m.sign : '';
+      return el('li', { className: 'beast' + (count ? '' : ' unknown') + (m.rare ? ' rare' + (m.rare === 2 ? ' elusive' : '') : '') },
+        el('span', { className: 'beast-icon' }, icon(count ? (m.rare ? 'star' : 'eye') : 'lock')),
+        el('div', {},
+          el('div', { className: 'beast-head' }, el('span', { textContent: count ? m.name : m.rare === 2 ? 'An elusive beast, not yet defeated' : m.rare ? 'A rare one, not yet defeated' : 'Not yet defeated' }), el('span', { className: 'beast-count' }, count ? pips : null, count ? '×' + num(count) : '')),
+          count ? el('p', { className: 'hint', textContent: m.about }) : null,
+          note ? el('p', { className: 'beast-rank', textContent: note }) : null));
+    };
     const total = el('i');
     total.style.width = `${(100 * metAll) / all.length}%`;
     const regions = REGIONS.map((r, i) => {
@@ -180,15 +205,16 @@ export function mountGear(root, app) {
       const clears = hero.dungeonClears[r.id] ?? 0;
       const fill = el('i');
       fill.style.width = `${(100 * met) / monsters.length}%`;
-      const rows = reached ? monsters.map((m) => {
-        const count = hero.bestiary[m.id] ?? 0;
-        return el('li', { className: count ? 'beast' : 'beast unknown' },
-          el('span', { className: 'beast-icon' }, icon(count ? 'eye' : 'lock')),
-          el('div', {},
-            el('div', { className: 'beast-head' }, el('span', { textContent: count ? m.name : 'Not yet defeated' }), el('span', { className: 'beast-count', textContent: count ? '×' + num(count) : '' })),
-            count ? el('p', { className: 'hint', textContent: m.about }) : null));
-      }) : [];
+      const rows = reached ? [...monsters, ...RARES[r.id]].map(beastRow) : [];
       if (reached) {
+        for (const s of SITES[r.id]) {
+          const n = hero.siteClears?.[s.id] ?? 0;
+          rows.push(el('li', { className: 'beast keeper' + (n ? '' : ' unknown') },
+            el('span', { className: 'beast-icon' }, icon(n ? 'flag' : 'lock')),
+            el('div', {},
+              el('div', { className: 'beast-head' }, el('span', { textContent: n ? s.boss.name : 'The keeper of a lesser delve' }), el('span', { className: 'beast-count', textContent: n ? '×' + num(n) : '' })),
+              el('p', { className: 'hint', textContent: n ? s.boss.about : `Keeps ${s.name}.` }))));
+        }
         rows.push(el('li', { className: 'beast boss' + (clears ? '' : ' unknown') },
           el('span', { className: 'beast-icon' }, icon(clears ? 'crown' : 'lock')),
           el('div', {},
@@ -209,7 +235,7 @@ export function mountGear(root, app) {
     });
     beastPage.replaceChildren(el('section', { className: 'panel' },
       el('h3', { textContent: 'Bestiary' }),
-      el('p', { className: 'hint', textContent: `${metAll} of ${all.length} monsters defeated at least once, and ${bossesBeaten} of ${REGIONS.length} bosses. Tap a region to open it.` }),
+      el('p', { className: 'hint', textContent: `${metAll} of ${all.length} monsters defeated at least once, ${raresMet} of ${RARE_LIST.length} rare ones, ${keepersBeaten} of ${SITE_LIST.length} keepers of lesser delves, and ${bossesBeaten} of ${REGIONS.length} bosses. Every monster earns three ranks as its defeats add up; each rank is ${Math.round(100 * MASTERY.dr)}% less damage from it and ${Math.round(100 * MASTERY.gold)}% more gold. Tap a region to open it.` }),
       el('div', { className: 'bar thin beast-bar' }, total),
       el('div', { className: 'beast-regions' }, ...regions)));
   }

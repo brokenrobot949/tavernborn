@@ -15,8 +15,8 @@ export const CHRONICLE_MAX = 200;
 // Highlights (level-ups, dungeons, finished quests, knockouts, Very Rare and Legendary gear) are
 // trimmed last, so up to KEPT_MAX of them outlive the ordinary lines of a busy day.
 export const KEPT_MAX = 60;
-const KEPT_KINDS = new Set(['deed', 'festival', 'levelup', 'milestone', 'paragon', 'feat', 'knockout', 'boss', 'cleared', 'chapter', 'unlock', 'trophy', 'questdone']);
-export const isHighlight = (line) => KEPT_KINDS.has(line.k) || (line.k === 'upgrade' && line.tier >= 3);
+const KEPT_KINDS = new Set(['sitecleared', 'bounty', 'regular', 'deed', 'festival', 'levelup', 'milestone', 'paragon', 'feat', 'knockout', 'boss', 'cleared', 'chapter', 'unlock', 'trophy', 'questdone']);
+export const isHighlight = (line) => KEPT_KINDS.has(line.k) || (line.k === 'upgrade' && line.tier >= 3) || (line.k === 'mastery' && line.rank >= 3);
 
 export const activeHero = (state) => state.heroes.find((h) => h.id === state.activeHeroId) ?? null;
 
@@ -98,7 +98,7 @@ export const GROWTH_FIELDS = () => ({ abilityPoints: 0, raised: {}, cooldowns: {
 // Ability points a hero of this level has been granted in all.
 export const abilityPointsBy = (level) => ABILITY_POINTS * ABILITY_LEVELS.filter((l) => l <= level).length;
 
-export const STATS = { knockouts: 0, mostEmbarrassingDefeat: null, natural20s: 0, natural1s: 0, tasks: 0, quests: 0, oddJobs: 0, dungeonRuns: 0, dungeonClears: 0, itemsFound: 0, upgrades: 0, soldFor: 0, riftRuns: 0, riftFloors: 0, riftBest: 0, choices: 0, choicesAlone: 0, bought: 0, festivals: 0 };
+export const STATS = { knockouts: 0, mostEmbarrassingDefeat: null, natural20s: 0, natural1s: 0, tasks: 0, quests: 0, oddJobs: 0, dungeonRuns: 0, dungeonClears: 0, itemsFound: 0, upgrades: 0, soldFor: 0, riftRuns: 0, riftFloors: 0, riftBest: 0, choices: 0, choicesAlone: 0, bought: 0, festivals: 0, rares: 0, authorities: 0, siteRuns: 0, siteClears: 0, bounties: 0, errands: 0, regulars: 0 };
 // What Phase 6 keeps on a hero.
 //   rift           the Planar Rifts run in progress: { floor }, or null
 //   paragon        Paragon ranks already announced in the Chronicle (titles only)
@@ -114,6 +114,15 @@ export const LEGACY_FIELDS = () => ({ rift: null, paragon: 0, retireOffered: fal
 //   deeds, title  deeds done (ids) and the one whose title is worn, or null
 //   rested        Well Rested: seconds waited at the tavern, three to a second of rest at the tavern (js/tavern.js, REST in rules.js)
 export const ROAD_FIELDS = () => ({ choice: null, nextChoiceAt: null, lastChoice: null, boons: [], supplies: { potions: 0 }, joined: [], deeds: [], title: null, rested: 0 });
+
+// What round five keeps on a hero (rare monsters need nothing new: they are counted in the Bestiary).
+//   site        the lesser delve that Delve goes to in its own region (an id from data/sites.js), or null for the dungeon
+//   siteClears  per lesser delve: times cleared
+//   bounty      the bounty taken from the notice board: { day, kind, title, about, monster, need, have, level }, or null
+//   bountyDay   the day (js/world.js, dayOf) a bounty was last taken: one a day
+//   errands     happenings' errands already done, as 'id-day'
+//   seen        the happening last written into the Chronicle, as 'id-day'
+export const EXPLORE_FIELDS = () => ({ site: null, siteClears: {}, bounty: null, bountyDay: null, errands: [], seen: null });
 
 // A region is open once the dungeon of the region before it has been cleared. The first always is.
 export function regionOpen(hero, regionId) {
@@ -147,6 +156,7 @@ export function createHero(state, { name, race, cls, appearance, baseScores }) {
     ...GROWTH_FIELDS(),
     ...LEGACY_FIELDS(),
     ...ROAD_FIELDS(),
+    ...EXPLORE_FIELDS(),
     bestiary: {},
     feats: [],
     stats: { ...STATS },
@@ -159,15 +169,33 @@ export function createHero(state, { name, race, cls, appearance, baseScores }) {
   return hero;
 }
 
+// How many highlights a Chronicle list holds, remembered per list so it is not counted again after
+// every task. A list the sim did not build itself (a loaded save, a test) is simply counted once.
+const highlightCount = new WeakMap();
+
 // Add a Chronicle line (kept to the last 200) and return it.
 export function chronicle(hero, kind, text, extra = {}) {
   const line = { n: ++hero.lines, t: hero.age, k: kind, text, ...extra };
-  hero.chronicle.push(line);
-  if (hero.chronicle.length > CHRONICLE_MAX) {
+  const list = hero.chronicle;
+  let highlights = highlightCount.get(list);
+  if (highlights == null) { highlights = 0; for (let i = 0; i < list.length; i++) if (isHighlight(list[i])) highlights += 1; }
+  list.push(line);
+  if (isHighlight(line)) highlights += 1;
+  highlightCount.set(list, highlights);
+  if (list.length > CHRONICLE_MAX) {
     // Drop the oldest ordinary lines first, and the oldest highlights only beyond KEPT_MAX.
-    let over = hero.chronicle.length - CHRONICLE_MAX;
-    let spare = Math.max(0, hero.chronicle.filter(isHighlight).length - KEPT_MAX);
-    hero.chronicle = hero.chronicle.filter((l) => {
+    let over = list.length - CHRONICLE_MAX;
+    let spare = Math.max(0, highlights - KEPT_MAX);
+    // The usual case is one line too many: take that one out in place (this runs after every task).
+    if (over === 1) {
+      for (let i = 0; i < list.length; i++) {
+        const hl = isHighlight(list[i]);
+        if (spare <= 0 && hl) continue;
+        list.splice(i, 1);
+        if (hl) highlightCount.set(list, highlights - 1);
+        break;
+      }
+    } else hero.chronicle = list.filter((l) => {
       if (over <= 0) return true;
       if (isHighlight(l)) { if (spare <= 0) return true; spare -= 1; }
       over -= 1;

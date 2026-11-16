@@ -4,10 +4,12 @@
 
 import { el } from './dom.js';
 import { icon } from './icons.js';
+export { weatherFor } from '../world.js';
 
 // Which shape a foe takes, from its name.
 const SHAPE_RULES = [
   [/dragon|drake|vexaldrith|salamander/i, 'dragon'], [/spider|scorpion/i, 'spider'], [/eyes|voice/i, 'eye'],
+  [/\bhen\b|heron|\bowl\b/i, 'bird'], [/badger|stag/i, 'beast'], [/leaf-fall/i, 'tree'], [/grubb/i, 'small'],
   [/wisp|elemental|dust devil/i, 'flame'], [/ooze|bog|leech|mimic/i, 'blob'],
   [/oak|scarecrow|bramble|stalactite|toadstool|myconid/i, 'tree'],
   [/owlbear|boar|wolf|mule|goat|camel|sphinx/i, 'beast'], [/goose|gull|harpy/i, 'bird'], [/\brat\b|crab/i, 'critter'],
@@ -56,27 +58,14 @@ export function arrival(layer, name, sub) {
   setTimeout(() => b.remove(), 4200);
 }
 
-// Weather by region. Some is always there (the fen's mist, the volcano's embers, the spores of
-// the Underdeep); rain, snow, leaves, and blowing sand come and go in spells of an hour and a half,
-// the same on every device at the same moment.
-const WEATHER = {
-  mugwick: { kind: 'clear' },
-  mumblewood: { kind: 'leaves', chance: 0.6 },
-  saltmarrow: { kind: 'rain', chance: 0.55 },
-  peaks: { kind: 'snow', chance: 0.65 },
-  gloamfen: { kind: 'mist', chance: 1 },
-  cinder: { kind: 'sand', chance: 0.5 },
-  underdeep: { kind: 'spores', chance: 1 },
-  wyrmspire: { kind: 'embers', chance: 1 },
-};
-const SPELL_MS = 90 * 60 * 1000;
-export function weatherFor(region, now = Date.now()) {
-  const w = WEATHER[region];
-  if (!w || w.kind === 'clear') return '';
-  if (w.chance >= 1) return w.kind;
-  const spell = Math.floor(now / SPELL_MS);
-  const roll = ((spell * 2654435761 + region.length * 97 + region.charCodeAt(0) * 13) >>> 0) % 1000 / 1000;
-  return roll < w.chance ? w.kind : '';
+// (The weather itself, `weatherFor`, is in js/world.js: the rules read it too, for the elusive beasts.)
+
+// A rare monster turning up, seen live: its name in a banner.
+export function rareBanner(layer, name, elusive) {
+  layer.querySelector('.rare-banner')?.remove();
+  const b = el('div', { className: 'arrival rare-banner' }, el('small', { textContent: elusive ? 'An elusive beast' : 'A rare one' }), el('strong', { textContent: name }), el('span', { textContent: 'is on the road' }));
+  layer.append(b);
+  setTimeout(() => b.remove(), 3600);
 }
 
 // ----- after Phase 7: bosses, loot arriving, healing, and a foe going down -----

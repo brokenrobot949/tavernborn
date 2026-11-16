@@ -147,8 +147,7 @@ function tick() {
   const now = Date.now();
   let gap = Math.floor((now - save.lastSavedAt) / 1000);
   if (gap < 0) { save.lastSavedAt = now; gap = 0; } // the device clock was moved back
-  const events = advance(save, gap);
-  save.lastSavedAt += gap * 1000;
+  const events = advance(save, gap); // moves `lastSavedAt` on by the gap as it goes
   sinceStore += gap;
   // Sound: one effect for what just happened, or one chime for a long time away.
   if (gap >= AWAY_SECONDS) { showAway(root, { seconds: gap, summary: summarize(events), hero }); sfx('away'); }

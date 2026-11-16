@@ -1,5 +1,7 @@
 // Map tab: the world map (drawn in code, nothing to download), the details of the region tapped,
 // travel, and the standing order: Roam, Quest, or Delve, and from level 20 the Planar Rifts.
+// Round five adds what is going on today (a star on the map and a box on the region's card), the two
+// lesser delves beside each dungeon, and the notice board with the day's three bounties.
 // The hero is always on the map, in their own gear: standing beside the region they are in, walking the
 // road while they travel, and at the tavern's door while they recover there.
 //
@@ -11,10 +13,16 @@ import { MONSTERS } from '../../data/monsters.js';
 import { DUNGEONS } from '../../data/dungeons.js';
 import { CHAPTERS } from '../../data/story.js';
 import { regionOpen } from '../hero.js';
-import { currentQuest, setFocus, orderTravel } from '../tasks.js';
+import { currentQuest, setFocus, orderTravel, orderDelve, delveTarget, storyReady, storyOpensAt } from '../tasks.js';
+import { RARES } from '../../data/rares.js';
+import { SITES } from '../../data/sites.js';
+import { QUESTS } from '../../data/quests.js';
+import { REGULARS, HAPPENING_EFFECT } from '../../data/board.js';
+import { happeningsOn, dayOf } from '../world.js';
+import { postingsOn, canTake, takeBounty, bountyReward } from '../board.js';
 import { STORY_QUESTS, TRAVEL_SECONDS_PER_REGION, MAX_LEVEL, RIFT } from '../rules.js';
 import { RIFT_NAME, RIFT_TEXT } from '../../data/tavern.js';
-import { el } from './dom.js';
+import { el, num, confirmBtn } from './dom.js';
 import { showChapter } from './story.js';
 import { icon, ICONS } from './icons.js';
 import { SpriteView, heroLook } from '../sprite.js';
@@ -132,6 +140,7 @@ export function mountMap(root, app) {
 
   function draw(hero) {
     const here = REGION_INDEX[hero.region];
+    const news = happeningsOn(new Date());
     const map = svg('svg', { viewBox: '0 0 340 400', class: 'worldmap', role: 'group', 'aria-label': 'World map: eight regions along the road from The Wobbly Griffin' });
     // Open regions glow in their colour; the rest are under fog. The road is solid as far as it is open.
     const openUpTo = REGIONS.reduce((n, r, i) => (regionOpen(hero, r.id) ? i : n), 0);
@@ -172,6 +181,7 @@ export function mountMap(root, app) {
         svg('circle', { r: 15, class: 'dot' }),
         r.id === selected ? svg('circle', { r: 20, class: 'ring' }) : null,
         state === 'locked' ? mapIcon('lock', 'translate(-7 -8) scale(0.58)') : number,
+        open && news[r.id] ? svg('g', { class: 'news', transform: 'translate(-15 -15)' }, svg('circle', { r: 7.5 }), mapIcon('star', 'translate(-5.4 -5.4) scale(0.45)')) : null,
         label);
       const pickIt = () => { selected = r.id; app.changed(); };
       node.addEventListener('click', pickIt);
@@ -203,6 +213,12 @@ export function mountMap(root, app) {
 
     const all = MONSTERS[r.id];
     const met = all.filter((m) => hero.bestiary[m.id]).length;
+    const rareMet = RARES[r.id].filter((m) => hero.bestiary[m.id]).length;
+    const sites = SITES[r.id];
+    const sitesDone = sites.filter((s) => hero.siteClears?.[s.id]).length;
+    const reg = REGULARS[r.id];
+    const news = happeningsOn(new Date())[r.id];
+    const target = here ? delveTarget(hero) : null;
     const qp = hero.questProgress[r.id];
     const story = qp?.done ?? 0;
     const quest = here && hero.focus === 'quest' && qp?.started ? currentQuest(hero) : null;
@@ -213,13 +229,46 @@ export function mountMap(root, app) {
     kids.push(el('div', { className: 'tiles' },
       tile('eye', 'Monsters met', `${met} of ${all.length}`, met, all.length),
       tile('scroll', 'Story quests', `${story} of ${STORY_QUESTS}`, story, STORY_QUESTS),
-      tile('door', 'Dungeon', clears ? `Cleared ${times(clears)}` : 'Not cleared', clears ? 1 : 0, 1)));
+      tile('door', 'Dungeon', clears ? `Cleared ${times(clears)}` : 'Not cleared', clears ? 1 : 0, 1),
+      tile('star', 'Rare ones', `${rareMet} of ${RARES[r.id].length}`, rareMet, RARES[r.id].length),
+      tile('flag', 'Lesser delves', `${sitesDone} of ${sites.length}`, sitesDone, sites.length),
+      tile('heart', reg.name, `${Math.min(qp?.reg ?? 0, reg.beats.length)} of ${reg.beats.length} jobs`, qp?.reg ?? 0, reg.beats.length)));
+    // What is going on here today, and the errand that comes with it.
+    if (news) {
+      const ran = (hero.errands ?? []).includes(`${news.id}-${news.day}`);
+      kids.push(el('div', { className: 'news-box' },
+        el('p', { className: 'news-name' }, icon('star'), el('span', { textContent: `Today: ${news.name}` })),
+        el('p', { className: 'hint', textContent: news.text }),
+        el('p', { className: 'news-effect', textContent: HAPPENING_EFFECT[news.kind] }),
+        el('p', { className: 'hint', textContent: ran ? `Errand done: ${news.errand.title}.` : `An errand on the quest board, once: ${news.errand.title}. It is set at ${hero.name}'s own level and pays a piece of gear.` })));
+    }
+    // The next story quest waits for the hero's level.
+    if (story < STORY_QUESTS && !storyReady(hero, r.id)) kids.push(line(`Next story quest: ${QUESTS[r.id][story].title}, at level ${storyOpensAt(r.id, story)}. Odd jobs until then.`));
     if (hero.feats.includes(r.id) || qp?.odd) kids.push(line(`${hero.feats.includes(r.id) ? 'Feat earned. ' : ''}${qp?.odd ? `Odd jobs done: ${qp.odd}.` : ''}`.trim()));
     if (quest) kids.push(line(`On the board now: ${quest.title}, step ${Math.min(qp.step + 1, quest.steps)} of ${quest.steps}.`));
+    // The places to delve: the dungeon, and the two lesser delves beside it.
+    const delveBtn = (place) => {
+      const on = here && hero.focus === 'delve' && target === place;
+      const b = el('button', { className: 'btn delve-here', type: 'button', textContent: on ? 'Delving here' : 'Delve here', onclick: () => { orderDelve(hero, place.site ? place.id : null); app.changed(); } });
+      b.setAttribute('aria-pressed', String(on));
+      return b;
+    };
+    const runIn = (place) => (run && (run.site ?? null) === (place.site ? place.id : null)
+      ? line(run.room >= run.rooms ? `Run in progress: every room done, ${place.boss.name} is next.` : `Run in progress: room ${run.room + 1} of ${run.rooms}.`) : null);
     kids.push(el('div', { className: 'dungeon-box' },
       el('p', { className: 'dungeon-name' }, icon('door'), el('span', { textContent: `${d.name}, built for level ${d.level}` })),
-      run ? line(run.room >= run.rooms ? `Run in progress: every room done, ${d.boss.name} is next.` : `Run in progress: room ${run.room + 1} of ${run.rooms}.`) : null,
-      el('p', { className: 'hint', textContent: d.about })));
+      runIn(d),
+      el('p', { className: 'hint', textContent: d.about }),
+      here ? delveBtn(d) : null));
+    kids.push(el('div', { className: 'site-list' }, ...sites.map((s) => {
+      const n = hero.siteClears?.[s.id] ?? 0;
+      return el('div', { className: 'dungeon-box site-box' + (n ? ' done' : '') },
+        el('p', { className: 'dungeon-name' }, icon('flag'), el('span', { textContent: `${s.name}, built for level ${s.level}` })),
+        el('p', { className: 'site-state', textContent: `Lesser delve. ${n ? `Cleared ${times(n)}` : 'Not cleared'}${hero.level < s.level ? `. Above ${hero.name}'s level` : ''}.` }),
+        runIn(s),
+        el('p', { className: 'hint', textContent: s.about }),
+        here ? delveBtn(s) : null);
+    })));
 
     const buttons = [];
     if (clears) {
@@ -244,11 +293,11 @@ export function mountMap(root, app) {
 
   function orders(hero) {
     const r = REGIONS[REGION_INDEX[hero.region]];
-    const d = DUNGEONS[r.id];
+    const d = delveTarget(hero);
     const about = {
       roam: `Roam: ${hero.name} fights the monsters of ${r.name} one at a time. Low risk, steady XP, and it fills the Bestiary.`,
-      quest: `Quest: ${hero.name} takes jobs from the quest board, 5 to 8 steps each. Better gold, and finishing all ${STORY_QUESTS} story quests in a region earns a Feat, worth one bonus skill point. Every finished quest also pays one piece of gear; a story quest's is picked for the slot that needs it most.`,
-      delve: `Delve: ${hero.name} runs ${d.name}, ${d.rooms[0]} to ${d.rooms[1]} rooms and then ${d.boss.name}. Hit points do not come back between rooms, and a knockout loses the run and nothing else. The first clear opens the next region. Built for level ${d.level}${hero.level < d.level ? `; at level ${hero.level} ${hero.name} will be outmatched.` : '.'}`,
+      quest: `Quest: ${hero.name} takes jobs from the quest board, 5 to 8 steps each. Better gold, and finishing all ${STORY_QUESTS} story quests in a region earns a Feat, worth one bonus skill point. Each story quest opens at its own level, with odd jobs in between, and every fourth odd job is for ${REGULARS[r.id].name}. Every finished quest also pays one piece of gear; a story quest's is picked for the slot that needs it most.`,
+      delve: `Delve: ${hero.name} runs ${d.name}, ${d.rooms[0]} to ${d.rooms[1]} rooms and then ${d.boss.name}. Hit points do not come back between rooms, and a knockout loses the run and nothing else. ${d.site ? 'A lesser delve: short, and it opens no road. Its keeper gives a good piece of gear the first time.' : 'The first clear opens the next region.'} Built for level ${d.level}${hero.level < d.level ? `; at level ${hero.level} ${hero.name} will be outmatched.` : '.'} Choose where to delve on the region's card above.`,
       rift: `Rifts: ${hero.name} goes down ${RIFT_NAME.replace(/^The /, 'the ')}, one floor at a time, from wherever they stand. ${RIFT_TEXT.about} Hit points come back a little between floors, but only the potions carried in can be drunk. A Warden on every ${RIFT.wardenEvery}th floor leaves gear, and sometimes one of the eight named Legendaries. A knockout ends the run; the next starts at floor 1. ${hero.rift ? `Now on floor ${hero.rift.floor}. ` : ''}${hero.stats.riftBest ? `Deepest so far: floor ${hero.stats.riftBest}.` : 'Not yet entered.'}`,
     }[hero.focus];
     const focuses = Object.entries(FOCUS_LABEL).filter(([id]) => id !== 'rift' || hero.level >= MAX_LEVEL);
@@ -263,6 +312,37 @@ export function mountMap(root, app) {
       el('p', { className: 'hint', textContent: 'A new order takes effect when the current task ends.' }));
   }
 
+  // The notice board: today's three bounties, and the one in hand. One may be taken a day; it stays
+  // until it is done or another is taken in its place.
+  function board(state, hero) {
+    const now = new Date();
+    const free = canTake(hero, now);
+    const b = hero.bounty;
+    const reward = (kind, level) => { const p = bountyReward(kind, level); return `${num(p.gold)} gp, ${num(p.xp)} XP${p.piece ? ', and a piece of gear' : ''}`; };
+    const kids = [el('h3', {}, icon('board'), el('span', { textContent: 'Notice board' }))];
+    if (b) {
+      const fill = el('i');
+      fill.style.width = `${Math.min(100, (100 * b.have) / b.need)}%`;
+      kids.push(el('div', { className: 'bounty mine' },
+        el('p', { className: 'bounty-title', textContent: `In hand: ${b.title}` }),
+        el('p', { className: 'hint', textContent: b.about }),
+        el('div', { className: 'bar thin' }, fill),
+        el('p', { className: 'bounty-pay', textContent: `${Math.min(b.have, b.need)} of ${b.need}. Pays ${reward(b.kind, b.level)}.` })));
+    }
+    kids.push(el('p', { className: 'hint', textContent: free
+      ? `Three bounties are posted each day. ${hero.name} may take one${b ? ', in place of the one in hand' : ''}; it keeps until it is done.`
+      : 'One bounty a day, and today\'s is taken. The board changes at midnight.' }));
+    postingsOn(now, hero).forEach((p, i) => {
+      const take = () => { if (takeBounty(state, hero, i, new Date())) app.changed(); };
+      kids.push(el('div', { className: 'bounty' + (free ? '' : ' shut') },
+        el('p', { className: 'bounty-title', textContent: p.title }),
+        el('p', { className: 'hint', textContent: p.about }),
+        el('p', { className: 'bounty-pay', textContent: `Pays ${reward(p.kind, hero.level)}.` }),
+        free ? (b ? confirmBtn('Take this one instead', 'Tap again: drop the old one', take, 'btn') : el('button', { className: 'btn primary', type: 'button', textContent: 'Take this bounty', onclick: take })) : null));
+    });
+    return el('section', { className: 'panel notice-board' }, ...kids);
+  }
+
   function update(state, hero) {
     if (followed !== hero.id + hero.region) { followed = hero.id + hero.region; selected = hero.region; }
     if (!REGION_INDEX[selected] && selected !== REGIONS[0].id) selected = hero.region;
@@ -271,6 +351,8 @@ export function mountMap(root, app) {
       hero.id, hero.name, hero.level, hero.region, hero.travelTo, hero.focus, selected, hero.dungeonClears, hero.feats.length,
       qp?.done, qp?.step, qp?.odd, qp?.started, hero.delve?.room, hero.delve?.rooms, hero.rift?.floor, hero.stats.riftBest,
       MONSTERS[selected].filter((m) => hero.bestiary[m.id]).length,
+      RARES[selected].filter((m) => hero.bestiary[m.id]).length, hero.site, hero.siteClears, hero.delve?.site, qp?.reg, hero.errands?.length,
+      dayOf(new Date()), hero.bountyDay, hero.bounty?.title, hero.bounty?.have,
     ]);
     if (next === key) return;
     key = next;
@@ -281,7 +363,8 @@ export function mountMap(root, app) {
       el('h2', { className: 'view-title', textContent: 'The road from The Wobbly Griffin' }),
       frameNow,
       details(state, hero),
-      orders(hero));
+      orders(hero),
+      board(state, hero));
   }
 
   // Where the hero is on the map. On the road: from one spot to another, a share of the way there,

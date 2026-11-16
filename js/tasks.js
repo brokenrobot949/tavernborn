@@ -29,6 +29,14 @@
 // knockout recovery and the stable to travel, the same numbers boots and skills use, and the
 // notice board makes odd jobs pay better. A dungeon's first clear by any hero earns a trophy.
 // After level 20 the Planar Rifts open (focus 'rift') and XP keeps counting toward Paragon ranks.
+//
+// Round five. Rare monsters (data/rares.js) turn up while roaming, an elusive one only while its
+// condition holds on the world's clock (js/world.js); every monster's defeats earn mastery ranks.
+// Each region has two lesser delves (data/sites.js) beside its dungeon: `hero.site` says which place
+// Delve goes to, and `placeOf(run)` is the dungeon or site a run is in. Story quests wait for the
+// hero to reach their level, with odd jobs in between; every fourth odd job is for the region's regular
+// (data/board.js). A region with a happening on (js/world.js) pays differently for the day and has
+// an errand on its board.
 
 import { MONSTERS, MONSTER_BY_ID } from '../data/monsters.js';
 import { CLASSES } from '../data/classes.js';
@@ -58,6 +66,11 @@ import { LOOT_LINES, LEGENDARIES, MILESTONES, TITLES } from '../data/loot.js';
 import { RIFT_TEXT, TROPHIES, TROPHY_HUNG, TROPHY_WAITING, PARAGON_LINE, RIFTS_OPEN } from '../data/tavern.js';
 import { tavernMods, recordTrophy, paragonRank, paragonTitle } from './tavern.js';
 import { boonMods } from './boons.js';
+import { RARES, MASTERY_TEXT } from '../data/rares.js';
+import { SITE_LIST, SITE_BY_ID, KEEPER_BY_ID, SITE_TEXT } from '../data/sites.js';
+import { REGULARS, BOARD_TEXT, HAPPENING_BY_ID, HAPPENING_EFFECT } from '../data/board.js';
+import { RARE, MASTERY, masteryRank, SITE, HAPPENING, REGULAR_EVERY, goldUnit } from './rules.js';
+import { conditionAt, happeningAt } from './world.js';
 
 export const FOCUSES = ['roam', 'quest', 'delve', 'rift'];
 
@@ -65,6 +78,17 @@ const fill = (text, values) => text.replace(/\{(\w+)\}/g, (_, key) => values[key
 const article = (name) => (/^[aeiou]/i.test(name) ? 'an ' : 'a ') + name;
 const midSentence = (name) => name.replace(/^The /, 'the ');
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+
+// The happening in the hero's region today, if any, and what it does to gold there.
+const today = (state, hero) => happeningAt(hero.region, state.lastSavedAt);
+const dayGold = (state, hero) => (today(state, hero)?.kind === 'gold' ? 1 + HAPPENING.gold : 1);
+// Where Delve goes in the hero's region: the lesser delve chosen, or the dungeon.
+export function delveTarget(hero) {
+  const s = SITE_BY_ID[hero.site];
+  return s && s.region === hero.region ? s : DUNGEONS[hero.region];
+}
+// The dungeon or lesser delve a run is in.
+export const placeOf = (run) => SITE_BY_ID[run.site] ?? DUNGEONS[run.region];
 
 // Record something that happened: it goes in the list `advance` returns and in the Chronicle.
 function emit(hero, events, type, text, data = {}, lineExtra = {}) {
@@ -238,18 +262,37 @@ function secondWinds(hero, sk, ctx, events) {
 
 const questState = (hero) => (hero.questProgress[hero.region] ??= { done: 0, step: 0, started: false, odd: 0, job: null });
 
-// The quest the hero is on in their current region: the next story quest, or an odd job.
+// The level a region's story quest is built for: they climb across the region's range, in order.
+export function storyLevel(region, i) {
+  const [lo, hi] = REGION_BY_ID[region].levels;
+  return lo + Math.round((i * (hi - lo)) / (QUESTS[region].length - 1));
+}
+// The level at which it opens: its own, but never later than one below the region's last, so the
+// sixth can be done (and the Feat earned) before the hero is ready for the dungeon and the road on.
+export const storyOpensAt = (region, i) => Math.min(storyLevel(region, i), Math.max(REGION_BY_ID[region].levels[0], REGION_BY_ID[region].levels[1] - 1));
+// Whether the next story quest can be taken: there is one left, and the hero has reached its level
+// (or was already part-way through it). Until then the board has odd jobs.
+export function storyReady(hero, region = hero.region) {
+  const qp = hero.questProgress[region];
+  const done = qp?.done ?? 0;
+  if (done >= QUESTS[region].length) return false;
+  return hero.level >= storyOpensAt(region, done) || (!!qp?.started && !qp.job && !qp.errand);
+}
+
+// The quest the hero is on in their current region: a happening's errand, an odd job already taken,
+// or the next story quest. Null when the next job has yet to be drawn from the board.
 export function currentQuest(hero) {
   const qp = hero.questProgress[hero.region];
   const [lo, hi] = REGION_BY_ID[hero.region].levels;
-  const list = QUESTS[hero.region];
-  const done = qp?.done ?? 0;
-  if (done < list.length) {
-    const q = list[done];
-    return { story: true, id: q.id, title: q.title, check: q.check, notice: q.notice, steps: q.steps.length, level: lo + Math.round((done * (hi - lo)) / (list.length - 1)), q };
+  const h = qp?.errand ? HAPPENING_BY_ID[qp.errand.id] : null;
+  if (h) return { story: false, errand: true, id: h.id, title: h.errand.title, check: h.errand.check, notice: h.errand.notice, steps: h.errand.steps.length, level: qp.errand.level, q: h.errand };
+  if (qp?.job) return { story: false, title: qp.job.title, check: 'Odd Jobs', steps: qp.job.steps, level: clamp(hero.level, lo, hi), regular: !!qp.job.regular };
+  if (storyReady(hero)) {
+    const done = qp?.done ?? 0;
+    const q = QUESTS[hero.region][done];
+    return { story: true, id: q.id, title: q.title, check: q.check, notice: q.notice, steps: q.steps.length, level: storyLevel(hero.region, done), q };
   }
-  if (!qp?.job) return null; // an odd job is drawn when the hero next looks at the board
-  return { story: false, title: qp.job.title, check: 'Odd Jobs', steps: qp.job.steps, level: clamp(hero.level, lo, hi) };
+  return null; // an odd job is drawn when the hero next looks at the board
 }
 
 // ---------- choosing the next task ----------
@@ -275,20 +318,35 @@ export function nextTask(state, hero, events = []) {
     else return { kind: 'return', text: fill(RETURN_TASK, { place: REGION_BY_ID[hero.region].name }), duration: quicker(Math.min(600, far * RETURN_SECONDS_PER_REGION), travelShare(state, hero), 30), elapsed: 0 };
   }
 
-  if (hero.focus !== 'delve' || hero.delve?.region !== hero.region) hero.delve = null;
+  // A run is abandoned if the order changes: another focus, another region, or another place to delve.
+  const target = delveTarget(hero);
+  if (hero.focus !== 'delve' || hero.delve?.region !== hero.region || (hero.delve.site ?? null) !== (target.site ? target.id : null)) hero.delve = null;
   if (hero.focus !== 'rift' || hero.level < MAX_LEVEL) hero.rift = null;
   if (hero.focus === 'rift' && hero.level >= MAX_LEVEL) return riftTask(state, hero, events);
+  // Something going on here today is written down once, the first time the hero works in it.
+  const hap = today(state, hero);
+  if (hap && hero.seen !== `${hap.id}-${hap.day}`) {
+    hero.seen = `${hap.id}-${hap.day}`;
+    emit(hero, events, 'happening', fill(BOARD_TEXT.happening, { place: REGION_BY_ID[hero.region].name, title: hap.name, notice: hap.text }), { happening: hap.id, region: hero.region }, { roll: HAPPENING_EFFECT[hap.kind] });
+  }
   if (hero.focus === 'delve') return delveTask(state, hero, events);
   if (hero.focus === 'quest') return questTask(state, hero, events);
-  return roamTask(state, hero);
+  return roamTask(state, hero, events);
 }
 
 // Boots, skills, and the tavern's stable all shorten the road.
 const travelShare = (state, hero) => modsOf(hero).n.travel + tavernMods(state).travel;
 
-// Roam: mostly monsters at or below the hero's level, with the odd tougher one.
-function roamTask(state, hero) {
-  const monster = pickWeighted(state, MONSTERS[hero.region], (m) => {
+// Roam: mostly monsters at or below the hero's level, with the odd tougher one. Now and then a rare
+// one instead, and the region's elusive beast while its hour or its weather holds.
+function roamTask(state, hero, events) {
+  const [first, second, beast] = RARES[hero.region]; // two rare monsters, lower level first, and the elusive beast
+  const reach = hero.level + 1;
+  let monster = null;
+  if (beast.level <= reach && conditionAt(beast.when, hero.region, state.lastSavedAt) && random(state) < RARE.elusive) monster = beast;
+  else if (first.level <= reach && random(state) < RARE.chance * (today(state, hero)?.kind === 'rare' ? HAPPENING.rare : 1)) monster = second.level <= reach && random(state) < 0.5 ? second : first;
+  if (monster) emit(hero, events, 'rare', fill(pick(state, MASTERY_TEXT.spotted), { monster: monster.name }), { monster: monster.id, rare: monster.rare });
+  monster ??= pickWeighted(state, MONSTERS[hero.region], (m) => {
     const above = m.level - hero.level;
     return above <= 0 ? 3 : above === 1 ? 1.2 : 0.3;
   });
@@ -297,25 +355,36 @@ function roamTask(state, hero) {
 
 function questTask(state, hero, events) {
   const qp = questState(hero);
-  if (qp.done >= QUESTS[hero.region].length && !qp.job) {
-    qp.job = { title: `${pick(state, ODD_JOBS.jobs)} for ${pick(state, ODD_JOBS.clients)}`, steps: randInt(state, 5, 8) };
+  if (!qp.started) {
+    // Looking at the board. Today's errand comes first, if there is one and it is not done; then the
+    // next story quest, if the hero is up to it; otherwise an odd job, every few of them for the regular.
+    const hap = today(state, hero);
+    qp.errand = hap && !(hero.errands ?? []).includes(`${hap.id}-${hap.day}`) ? { id: hap.id, day: hap.day, level: hero.level } : null;
+    if (!qp.errand && !qp.job && !storyReady(hero)) {
+      const beat = REGULARS[hero.region].beats[qp.reg ?? 0];
+      qp.job = beat && ((qp.odd ?? 0) + 1) % REGULAR_EVERY === 0
+        ? { title: beat.job, steps: randInt(state, 5, 6), regular: true }
+        : { title: `${pick(state, ODD_JOBS.jobs)} for ${pick(state, ODD_JOBS.clients)}`, steps: randInt(state, 5, 8) };
+    }
   }
   const quest = currentQuest(hero);
   if (!qp.started) {
     qp.started = true;
     qp.step = 0;
     qp.used = {};
-    const text = quest.story ? fill(QUEST_TAKEN, { quest: quest.title, notice: quest.notice }) : fill(ODD_JOB_TAKEN, { quest: quest.title });
+    const text = quest.story ? fill(QUEST_TAKEN, { quest: quest.title, notice: quest.notice })
+      : quest.errand ? fill(BOARD_TEXT.errandTaken, { place: REGION_BY_ID[hero.region].name, quest: quest.title, notice: quest.notice })
+      : fill(quest.regular ? BOARD_TEXT.regularTaken : ODD_JOB_TAKEN, { quest: quest.title });
     emit(hero, events, 'story', text);
   }
-  const text = quest.story ? quest.q.steps[qp.step] : pick(state, ODD_JOBS.steps);
+  const text = quest.q ? quest.q.steps[qp.step] : pick(state, ODD_JOBS.steps);
   // `worth` is the step's full length: XP is paid on it, so a faster step pays the same.
   const worth = randInt(state, QUEST_STEP_SECONDS[0], QUEST_STEP_SECONDS[1]);
   return { kind: 'quest', text, worth, duration: quicker(worth, modsOf(hero).n.speedQuest), elapsed: 0 };
 }
 
 function delveTask(state, hero, events) {
-  const d = DUNGEONS[hero.region];
+  const d = delveTarget(hero);
   const sk = modsOf(hero);
   if (!hero.delve) {
     // A run starts at full hit points: a hurt hero makes camp at the door first.
@@ -326,17 +395,19 @@ function delveTask(state, hero, events) {
     }
     const cut = sk.sigs.shortcut?.[0];
     const rooms = Math.max(MIN_ROOMS, randInt(state, d.rooms[0], d.rooms[1]) - sk.n.rooms - (cut?.rooms ?? 0));
-    hero.delve = { region: hero.region, room: 0, rooms, potions: DUNGEON_POTIONS + sk.n.potions + takeSupplies(hero), stubborn: false, used: {}, hidden: null };
+    hero.delve = { region: hero.region, site: d.site ? d.id : null, room: 0, rooms, potions: DUNGEON_POTIONS + sk.n.potions + takeSupplies(hero), stubborn: false, used: {}, hidden: null };
     // A hidden room, if a skill finds one this run, is paid out when the hero reaches it.
     const finder = (sk.sigs.hiddenRoom ?? []).find((s) => random(state) < s.chance);
     if (finder) hero.delve.hidden = { room: randInt(state, 0, rooms - 1), by: finder.id };
     hero.fresh = true;
-    hero.stats.dungeonRuns += 1;
+    if (d.site) hero.stats.siteRuns = (hero.stats.siteRuns ?? 0) + 1;
+    else hero.stats.dungeonRuns += 1;
     emit(hero, events, 'story', `${d.name}. ${d.enter}`);
     if (cut) fire(hero, events, cut);
   }
   if (hero.delve.room >= hero.delve.rooms) {
-    return { kind: 'boss', text: pick(state, d.boss.tasks), duration: randInt(state, BOSS_SECONDS[0], BOSS_SECONDS[1]), elapsed: 0 };
+    const secs = d.site ? SITE.bossSeconds : BOSS_SECONDS;
+    return { kind: 'boss', text: pick(state, d.boss.tasks), duration: randInt(state, secs[0], secs[1]), elapsed: 0 };
   }
   const worth = randInt(state, d.secs[0], d.secs[1]);
   const duration = quicker(worth, sk.n.speedDelve);
@@ -441,7 +512,10 @@ function encounter(state, hero, foe, events, source, ctx = { source }) {
   const after = []; // moves that fire on the result; their lines follow the task's own
   const share = REWARD[r.outcome] + (r.outcome === 'crit' ? sk.n.critReward : failed(r) ? sk.n.missReward : 0);
   let xp = Math.max(1, Math.round(foe.xp * share * levelGapXp(foe.level - hero.level) * xpBonus(state, hero, sk, source)));
-  let gold = Math.max(0, Math.round(randInt(state, foe.gold[0], foe.gold[1]) * share * goldBonus(hero, sk, source)));
+  // Mastery: every rank against this monster is a little more of its gold and a little less of its damage.
+  const known = foe.monster ? masteryRank(hero.bestiary[foe.id], foe.rare) : 0;
+  const dayPay = source === 'rift' ? 1 : dayGold(state, hero);
+  let gold = Math.max(0, Math.round(randInt(state, foe.gold[0], foe.gold[1]) * share * goldBonus(hero, sk, source) * (1 + MASTERY.gold * known) * dayPay));
   let mend = 0;
   if (r.outcome === 'crit') {
     for (const s of sk.sigs.onCrit ?? []) {
@@ -461,6 +535,7 @@ function encounter(state, hero, foe, events, source, ctx = { source }) {
   if (!unhurt) {
     const die = Math.max(1, Math.round(foe.dmg * grownDamage(foe.level) * (1 + gap * OUTMATCHED_DAMAGE) * WHAT_IF.damage));
     dealt = soften(cls, sk, source, !!foe.trap, taskDamage(state, r.outcome, die, dodgeChance(hero, sk)));
+    if (known) dealt = Math.round(dealt * (1 - MASTERY.dr * known));
     if (dealt > 0 && failed(r)) {
       const block = negated(state, sk, r);
       if (block) { dealt = 0; after.push(block); }
@@ -476,8 +551,14 @@ function encounter(state, hero, foe, events, source, ctx = { source }) {
   const rollText = r.auto ? `${foe.name}: no roll needed`
     : `${foe.name}: d20 ${r.die}${rollNotes(r)} + ${r.bonus}${grudge ? ' (grudge)' : ''} = ${r.total} vs DC ${r.dc}${gap ? ` (outmatched by ${gap})` : ''}${r.cleared ? ' (cleared anyway)' : ''}`;
   const gain = `+${xp} XP` + (gold ? `, ${gold} gp` : '') + (hurt.damage ? `, -${hurt.damage} HP` : '');
-  emit(hero, events, 'task', line, { outcome: r.outcome, source, monster: foe.monster ? foe.id : undefined, roll: r, xp, gold, damage: hurt.damage }, { roll: rollText, gain });
+  emit(hero, events, 'task', line, { outcome: r.outcome, source, monster: foe.monster ? foe.id : undefined, rare: foe.rare, roll: r, xp, gold, damage: hurt.damage }, { roll: rollText, gain });
   if (firstWin) emit(hero, events, 'bestiary', fill(BESTIARY_NEW, { monster: foe.name }), { monster: foe.id });
+  const rank = foe.monster && won ? masteryRank(hero.bestiary[foe.id], foe.rare) : 0;
+  if (rank > known) {
+    if (rank >= MASTERY.at.length) hero.stats.authorities = (hero.stats.authorities ?? 0) + 1;
+    const text = fill(MASTERY_TEXT.line, { monster: foe.name, rank: MASTERY_TEXT.ranks[rank - 1] }) + ' ' + fill(pick(state, MASTERY_TEXT.lines[rank - 1]), { name: hero.name });
+    emit(hero, events, 'mastery', text, { monster: foe.id, rank }, { rank, roll: `${Math.round(100 * MASTERY.dr * rank)}% less damage from it, ${Math.round(100 * MASTERY.gold * rank)}% more gold` });
+  }
   if (hurt.stubborn) emit(hero, events, 'story', fill(STUBBORN, { name: hero.name }));
   for (const s of after) fire(hero, events, s);
 
@@ -534,8 +615,14 @@ function resolveRoam(state, hero, m, events) {
   const foe = { ...m, monster: true, defeat: `Defeated by ${article(m.name)}. ${m.ko}` };
   const result = encounter(state, hero, foe, events, 'roam');
   if (!result.ok) return;
-  // Monsters drop gear rarely. Wisdom spots more of it, and a natural 20 shakes more loose.
-  if (!failed(result) && random(state) < dropChance(hero, 'roam', result.outcome === 'crit')) loot(state, hero, events, { level: m.level, source: 'roam' });
+  // Monsters drop gear rarely. Wisdom spots more of it, and a natural 20 shakes more loose. A rare one
+  // beaten always has a piece on it.
+  if (m.rare) {
+    if (!failed(result)) {
+      hero.stats.rares = (hero.stats.rares ?? 0) + 1;
+      loot(state, hero, events, { level: m.level, source: m.rare === 2 ? 'elusive' : 'rare' });
+    }
+  } else if (!failed(result) && random(state) < dropChance(hero, 'roam', result.outcome === 'crit') * (today(state, hero)?.kind === 'loot' ? HAPPENING.loot : 1)) loot(state, hero, events, { level: m.level, source: 'roam' });
   rest(state, hero, events);
 }
 
@@ -544,11 +631,13 @@ function resolveQuestStep(state, hero, task, events) {
   const quest = currentQuest(hero);
   if (!quest) return; // the board changed under the task (an old save); the next task sorts it out
   const [lo, hi] = baseGold(quest.level);
-  const board = quest.story ? 1 : 1 + tavernMods(state).odd; // the notice board: better-paid odd jobs
+  const odd = !quest.story && !quest.errand;
+  const board = odd ? 1 + tavernMods(state).odd : 1; // the notice board: better-paid odd jobs
+  const pay = board * (odd && today(state, hero)?.kind === 'jobs' ? 1 + HAPPENING.jobsGold : 1); // and a day when the whole region wants errands run
   const foe = {
     name: quest.title, level: quest.level, check: quest.check,
     dc: baseDc(quest.level), dmg: Math.round(baseDamage(quest.level) * QUEST_DAMAGE),
-    xp: Math.round((task.worth ?? task.duration) * QUEST_XP_PER_SECOND * board), gold: [Math.round(lo * QUEST_GOLD * board), Math.round(hi * QUEST_GOLD * board)],
+    xp: Math.round((task.worth ?? task.duration) * QUEST_XP_PER_SECOND * board), gold: [Math.round(lo * QUEST_GOLD * pay), Math.round(hi * QUEST_GOLD * pay)],
     hit: QUEST_LINES.hit, miss: QUEST_LINES.miss, crit: pick(state, QUEST_LINES.crit), fumble: pick(state, QUEST_LINES.fumble),
     defeat: `Knocked out on a job, ${quest.title}. ${pick(state, QUEST_LINES.ko)}`,
   };
@@ -561,15 +650,22 @@ function resolveQuestStep(state, hero, task, events) {
 function finishQuest(state, hero, qp, quest, events) {
   const sk = modsOf(hero);
   const tav = tavernMods(state);
-  const board = quest.story ? 1 : 1 + tav.odd; // the notice board: better-paid odd jobs
+  const odd = !quest.story && !quest.errand;
+  const jobsDay = odd && today(state, hero)?.kind === 'jobs';
+  const board = odd ? 1 + tav.odd : 1; // the notice board: better-paid odd jobs
+  const reg = REGULARS[hero.region];
+  const beat = quest.regular ? reg.beats[qp.reg ?? 0] : null;
   const xp = Math.round(QUEST_DONE_XP * board * levelGapXp(quest.level - hero.level) * xpBonus(state, hero, sk, 'quest'));
-  const gold = Math.round(questDoneGold(quest.level) * board * goldBonus(hero, sk, 'quest') * (1 + 0.05 * Math.max(0, mod(hero.abilities.cha)))); // Charisma: better quest rewards
+  const gold = Math.round(questDoneGold(quest.level) * board * (jobsDay ? 1 + HAPPENING.jobsGold : 1) * dayGold(state, hero) * goldBonus(hero, sk, 'quest') * (1 + 0.05 * Math.max(0, mod(hero.abilities.cha)))) // Charisma: better quest rewards
+    + (quest.errand ? Math.round(goldUnit(quest.level) * HAPPENING.errandGold) : 0);
   hero.gold += gold;
-  const done = quest.story ? quest.q.done : pick(state, ODD_JOBS.done);
-  emit(hero, events, 'questdone', fill(QUEST_DONE, { quest: quest.title, done }), { quest: quest.title, story: quest.story, xp, gold }, { gain: `+${xp} XP, ${gold} gp` });
+  const done = quest.q ? quest.q.done : beat ? beat.done : pick(state, ODD_JOBS.done);
+  emit(hero, events, 'questdone', fill(QUEST_DONE, { quest: quest.title, done }), { quest: quest.title, story: quest.story, errand: !!quest.errand, regular: !!beat, xp, gold }, { gain: `+${xp} XP, ${gold} gp` });
   // Every finished quest pays one piece of gear. A story quest's is chosen for the slot that
-  // needs it most; an odd job pays whatever the client had lying about.
-  loot(state, hero, events, quest.story ? { level: quest.level, source: 'quest', slot: weakestSlot(hero) } : { level: quest.level, source: 'odd', quality: tav.oddQuality });
+  // needs it most; an odd job pays whatever the client had lying about; an errand pays like a chest.
+  loot(state, hero, events, quest.story ? { level: quest.level, source: 'quest', slot: weakestSlot(hero) }
+    : quest.errand ? { level: quest.level, source: 'chest' }
+    : { level: quest.level, source: 'odd', quality: tav.oddQuality + (jobsDay ? HAPPENING.jobsQuality : 0) });
   // A windfall pays the fee again.
   for (const s of sk.sigs.windfall ?? []) {
     if (random(state) >= s.chance) continue;
@@ -586,10 +682,23 @@ function finishQuest(state, hero, qp, quest, events) {
       hero.skillPoints += 1;
       emit(hero, events, 'feat', fill(FEAT, { place: REGION_BY_ID[hero.region].name }), { region: hero.region });
     }
+  } else if (quest.errand) {
+    hero.errands = [...(hero.errands ?? []), `${qp.errand.id}-${qp.errand.day}`].slice(-12);
+    qp.errand = null;
+    hero.stats.errands = (hero.stats.errands ?? 0) + 1;
   } else {
     qp.odd += 1;
     qp.job = null;
     hero.stats.oddJobs += 1;
+    if (beat) {
+      // The regular's story moves on; when it is told, they send something worth having.
+      qp.reg = (qp.reg ?? 0) + 1;
+      if (qp.reg >= reg.beats.length) {
+        hero.stats.regulars = (hero.stats.regulars ?? 0) + 1;
+        emit(hero, events, 'regular', fill(BOARD_TEXT.regularGift, { name: hero.name, title: reg.name }), { regular: reg.id, region: hero.region });
+        loot(state, hero, events, { level: quest.level, source: 'chest', slot: weakestSlot(hero) });
+      }
+    }
   }
   levelUps(state, hero, xp, events);
 }
@@ -597,7 +706,7 @@ function finishQuest(state, hero, qp, quest, events) {
 function resolveRoom(state, hero, task, events) {
   const run = hero.delve;
   if (!run) return;
-  const d = DUNGEONS[run.region];
+  const d = placeOf(run);
   const sk = modsOf(hero);
   const ctx = { source: 'delve' };
   const purse = () => Math.round(randInt(state, d.gold[0], d.gold[1]) * DELVE_GOLD * goldBonus(hero, sk, 'delve'));
@@ -612,7 +721,7 @@ function resolveRoom(state, hero, task, events) {
   } else {
     const m = task.monster ? MONSTER_BY_ID[task.monster] : null;
     const room = m ? null : d.roomTasks[task.roomTask];
-    const numbers = { level: d.level, dc: d.dc, dmg: d.dmg, xp: Math.round((task.worth ?? task.duration) * DELVE_XP_PER_SECOND), gold: [d.gold[0] * DELVE_GOLD, d.gold[1] * DELVE_GOLD] };
+    const numbers = { level: d.level, dc: d.dc, dmg: d.dmg, xp: Math.round((task.worth ?? task.duration) * (d.site ? SITE.xpPerSecond : DELVE_XP_PER_SECOND)), gold: [d.gold[0] * DELVE_GOLD, d.gold[1] * DELVE_GOLD] };
     const foe = m
       ? { ...m, ...numbers, monster: true, defeat: `Defeated by ${article(m.name)} in ${d.name}. ${m.ko}` }
       : { name: d.name, check: 'the dungeon', ...numbers, trap: true, hit: [room.hit], miss: [room.miss], crit: d.crit, fumble: d.fumble, defeat: `Knocked out in ${d.name}. ${d.ko}` };
@@ -632,7 +741,7 @@ function resolveRoom(state, hero, task, events) {
     }
   }
   // A room cleared cleanly sometimes has a chest in it.
-  if (won && random(state) < dropChance(hero, 'room', crit)) loot(state, hero, events, { level: d.level, source: 'room' });
+  if (won && random(state) < dropChance(hero, 'room', crit) * (today(state, hero)?.kind === 'loot' ? HAPPENING.loot : 1)) loot(state, hero, events, { level: d.level, source: 'room' });
   run.room += 1;
 
   // Between rooms: free healing from skills first, then a potion if it is still needed.
@@ -652,7 +761,7 @@ function resolveRoom(state, hero, task, events) {
 function resolveBoss(state, hero, task, events) {
   const run = hero.delve;
   if (!run) return;
-  const d = DUNGEONS[run.region];
+  const d = placeOf(run); // a dungeon and its boss, or a lesser delve and its keeper
   const b = d.boss;
   const cls = CLASSES[hero.class];
   const sk = modsOf(hero);
@@ -714,8 +823,8 @@ function resolveBoss(state, hero, task, events) {
   }
   hero.stats.tasks += 1;
   const won = landed >= b.hits;
-  let xp = Math.max(1, Math.round(BOSS_XP * (won ? 1 : BOSS_LOSS_SHARE) * levelGapXp(d.level - hero.level) * xpBonus(state, hero, sk, 'boss')));
-  const gold = won ? Math.round(bossGold(d.level) * goldBonus(hero, sk, 'boss')) : 0;
+  let xp = Math.max(1, Math.round((d.site ? SITE.bossXp : BOSS_XP) * (won ? 1 : BOSS_LOSS_SHARE) * levelGapXp(d.level - hero.level) * xpBonus(state, hero, sk, 'boss')));
+  const gold = won ? Math.round(bossGold(d.level) * (d.site ? 0.5 : 1) * dayGold(state, hero) * goldBonus(hero, sk, 'boss')) : 0;
   const purses = won ? sk.sigs.bossPurse ?? [] : []; // Hazard Pay and its kind
   for (const s of purses) xp += Math.round(xp * (s.xp ?? 0));
   hero.gold += gold;
@@ -731,14 +840,23 @@ function resolveBoss(state, hero, task, events) {
   }
   if (won) {
     // A beaten boss drops the best gear there is at its level, one more piece for each move like
-    // Hazard Pay, and now and then the dungeon's own named Legendary.
-    loot(state, hero, events, { level: d.level, source: 'boss' });
-    for (const s of purses) for (let i = 0; i < (s.items ?? 0); i++) loot(state, hero, events, { level: d.level, source: 'boss', second: true });
-    const open = LEGENDARIES[run.region].slot !== 'cloak' || hero.level >= LOOT.cloakLevel;
+    // Hazard Pay, and now and then the dungeon's own named Legendary. A lesser delve's keeper gives
+    // as good a piece the first time, a chest's worth after that, and no Legendary.
+    const from = d.site && hero.siteClears?.[d.id] ? 'keeper' : 'boss';
+    loot(state, hero, events, { level: d.level, source: from });
+    for (const s of purses) for (let i = 0; i < (s.items ?? 0); i++) loot(state, hero, events, { level: d.level, source: from, second: true });
+    const open = !d.site && (LEGENDARIES[run.region].slot !== 'cloak' || hero.level >= LOOT.cloakLevel);
     if (open && !wearsLegend(hero, run.region) && random(state) < LOOT.legend) loot(state, hero, events, { legend: run.region, source: 'boss' });
   }
 
-  if (won) {
+  if (won && d.site) {
+    const first = !(hero.siteClears?.[d.id] > 0);
+    hero.siteClears = { ...hero.siteClears, [d.id]: (hero.siteClears?.[d.id] ?? 0) + 1 };
+    hero.stats.siteClears = (hero.stats.siteClears ?? 0) + 1;
+    hero.delveFails[d.id] = 0;
+    hero.delve = null;
+    emit(hero, events, 'sitecleared', fill(SITE_TEXT.cleared[first ? 0 : 1], { dungeon: d.name }), { site: d.id, region: run.region, first });
+  } else if (won) {
     const first = !(hero.dungeonClears[run.region] > 0);
     hero.dungeonClears[run.region] = (hero.dungeonClears[run.region] ?? 0) + 1;
     hero.stats.dungeonClears += 1;
@@ -807,7 +925,7 @@ function resolveRiftFloor(state, hero, task, events) {
 function foeRank(id) {
   const m = MONSTER_BY_ID[id];
   if (m) return [m.level, m.dc];
-  const d = Object.values(DUNGEONS).find((x) => x.boss.id === id);
+  const d = Object.values(DUNGEONS).find((x) => x.boss.id === id) ?? SITE_LIST.find((x) => x.boss.id === id);
   return d ? [d.level + 1, d.boss.dc] : null;
 }
 
@@ -832,18 +950,21 @@ function knockOut(state, hero, foe, events, source) {
   const lost = inDungeon ? 'run' : source === 'quest' ? 'step' : source === 'rift' ? 'rift' : null;
   if (source === 'rift') hero.rift = null; // the next run starts from floor 1
   const region = hero.region;
+  const place = inDungeon && hero.delve ? placeOf(hero.delve) : DUNGEONS[region];
+  const site = place.site ? place.id : undefined; // a lesser delve keeps its own count of defeats
   let text = foe.defeat + (lost === 'run' ? ' ' + RUN_LOST : lost === 'step' ? ' ' + STEP_LOST : '');
-  emit(hero, events, 'knockout', text, { monster: foe.id, source, lost, region, seconds: Math.round(seconds) });
+  emit(hero, events, 'knockout', text, { monster: foe.id, source, lost, region, site, seconds: Math.round(seconds) });
 
   if (inDungeon) {
     hero.delve = null;
-    const fails = (hero.delveFails[region] ?? 0) + 1;
-    hero.delveFails[region] = fails;
+    const key = site ?? region;
+    const fails = (hero.delveFails[key] ?? 0) + 1;
+    hero.delveFails[key] = fails;
     // Confidence safeguard: three in a row in one dungeon and the hero roams instead.
     if (fails >= CONFIDENCE_LIMIT && hero.focus === 'delve') {
       hero.focus = 'roam';
-      hero.delveFails[region] = 0;
-      emit(hero, events, 'confidence', fill(CONFIDENCE, { dungeon: DUNGEONS[region].name, name: hero.name }), { region });
+      hero.delveFails[key] = 0;
+      emit(hero, events, 'confidence', fill(site ? SITE_TEXT.confidence : CONFIDENCE, { dungeon: place.name, name: hero.name }), site ? { site } : { region });
     }
   }
 }
@@ -886,8 +1007,16 @@ function drinkPotion(state, hero, events) {
 export function setFocus(hero, focus) {
   if (!FOCUSES.includes(focus) || (focus === 'rift' && hero.level < MAX_LEVEL)) return false;
   hero.focus = focus;
-  if (focus === 'delve') hero.delveFails[hero.region] = 0;
+  if (focus === 'delve') { hero.delveFails[hero.region] = 0; if (hero.site) hero.delveFails[hero.site] = 0; }
   return true;
+}
+
+// Delve, and where: one of the region's two lesser delves (its id), or null for the dungeon itself.
+// Changing place abandons a run in progress, when the current task ends.
+export function orderDelve(hero, siteId = null) {
+  if (siteId != null && SITE_BY_ID[siteId]?.region !== hero.region) return false;
+  hero.site = siteId;
+  return setFocus(hero, 'delve');
 }
 
 // Walk to an open region when the current task ends. Ordering the region the hero is already in
@@ -914,4 +1043,4 @@ export function payCleric(state, hero) {
 }
 
 // Display name for whatever a knockout or Bestiary entry refers to.
-export const foeName = (id) => MONSTER_BY_ID[id]?.name ?? BOSS_BY_ID[id]?.name ?? null;
+export const foeName = (id) => MONSTER_BY_ID[id]?.name ?? BOSS_BY_ID[id]?.name ?? KEEPER_BY_ID[id]?.name ?? null;

@@ -689,3 +689,48 @@
 .rested .bar.thin > i { background: linear-gradient(90deg, #5b8fb0, #8fc3dd); transition: width 1s linear; }
 .rested.full .bar.thin > i { background: linear-gradient(90deg, #5b8fb0, #b8e2f2); box-shadow: 0 0 6px #8fc3dd; }
 .rested.empty .rested-label { color: var(--ink-soft); }
+
+/* ----- round five: rare monsters, mastery, lesser delves, the notice board, happenings ----- */
+/* The map: a gold star on a region with something going on today. */
+.worldmap .news circle { fill: #f2c94c; stroke: #7a5600; stroke-width: 1.2; }
+.worldmap .news .map-icon .fill { fill: #5a3e00; }
+/* The region card: today's news, the lesser delves, and where Delve goes. */
+.news-box { padding: 8px 10px; border-radius: 6px; background: #fff6d8; border: 1px solid #d9b45a; display: grid; gap: 3px; }
+.news-box .hint { margin: 0; }
+.news-name { display: flex; align-items: center; gap: 6px; font: 700 1rem var(--display); color: #6a4a00; }
+.news-name .icon { color: #c9962c; font-size: 1.1rem; }
+.news-effect { font-size: 0.88rem; font-weight: 600; color: #5a3e10; }
+.site-list { display: grid; gap: 6px; }
+.site-box { background: #3a3350; }
+.site-box.done { box-shadow: inset 4px 0 0 #c9962c; }
+.site-state { font-size: 0.8rem; color: #f6dc8c; }
+.dungeon-box .delve-here { justify-self: start; min-height: var(--tap); margin-top: 4px; background: #efe6f4; color: #2f2836; border-color: #efe6f4; display: inline-flex; align-items: center; }
+.dungeon-box .delve-here[aria-pressed='true'] { background: #c9962c; border-color: #c9962c; color: #2b2118; font-weight: 700; }
+/* The notice board. */
+.notice-board { display: grid; gap: 8px; }
+.notice-board h3 { display: flex; align-items: center; gap: 8px; }
+.notice-board h3 .icon { color: #3d6a8a; }
+.notice-board > .hint { margin: 0; }
+.bounty { display: grid; gap: 3px; padding: 9px 10px; border-radius: 6px; background: #fff; border: 1px solid var(--line); box-shadow: inset 4px 0 0 #3d6a8a; }
+.bounty .hint { margin: 0; }
+.bounty .btn { justify-self: start; min-height: var(--tap); margin-top: 4px; }
+.bounty-title { font: 700 1rem var(--display); }
+.bounty-pay { font-size: 0.82rem; color: #5a3e10; }
+.bounty.mine { background: #eef4f8; border-color: #3d6a8a; }
+.bounty.mine .bar.thin > i { background: #3d6a8a; }
+.bounty.shut { opacity: 0.7; box-shadow: inset 4px 0 0 var(--line); }
+/* The Hero tab: chips for today's news and the bounty in hand; a rare foe glows. */
+.boon.news-chip { background: #fff6d8; }
+.boon.bounty-chip { background: #eef4f8; border-color: #8fb0c6; color: #23445a; }
+.boon.bounty-chip .icon { color: #3d6a8a; }
+.foe.rare .foe-px { filter: drop-shadow(0 0 5px #f6dc8c) drop-shadow(0 0 2px #fff); }
+.foe.rare.elusive .foe-px { filter: drop-shadow(0 0 6px #9fe0ff) drop-shadow(0 0 2px #fff); }
+.rare-banner { background: linear-gradient(90deg, transparent, rgba(60, 44, 4, 0.84) 18%, rgba(60, 44, 4, 0.84) 82%, transparent); animation-duration: 3.6s; }
+/* The Bestiary: mastery pips, rare ones in silver, elusive ones in pale blue, keepers in gold. */
+.beast-count { display: inline-flex; align-items: center; gap: 6px; }
+.beast-rank { margin: 2px 0 0; font-size: 0.76rem; color: #5a3e10; }
+.beast-region .beast.rare .beast-icon { background: linear-gradient(135deg, #f4f4f8, #9ea3b0); color: #2b2a33; box-shadow: 0 0 0 2px #c9962c; }
+.beast-region .beast.rare.elusive .beast-icon { background: linear-gradient(135deg, #e8f8ff, #7fbfe0); box-shadow: 0 0 0 2px #3d8bbf; }
+.beast-region .beast.rare.unknown .beast-icon { background: var(--parchment-deep); color: var(--ink-soft); box-shadow: 0 0 0 2px #b9b2a2; }
+.beast-region .beast.keeper .beast-icon { background: #8a6a3a; color: #fff; }
+.beast-region .beast.keeper.unknown .beast-icon { background: var(--parchment-deep); color: var(--ink-soft); }

@@ -212,7 +212,7 @@ export const LOOT = {
   // So each source has a ceiling for its level. A monster on the road never has better than Very
   // Rare on it, and that only near the end; quests run about a tier behind bosses; a boss of level
   // 18 or 20 is where Legendaries come from.
-  shift: { roam: -1.6, odd: -1.1, room: -0.9, quest: -0.8, chest: -0.5, boss: -0.2 },
+  shift: { roam: -1.6, odd: -1.1, room: -0.9, quest: -0.8, chest: -0.5, boss: -0.2, rare: -1.3, elusive: -0.8, keeper: -0.6 },
   luck: 1,
   legend: 0.15, // chance that a beaten boss also gives up its dungeon's named Legendary
 };
@@ -302,3 +302,24 @@ export const goldUnit = (level) => Math.round(5 * level ** 3 + 20);
 // The travelling merchant: in the Vale on about six days in ten (by the device's calendar), four
 // wares on each visit, one of each per visit.
 export const MERCHANT = { chance: 0.6, wares: 4 };
+
+// ----- round five: rare monsters, mastery, lesser delves, the notice board, happenings -----
+// Rare monsters (data/rares.js): each roam task has `chance` of meeting one of the region's two (never
+// one more than a level above the hero), and `elusive` of meeting its elusive beast while that beast's
+// condition holds (night, dusk, dawn, or the region's weather). A rare one beaten always leaves a
+// piece of gear (LOOT.shift.rare and .elusive; .keeper is a lesser delve's keeper after the first time).
+export const RARE = { chance: 0.01, elusive: 0.006 };
+// Mastery: a monster's defeats earn ranks at these counts (rare ones sooner). Each rank takes a tenth off
+// the damage that monster does and adds a twentieth to its gold. It never touches XP.
+export const MASTERY = { at: [10, 100, 500], rareAt: [3, 10, 30], dr: 0.1, gold: 0.05 };
+export function masteryRank(count, rare) {
+  const at = rare ? MASTERY.rareAt : MASTERY.at;
+  return at.filter((n) => (count ?? 0) >= n).length;
+}
+// Lesser delves (data/sites.js): short runs that pay a little under a dungeon's rate, so they are a
+// change from the road and not a quicker one.
+export const SITE = { xpPerSecond: 0.52, bossXp: 150, bossSeconds: [180, 240] };
+// Happenings (data/board.js, js/world.js): what each kind does to its region for the day.
+export const HAPPENING = { gold: 0.25, rare: 3, loot: 2, jobsGold: 0.5, jobsQuality: 0.3, errandGold: 1 };
+// Regulars: every `every`th odd job in a region is for its regular client, while their story lasts.
+export const REGULAR_EVERY = 4;

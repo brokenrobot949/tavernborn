@@ -5,7 +5,6 @@
 import { RACES } from '../../data/races.js';
 import { CLASSES } from '../../data/classes.js';
 import { REGION_BY_ID } from '../../data/regions.js';
-import { DUNGEONS } from '../../data/dungeons.js';
 import { TIERS, EMBLEM_LEVEL } from '../../data/items.js';
 import { RIFT_NAME, TROPHIES, TROPHY_COLORS } from '../../data/tavern.js';
 import { TITLES } from '../../data/loot.js';
@@ -13,13 +12,15 @@ import { SpriteView, heroLook, drawStill } from '../sprite.js';
 import { maxHp, xpToNext, isHighlight } from '../hero.js';
 import { xpForLevel, paragonXpFor, legacyFor, REST } from '../rules.js';
 import { portraitOf, paragonRank, paragonTitle, paragonXp, canRetire, trophyWall, restedOf } from '../tavern.js';
-import { currentQuest, clericFee, payCleric } from '../tasks.js';
+import { currentQuest, clericFee, payCleric, placeOf, delveTarget } from '../tasks.js';
+import { timeOfDay, happeningIn } from '../world.js';
+export { timeOfDay };
 import { subclassName } from '../skills.js';
 import { el, num, heroClock, confirmBtn, named } from './dom.js';
 import { icon } from './icons.js';
-import { shapeFor, pickBy, popRoll, burst, arrival, weatherFor, lootDrop, bossEntrance, healGlow, defeatGhost } from './scene-fx.js';
+import { shapeFor, pickBy, popRoll, burst, arrival, weatherFor, lootDrop, bossEntrance, healGlow, defeatGhost, rareBanner } from './scene-fx.js';
 import { foeCanvas } from './foes.js';
-import { MONSTERS } from '../../data/monsters.js';
+import { MONSTER_BY_ID } from '../../data/monsters.js';
 import { sfx } from '../audio.js';
 import { CHOICE_BY_ID } from '../../data/road.js';
 import { BOON_TEXT } from '../../data/market.js';
@@ -33,8 +34,8 @@ const WALK_PX_PER_S = 120; // how fast the ground scrolls past a walking hero, i
 // Regions drawn with open sky, where stars come out at night. The Underdeep is underground.
 const OPEN_SKY = new Set(['mugwick', 'saltmarrow', 'peaks', 'gloamfen', 'cinder', 'wyrmspire']);
 
-// Every monster by id, for the foe's shape.
-const MONSTER_BY_ID = Object.fromEntries(Object.values(MONSTERS).flat().map((m) => [m.id, m]));
+// The dungeon or lesser delve the hero is in, or is about to go into.
+const delvePlace = (hero) => (hero.delve ? placeOf(hero.delve) : delveTarget(hero));
 const POPS_UP_TO = 3; // dice rise only for what happened in the last few seconds, not for a long gap
 
 // The foe the hero is facing in this task, as [shape, name, kind, key], or null for none (travel,
@@ -42,8 +43,8 @@ const POPS_UP_TO = 3; // dice rise only for what happened in the last few second
 // colours (js/ui/foes.js); a quest step has no named foe, so its shape is picked from the task text.
 function foeOf(hero, t) {
   if (!t) return null;
-  if ((t.kind === 'roam' || t.kind === 'delve') && t.monster) { const m = MONSTER_BY_ID[t.monster]; return m ? [shapeFor(m.name), m.name, '', t.monster] : null; }
-  if (t.kind === 'boss') { const b = DUNGEONS[hero.region].boss; return [shapeFor(b.name), b.name, 'boss', 'boss:' + b.name, b.id, b.hits]; }
+  if ((t.kind === 'roam' || t.kind === 'delve') && t.monster) { const m = MONSTER_BY_ID[t.monster]; return m ? [shapeFor(m.name), m.name, '', t.monster, null, 1, m.rare ?? 0] : null; }
+  if (t.kind === 'boss') { const b = delvePlace(hero).boss; return [shapeFor(b.name), b.name, 'boss', 'boss:' + b.name, b.id, b.hits]; }
   if (t.kind === 'rift') return [pickBy(t.text, ['eye', 'flame', 'humanoid', 'blob']), '', 'rift', 'rift:' + t.text];
   if (t.kind === 'quest') return [pickBy(t.text, ['humanoid', 'beast', 'small', 'critter', 'humanoid']), '', '', 'quest:' + t.text];
   return null;
@@ -60,11 +61,7 @@ function backdropTracks() {
 function setData(node, key, value) { if (node.dataset[key] !== value) node.dataset[key] = value; }
 function setText(node, value) { value = named(value); if (node.textContent !== value) node.textContent = value; }
 
-// The time of day on this device: dawn 5 to 7, day 7 to 18, dusk 18 to 21, night after that.
-export function timeOfDay(date = new Date()) {
-  const h = date.getHours() + date.getMinutes() / 60;
-  return h < 5 || h >= 21 ? 'night' : h < 7 ? 'dawn' : h < 18 ? 'day' : 'dusk';
-}
+// (The time of day on this device, `timeOfDay`, is in js/world.js; the rules read it too.)
 
 // What the hero is doing this second. Travel is all walking. A fight alternates: a walk up to the
 // foe, then bursts of swings with short walks between, so the same motion does not repeat for
@@ -111,6 +108,7 @@ const LINE_LOOK = {
   tavern: ['tavern', 'mug'], rift: ['rift', 'vortex'],
   story: ['story', 'book'], confidence: ['story', 'eye'], bestiary: ['story', 'eye'],
   choice: ['road', 'signpost'], deed: ['grow', 'medal'], festival: ['tavern', 'lantern'],
+  rare: ['crit', 'eye'], mastery: ['skill', 'book'], sitecleared: ['dungeon', 'flag'], bounty: ['quest', 'board'], regular: ['quest', 'heart'], happening: ['road', 'star'],
 };
 const lookOf = (line) => LINE_LOOK[line.k] ?? ['plain', 'd20'];
 
@@ -119,7 +117,7 @@ export const heroSpriteLook = (hero) => heroLook(portraitOf(hero));
 // One line above the task bar saying what the task is part of.
 function taskContext(hero, t) {
   const region = REGION_BY_ID[hero.region];
-  const d = DUNGEONS[hero.region];
+  const d = delvePlace(hero);
   let text;
   if (t.kind === 'tavern') text = 'Recovering at The Wobbly Griffin';
   else if (t.kind === 'travel') text = `Travelling to ${REGION_BY_ID[t.to].name}`;
@@ -131,8 +129,8 @@ function taskContext(hero, t) {
   else if (t.kind === 'quest') {
     const q = currentQuest(hero);
     const step = hero.questProgress[hero.region]?.step ?? 0;
-    text = q ? `Quest: ${q.title} (step ${Math.min(step + 1, q.steps)} of ${q.steps})` : 'Quest';
-  } else text = `Roaming ${region.name}`;
+    text = q ? `${q.errand ? 'Errand' : q.story ? 'Quest' : q.regular ? 'For a regular' : 'Odd job'}: ${q.title} (step ${Math.min(step + 1, q.steps)} of ${q.steps})` : 'Quest';
+  } else text = MONSTER_BY_ID[t.monster]?.rare ? `${region.name}: ${MONSTER_BY_ID[t.monster].rare === 2 ? 'an elusive beast' : 'a rare one'}` : `Roaming ${region.name}`;
   if (hero.travelTo && t.kind !== 'travel') text += `. Next: travel to ${REGION_BY_ID[hero.travelTo].name}`;
   return text;
 }
@@ -289,7 +287,8 @@ export function mountHero(root, app) {
     // The backdrop: the tavern, the region's dungeon, or the region itself. All drawn in CSS.
     if (!falling) {
       setData(scene, 'bg', inTavern ? 'tavern' : inRift ? 'rift' : inDungeon ? 'dungeon' : hero.region);
-      setData(scene, 'dungeon', inDungeon ? hero.region : ''); // each dungeon dresses the shared stone its own way
+      const where = inDungeon ? delvePlace(hero) : null;
+      setData(scene, 'dungeon', !where ? '' : where.site ? where.id : hero.region); // each dungeon dresses the shared stone its own way; a lesser delve keeps it plain
       setData(scene, 'time', timeOfDay());
       const outdoor = !inTavern && !inDungeon && !inRift && hero.region !== 'underdeep';
       scene.classList.toggle('outdoor', outdoor);
@@ -302,7 +301,7 @@ export function mountHero(root, app) {
       if (fk !== foeKey) {
         foeKey = fk;
         foe.replaceChildren(...(f ? [foeCanvas(f[0], f[1], f[2], f[4])] : []));
-        foe.className = 'foe' + (f ? ' here ' + f[0] + (f[2] === 'boss' ? ' boss' : '') : '');
+        foe.className = 'foe' + (f ? ' here ' + f[0] + (f[2] === 'boss' ? ' boss' : '') + (f[6] ? ' rare' + (f[6] === 2 ? ' elusive' : '') : '') : '');
         // A boss arriving, seen live: a banner and a shudder.
         if (f?.[2] === 'boss' && now - seenSince > 1500 && !root.hidden) { bossEntrance(fx, f[1]); scene.classList.remove('shake'); void scene.offsetWidth; scene.classList.add('shake'); }
       }
@@ -342,7 +341,7 @@ export function mountHero(root, app) {
       else view.set({ look, anim, facing: 'right' });
       lookKey = key;
     }
-    if (!falling) setText(place, inTavern ? 'The Wobbly Griffin' : inRift ? RIFT_NAME : t?.kind === 'travel' || t?.kind === 'return' ? 'On the road' : inDungeon ? DUNGEONS[hero.region].name : REGION_BY_ID[hero.region].name);
+    if (!falling) setText(place, inTavern ? 'The Wobbly Griffin' : inRift ? RIFT_NAME : t?.kind === 'travel' || t?.kind === 'return' ? 'On the road' : inDungeon ? delvePlace(hero).name : REGION_BY_ID[hero.region].name);
 
     name.textContent = titled(hero);
     const subclass = subclassName(hero);
@@ -414,7 +413,9 @@ export function mountHero(root, app) {
     // Boons running, with the time left in whole minutes.
     const boons = activeBoons(hero);
     const rested = restedOf(hero);
-    const bKey = boons.map((b) => b.id + Math.ceil((b.until - hero.age) / 60)).join() + (hero.supplies?.potions ?? 0) + '/' + Math.ceil(rested / 60);
+    const news = happeningIn(hero.region, new Date());
+    const bounty = hero.bounty;
+    const bKey = boons.map((b) => b.id + Math.ceil((b.until - hero.age) / 60)).join() + (hero.supplies?.potions ?? 0) + '/' + Math.ceil(rested / 60) + '/' + (news?.id ?? '') + '/' + (bounty ? bounty.title + bounty.have : '');
     if (bKey !== boonKey) {
       boonKey = bKey;
       const until = (b) => { const s = b.until - hero.age; return s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min` : `${Math.ceil(s / 60)} min`; };
@@ -423,6 +424,8 @@ export function mountHero(root, app) {
         el('span', { textContent: `${BOON_TEXT[b.id].title}: ${BOON_TEXT[b.id].does}, ${until(b)}` })));
       if (rested > 0) chips.unshift(el('span', { className: 'boon rested-chip' }, icon('bed'), el('span', { textContent: `Well Rested: +${Math.round(REST.xp * 100)}% XP, ${until({ until: hero.age + rested })}` })));
       if (hero.supplies?.potions) chips.push(el('span', { className: 'boon' }, icon('potion'), el('span', { textContent: `${hero.supplies.potions} spare potions for the next dungeon or Rifts run` })));
+      if (news) chips.push(el('span', { className: 'boon news-chip', title: news.text }, icon('star'), el('span', { textContent: `Today in ${REGION_BY_ID[hero.region].name}: ${news.name}` })));
+      if (bounty) chips.push(el('span', { className: 'boon bounty-chip', title: bounty.about }, icon('board'), el('span', { textContent: `Bounty: ${bounty.title}, ${Math.min(bounty.have, bounty.need)} of ${bounty.need}` })));
       boonRow.replaceChildren(...chips);
       boonRow.hidden = !chips.length;
     }
@@ -485,6 +488,8 @@ export function mountHero(root, app) {
       // Healing: a potion, a heal from a skill, or getting up again.
       if (events.some((e) => e.type === 'potion' || e.heal > 0 || (e.type === 'choice' && e.boon))) healGlow(fx, hero.class);
     }
+    const rare = events.filter((e) => e.type === 'rare').at(-1);
+    if (rare && gap <= POPS_UP_TO && MONSTER_BY_ID[rare.monster]) rareBanner(fx, MONSTER_BY_ID[rare.monster].name, rare.rare === 2);
     const level = events.filter((e) => e.type === 'levelup').at(-1);
     const paragon = events.filter((e) => e.type === 'paragon').at(-1);
     if (level) burst(fx, fxBack, `Level ${level.level}`, hero.name);

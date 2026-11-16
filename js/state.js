@@ -5,7 +5,9 @@
 import { RACES } from '../data/races.js';
 import { CLASSES } from '../data/classes.js';
 import { REGION_BY_ID, START_REGION } from '../data/regions.js';
-import { ADVENTURE_FIELDS, GROWTH_FIELDS, LEGACY_FIELDS, ROAD_FIELDS, STATS, abilityPointsBy } from './hero.js';
+import { ADVENTURE_FIELDS, GROWTH_FIELDS, LEGACY_FIELDS, ROAD_FIELDS, EXPLORE_FIELDS, STATS, abilityPointsBy } from './hero.js';
+import { SITE_BY_ID } from '../data/sites.js';
+import { BOUNTIES, HAPPENING_BY_ID } from '../data/board.js';
 import { CHOICE_BY_ID } from '../data/road.js';
 import { DEED_BY_ID } from '../data/deeds.js';
 import { BOONS, REST } from './rules.js';
@@ -119,6 +121,28 @@ function roadFields(h) {
   h.rested = Math.min(REST.cap * REST.every, Math.max(0, Math.floor(Number(h.rested) || 0)));
 }
 
+// Round five (no version change): the lesser delve chosen, bounties, and errands. Anything unreadable
+// is dropped; a hero from an older save starts with none. A quest board's errand or regular count that
+// cannot be read is cleared, so the board draws afresh.
+function exploreFields(h) {
+  for (const [key, value] of Object.entries(EXPLORE_FIELDS())) h[key] ??= value;
+  if (!SITE_BY_ID[h.site]) h.site = null;
+  const clears = {};
+  for (const [id, n] of Object.entries(h.siteClears && typeof h.siteClears === 'object' ? h.siteClears : {})) if (SITE_BY_ID[id] && n > 0) clears[id] = Math.floor(n);
+  h.siteClears = clears;
+  const b = h.bounty;
+  h.bounty = b && BOUNTIES[b.kind] && Number.isFinite(b.need) && Number.isFinite(b.have) && typeof b.title === 'string' ? b : null;
+  if (!Number.isInteger(h.bountyDay)) h.bountyDay = null;
+  h.errands = Array.isArray(h.errands) ? h.errands.filter((k) => typeof k === 'string').slice(-12) : [];
+  if (typeof h.seen !== 'string') h.seen = null;
+  if (h.delve && h.delve.site && !SITE_BY_ID[h.delve.site]) h.delve = null;
+  for (const qp of Object.values(h.questProgress ?? {})) {
+    if (!qp || typeof qp !== 'object') continue;
+    if (qp.errand && !HAPPENING_BY_ID[qp.errand.id]) { qp.errand = null; qp.started = false; qp.step = 0; }
+    if (qp.reg != null) qp.reg = Math.max(0, Math.floor(Number(qp.reg) || 0));
+  }
+}
+
 // Bring an older or partial save up to the current shape, or throw if it is not a save at all.
 export function migrate(save) {
   if (!save || typeof save !== 'object' || !Array.isArray(save.heroes)) throw new Error('That is not a Tavernborn save.');
@@ -135,6 +159,7 @@ export function migrate(save) {
     gearFields(h);
     for (const [key, value] of Object.entries(LEGACY_FIELDS())) h[key] ??= value;
     roadFields(h);
+    exploreFields(h);
     if (!['roam', 'quest', 'delve', 'rift'].includes(h.focus) || (h.focus === 'rift' && h.level < MAX_LEVEL)) h.focus = 'roam';
     // XP never sits below the hero's own level, whatever happened to the curve.
     h.xp = Math.max(Number(h.xp) || 0, xpForLevel(Math.min(h.level, MAX_LEVEL)));

@@ -16,7 +16,8 @@
 // hero's XP and its 10% cap, the Planar Rifts and Paragon ranks, determinism, and a Phase 5 save
 // loading intact. Then Phase 7: every line of game text against the Humor and voice rules
 // (tools/check-text.mjs), which sound plays for what, the tavern tune, the default sound settings,
-// and the credits data. Exits with an error if any check fails.
+// and the credits data. Then round five: rare monsters and mastery, lesser delves, story quests by
+// level, the regular, happenings and their errands, and the notice board. Exits with an error if any check fails.
 
 import { advance, summarize } from '../js/sim.js';
 import { newSave, exportSave, importSave, migrate, SAVE_VERSION } from '../js/state.js';
@@ -24,7 +25,14 @@ import { createHero, assignScores, defaultAppearance, maxHp, regionOpen, raiseAb
 import {
   TREES, ALL_SKILLS, FX_KEYS, SIG_TYPES, MAX_SKILLS, canLearn, whyNot, learnSkill, chooseSubclass, respec, respecCost, pending,
 } from '../js/skills.js';
-import { setFocus, orderTravel, payCleric, clericFee } from '../js/tasks.js';
+import { setFocus, orderTravel, payCleric, clericFee, orderDelve, delveTarget, storyReady, storyOpensAt, foeName } from '../js/tasks.js';
+import { RARES, RARE_LIST } from '../data/rares.js';
+import { SITES, SITE_LIST, SITE_BY_ID } from '../data/sites.js';
+import { BOUNTIES, REGULARS, HAPPENINGS, HAPPENING_EFFECT } from '../data/board.js';
+import { MASTERY, masteryRank } from '../js/rules.js';
+import { happeningsOn, conditionHolds, timeOfDay } from '../js/world.js';
+import { postingsOn, takeBounty, canTake, bountyReward } from '../js/board.js';
+import { DEEDS } from '../data/deeds.js';
 import { xpForLevel, respecPrice, PAST_CURVES, ABILITY_LEVELS, ABILITY_MAX, MAX_LEVEL } from '../js/rules.js';
 import { REGIONS } from '../data/regions.js';
 import { MONSTERS } from '../data/monsters.js';
@@ -503,7 +511,8 @@ ok(bh.stats.itemsFound === 4000 && bh.stats.upgrades > 8 && bh.stats.upgrades < 
 // 29. Drops from each source, through the real `advance`.
 const roamer = placed(62, 'cleric', 'human', 9, 'peaks', 'roam');
 const roamLoot = lootOf(advance(roamer, 40 * HOUR));
-ok(roamLoot.length > 5 && roamLoot.every((e) => e.source === 'roam'), `monsters drop gear, rarely (${roamLoot.length} pieces from ${roamer.heroes[0].stats.tasks} fights)`);
+const fromCommon = roamLoot.filter((e) => e.source === 'roam');
+ok(fromCommon.length > 5 && fromCommon.length < 0.03 * roamer.heroes[0].stats.tasks && roamLoot.every((e) => ['roam', 'rare', 'elusive'].includes(e.source)), `monsters drop gear, rarely (${fromCommon.length} pieces from ${roamer.heroes[0].stats.tasks} fights, and ${roamLoot.length - fromCommon.length} more from rare ones)`);
 const quester = placed(31, 'cleric', 'human', 3, 'mugwick', 'quest');
 const questEvents = advance(quester, 8 * HOUR);
 const questSum = summarize(questEvents);
@@ -560,7 +569,7 @@ const cubEvents = advance(cub5, 14 * HOUR);
 const five = cubEvents.find((e) => e.type === 'levelup' && e.level === 5);
 const yh = cub5.heroes[0];
 ok(five && cubEvents.filter((e) => e.type === 'loot' && e.at < five.at).every((e) => e.slot !== 'cloak'), 'no cloak can be found before level 5: the slot is shut');
-ok(five && yh.gear.cloak && yh.gear.cloak.level >= 5 && cubEvents.some((e) => e.type === 'milestone' && e.level === 5), `at level 5 the Cloak slot opens with a Common cloak (${yh.gear.cloak?.name})`);
+ok(five && yh.gear.cloak && cubEvents.some((e) => e.type === 'milestone' && e.level === 5), `at level 5 the Cloak slot opens with a Common cloak (${yh.gear.cloak?.name})`);
 ok([5, 10, 15, 20].every((l) => MILESTONES[l] && !MILESTONES[l].includes('!')), 'levels 5, 10, 15, and 20 each write a milestone line');
 
 // 33. The six loot skills do what their cards say, and no skill is waiting on a later build.
@@ -693,7 +702,7 @@ ok(itemStats('weapon', { tier: 4, level: 20 }).roll === 4 && steps.every(([t, l]
     const s = placed(83, 'cleric', 'human', 10, 'mugwick', 'quest');
     s.heroes[0].questProgress.mugwick = { done: 6, step: 0, started: false, odd: 0, job: null };
     s.tavern.upgrades.notice = rank;
-    return firstOf(advance(s, 2 * HOUR), 'questdone', (e) => !e.story);
+    return firstOf(advance(s, 2 * HOUR), 'questdone', (e) => !e.story && !e.errand);
   };
   const job0 = oddJob(0), job5 = oddJob(5);
   ok(job0 && job5 && Math.abs(job5.xp / job0.xp - 1.5) < 0.02 && Math.abs(job5.gold / job0.gold - 1.5) < 0.02, `the best notice board (rank 5) makes an odd job pay half as much again (${job0.xp} XP and ${job0.gold} gp, then ${job5.xp} XP and ${job5.gold} gp)`);
@@ -1046,6 +1055,195 @@ for (const [level, times] of Object.entries(reach)) {
   odd.heroes[1].rested = 'lots'; odd.heroes[0].rested = 1e12;
   const m = migrate(odd);
   ok(m.heroes[1].rested === 0 && restedOf(m.heroes[0]) === REST.cap, 'an unreadable or too-large bank is mended');
+}
+
+// Round five: rare monsters and mastery, lesser delves, the notice board, and happenings.
+console.log('\nRound five: rare monsters, lesser delves, the notice board, happenings:');
+{
+  const DAY_MS = 86400000;
+  // The world's clock.
+  const w = fresh(501);
+  advance(w, 5000);
+  ok(w.lastSavedAt === 5000 * 1000, 'the world\'s clock moves on by exactly the seconds advanced');
+
+  // The content is whole.
+  const commonIds = new Set(Object.values(MONSTERS).flat().map((m) => m.id));
+  ok(REGIONS.every((r) => RARES[r.id].length === 3 && RARES[r.id].filter((m) => m.rare === 1).length === 2 && RARES[r.id][2].rare === 2 && RARES[r.id][2].when
+    && RARES[r.id].every((m) => !commonIds.has(m.id) && m.level >= r.levels[0] && m.level <= r.levels[1] && m.tasks.length >= 2 && m.hit.length && m.miss.length && m.crit && m.fumble && m.ko && MONSTER_BY_ID[m.id] === m))
+    && new Set(RARE_LIST.map((m) => m.id)).size === 24, 'every region has two rare monsters and one elusive beast, each whole (24 in all)');
+  ok(REGIONS.every((r) => SITES[r.id].length === 2 && SITES[r.id][0].level === r.levels[0] && SITES[r.id][1].level > r.levels[0] && SITES[r.id][1].level < r.levels[1] + (r.id === 'mugwick' ? 1 : 0)
+    && SITES[r.id].every((s) => s.site && s.region === r.id && s.roomTasks.length >= 3 && s.boss.hits === 2 && s.boss.tasks.length && s.dc < DUNGEONS[r.id].dc + 1 && s.dmg < DUNGEONS[r.id].dmg))
+    && new Set(SITE_LIST.map((s) => s.id)).size === 16, 'every region has two lesser delves, the first at its opening level and the second part-way up, each kinder than the dungeon');
+  ok(REGIONS.every((r) => HAPPENINGS[r.id].length === 2 && HAPPENINGS[r.id].every((h) => HAPPENING_EFFECT[h.kind] && h.errand.steps.length === 4 && h.errand.done)
+    && REGULARS[r.id].beats.length === 4), 'every region has two happenings, each with an errand, and a regular with four jobs');
+
+  // Rare monsters turn up while roaming, and always leave a piece.
+  const rs = placed(503, 'fighter', 'human', 10, 'peaks', 'roam');
+  const rh = rs.heroes[0];
+  const re = advance(rs, 60 * HOUR);
+  const rareWins = re.filter((e) => e.type === 'task' && e.rare && (e.outcome === 'hit' || e.outcome === 'crit'));
+  const rareLoot = re.filter((e) => e.type === 'loot' && (e.source === 'rare' || e.source === 'elusive'));
+  const share = re.filter((e) => e.type === 'rare').length / rh.stats.tasks;
+  ok(rareWins.length > 5 && rh.stats.rares === rareWins.length && share > 0.01 && share < 0.08, `rare monsters turn up now and then while roaming (${re.filter((e) => e.type === 'rare').length} in ${rh.stats.tasks} fights)`);
+  ok(rareLoot.length >= rareWins.length && rareWins.every((e) => rh.bestiary[e.monster] > 0), 'a rare one beaten always leaves a piece of gear, and goes in the Bestiary');
+  // The elusive beast only while its condition holds on the world's clock (the Peaks: snow).
+  const beasts = re.filter((e) => e.type === 'rare' && e.rare === 2);
+  ok(beasts.length > 0 && beasts.every((e) => conditionHolds('weather', 'peaks', new Date(e.at * 1000))), `the elusive beast of the Peaks is met only while it snows (${beasts.length} times)`);
+  const vale = placed(504, 'fighter', 'human', 3, 'mugwick', 'roam');
+  const ve = advance(vale, 72 * HOUR).filter((e) => e.type === 'rare' && e.rare === 2);
+  ok(ve.length > 0 && ve.every((e) => timeOfDay(new Date(e.at * 1000)) === 'night'), `and the Vale's badger only at night (${ve.length} times)`);
+  const low = placed(505, 'fighter', 'human', 1, 'mugwick', 'roam');
+  low.heroes[0].xp = 0;
+  const le = advance(low, 9 * 60);
+  ok(le.filter((e) => e.type === 'rare').every((e) => MONSTER_BY_ID[e.monster].level <= 2), 'a rare one more than a level above the hero keeps away');
+
+  // Mastery.
+  ok(masteryRank(9) === 0 && masteryRank(MASTERY.at[0]) === 1 && masteryRank(MASTERY.at[2]) === 3 && masteryRank(MASTERY.rareAt[0], 1) === 1 && masteryRank(MASTERY.rareAt[0] - 1, 1) === 0, 'defeats earn three mastery ranks, a rare monster\'s sooner');
+  const ranks = re.filter((e) => e.type === 'mastery');
+  ok(ranks.length > 3 && ranks.every((e) => masteryRank(rh.bestiary[e.monster], MONSTER_BY_ID[e.monster].rare) >= e.rank) && rh.chronicle.some((l) => l.k === 'mastery'), `each rank is announced once, in the Chronicle (${ranks.length} ranks in 60 hours)`);
+  {
+    // The same fights with and without mastery: less damage taken, more gold, the same XP.
+    const run = (count) => { const s = placed(506, 'fighter', 'human', 9, 'peaks', 'roam'); const h = s.heroes[0]; for (const m of [...MONSTERS.peaks, ...RARES.peaks]) h.bestiary[m.id] = count; const ev = advance(s, 2 * HOUR).filter((e) => e.type === 'task'); return { dmg: ev.reduce((n, e) => n + e.damage, 0), n: ev.length }; };
+    const green = run(0), old = run(100000);
+    ok(old.dmg < green.dmg * 0.85, `an Authority takes less damage from what it knows (${old.dmg} against ${green.dmg} in two hours)`);
+  }
+
+  // Lesser delves.
+  const ds = placed(507, 'fighter', 'dwarf', 6, 'saltmarrow', 'roam');
+  const dh = ds.heroes[0];
+  ok(!orderDelve(dh, 'mill_loft') && dh.focus === 'roam', 'a lesser delve in another region cannot be ordered');
+  ok(orderDelve(dh, 'fenwicks_hole') && dh.focus === 'delve' && delveTarget(dh) === SITE_BY_ID.fenwicks_hole, 'Delve can be sent to a lesser delve');
+  const de = advance(ds, 3 * HOUR);
+  const cleared = de.filter((e) => e.type === 'sitecleared');
+  const firstClear = de.indexOf(cleared[0]);
+  const roomsBefore = de.slice(0, firstClear).filter((e) => e.type === 'task' && e.source === 'delve').length;
+  ok(cleared.length >= 2 && cleared[0].first && !cleared[1].first && dh.siteClears.fenwicks_hole === cleared.length && dh.stats.siteClears === cleared.length, `a lesser delve is cleared, and can be cleared again (${cleared.length} times in three hours)`);
+  ok(roomsBefore >= 4 && roomsBefore <= 6 + 6 && de.some((e) => e.type === 'task' && e.boss === 'fenwick' && e.won), 'a run is a few rooms and then the keeper');
+  ok(!de.some((e) => ['cleared', 'unlock', 'chapter', 'trophy'].includes(e.type)) && !dh.dungeonClears.saltmarrow && !regionOpen(dh, 'peaks') && dh.stats.dungeonRuns === 0 && dh.stats.siteRuns >= cleared.length,
+    'it opens no road, earns no chapter or trophy, and is counted apart from the dungeons');
+  const keeperLoot = de.filter((e) => e.type === 'loot' && (e.source === 'boss' || e.source === 'keeper'));
+  ok(keeperLoot[0]?.source === 'boss' && keeperLoot.slice(1).every((e) => e.source === 'keeper') && !de.some((e) => e.type === 'loot' && e.legend), 'the keeper gives a boss\'s piece the first time, a chest\'s after, and no named Legendary');
+  ok(foeName('fenwick') === 'Fenwick the Unpaid', 'a keeper has a name for the Bestiary and the knockout line');
+  orderDelve(dh, null);
+  advance(ds, 600);
+  ok(dh.delve?.site == null && delveTarget(dh) === DUNGEONS.saltmarrow && (dh.currentTask.kind === 'delve' || dh.currentTask.kind === 'camp' || dh.currentTask.kind === 'tavern'), 'ordering the dungeon again leaves the lesser delve');
+  {
+    // Losing three times in a lesser delve sends the hero roaming, and keeps its own count.
+    const s = placed(508, 'wizard', 'human', 12, 'underdeep', 'roam');
+    const h = s.heroes[0];
+    orderDelve(h, 'counting_shaft');
+    const ev = advance(s, 12 * HOUR);
+    const conf = ev.find((e) => e.type === 'confidence');
+    ok(conf && conf.site === 'counting_shaft' && conf.region === undefined && h.focus === 'roam' && ev.filter((e) => e.type === 'knockout' && e.site === 'counting_shaft').length >= 3, 'three defeats running in a lesser delve and the hero roams instead');
+  }
+
+  // Story quests open by level, with odd jobs between.
+  ok(REGIONS.every((r) => storyOpensAt(r.id, 0) === r.levels[0] && storyOpensAt(r.id, 5) === Math.max(r.levels[0], r.levels[1] - 1) && [1, 2, 3, 4, 5].every((i) => storyOpensAt(r.id, i) >= storyOpensAt(r.id, i - 1))),
+    'story quests open in order across a region, the last a level before the dungeon is due');
+  const qs5 = placed(509, 'cleric', 'human', 12, 'cinder', 'quest');
+  const qh5 = qs5.heroes[0];
+  const qe = advance(qs5, 10 * HOUR);
+  const doneStory = qe.filter((e) => e.type === 'questdone' && e.story).length;
+  const expected = [0, 1, 2, 3, 4, 5].filter((i) => storyOpensAt('cinder', i) <= qh5.level).length;
+  ok(doneStory === expected && doneStory < 6 && !storyReady(qh5) && qe.some((e) => e.type === 'questdone' && !e.story), `a level ${qh5.level} hero does the ${doneStory} story quests open to them in the Wastes, then odd jobs`);
+  qh5.level = 14; qh5.xp = xpForLevel(14);
+  ok(storyReady(qh5), 'and the next opens when they reach its level');
+  // The regular: every fourth odd job, four times, then a gift.
+  const reg = placed(510, 'cleric', 'human', 3, 'mugwick', 'quest');
+  const gh = reg.heroes[0];
+  gh.questProgress.mugwick = { done: 6, step: 0, started: false, odd: 0, job: null };
+  const ge = advance(reg, 60 * HOUR);
+  const regJobs = ge.filter((e) => e.type === 'questdone' && e.regular);
+  ok(regJobs.length === 4 && regJobs.every((e, i) => e.quest === REGULARS.mugwick.beats[i].job) && ge.filter((e) => e.type === 'regular').length === 1 && gh.stats.regulars === 1 && gh.questProgress.mugwick.reg === 4,
+    `every fourth odd job is for the regular until her story is told, and then she sends a gift (${regJobs.length} jobs for Widow Pelk in ${gh.stats.oddJobs})`);
+
+  // Happenings follow the calendar.
+  const d1 = new Date(2026, 10, 16), d2 = new Date(2026, 10, 17);
+  const on1 = happeningsOn(d1);
+  ok(Object.keys(on1).length === 3 && Object.entries(on1).every(([r, h]) => HAPPENINGS[r].some((x) => x.id === h.id)) && JSON.stringify(happeningsOn(new Date(2026, 10, 16, 23, 59))) === JSON.stringify(on1), 'three regions have something going on each day, the same all day');
+  let differ = 0;
+  for (let i = 0; i < 30; i++) if (JSON.stringify(Object.keys(happeningsOn(new Date(2026, 0, 1 + i))).sort()) !== JSON.stringify(Object.keys(happeningsOn(new Date(2026, 0, 2 + i))).sort())) differ += 1;
+  ok(differ > 20 && JSON.stringify(happeningsOn(d2)) !== JSON.stringify(on1), `and it changes from day to day (${differ} of 30 days differ from the day before)`);
+  {
+    // A hero questing where something is on takes the errand first, once, at their own level.
+    const [region, hap] = Object.entries(on1)[0];
+    const s = placed(511, 'fighter', 'human', 20, region, 'quest');
+    const h = s.heroes[0];
+    s.lastSavedAt = d1.getTime() + 3600 * 1000;
+    const ev = advance(s, 6 * HOUR);
+    const errands = ev.filter((e) => e.type === 'questdone' && e.errand);
+    ok(errands.length === 1 && errands[0].quest === hap.errand.title && h.errands.length === 1 && h.stats.errands === 1 && ev.find((e) => e.type === 'happening')?.happening === hap.id,
+      `a happening is written down once and its errand done once (${hap.name}, in ${region})`);
+    const first = ev.find((e) => e.type === 'task' && e.source === 'quest');
+    ok(first.roll.dc >= 15 && ev[ev.indexOf(errands[0]) + 1]?.type === 'loot' && ev[ev.indexOf(errands[0]) + 1].source === 'chest' && ev[ev.indexOf(errands[0]) + 1].level === 20, 'the errand is set at the hero\'s own level and pays a piece of gear');
+  }
+  {
+    // What a happening does: gold, rare monsters, gear.
+    const find = (kind) => { for (let i = 0; i < 400; i++) { const d = new Date(2026, 0, 1 + i); const e = Object.entries(happeningsOn(d)).find(([, h]) => h.kind === kind); if (e) return { date: d, region: e[0] }; } return null; };
+    const run = (kind, focus, hours, seed) => {
+      const f = find(kind);
+      const level = REGIONS.find((r) => r.id === f.region).levels[1];
+      const play = (ms) => { const s = placed(seed, 'fighter', 'human', level, f.region, focus); s.lastSavedAt = ms; return { ev: advance(s, hours * HOUR), h: s.heroes[0] }; };
+      const plainDay = (() => { for (let i = 1; i < 60; i++) { const d = new Date(f.date.getTime() + i * DAY_MS); if (!happeningsOn(d)[f.region]) return d; } return null; })();
+      return { on: play(f.date.getTime() + 1000), off: play(plainDay.getTime() + 1000) };
+    };
+    const g = run('gold', 'roam', 10, 512);
+    const goldOf = (x) => x.ev.filter((e) => e.type === 'task').reduce((n, e) => n + e.gold, 0) / x.ev.filter((e) => e.type === 'task').length;
+    ok(goldOf(g.on) > goldOf(g.off) * 1.12, `a day of plenty pays more gold (${goldOf(g.on).toFixed(1)} gp a fight against ${goldOf(g.off).toFixed(1)})`);
+    const r = run('rare', 'roam', 20, 513);
+    const rareOf = (x) => x.ev.filter((e) => e.type === 'rare' && e.rare === 1).length;
+    ok(rareOf(r.on) > rareOf(r.off) * 1.6, `rare monsters come out for some happenings (${rareOf(r.on)} met against ${rareOf(r.off)})`);
+    const l = run('loot', 'roam', 20, 514);
+    const dropOf = (x) => x.ev.filter((e) => e.type === 'loot' && e.source === 'roam').length;
+    ok(dropOf(l.on) > dropOf(l.off) * 1.3, `and on others the monsters drop more gear (${dropOf(l.on)} pieces against ${dropOf(l.off)})`);
+  }
+
+  // The notice board.
+  const bs = placed(515, 'fighter', 'human', 9, 'peaks', 'roam');
+  const bh = bs.heroes[0];
+  const today = new Date(2026, 10, 16);
+  const posts = postingsOn(today, bh);
+  ok(posts.length === 3 && posts[0].kind === 'hunt' && MONSTERS.peaks.some((m) => m.id === posts[0].monster) && ['rare', 'delve'].includes(posts[2].kind) && posts.every((p) => BOUNTIES[p.kind] && p.need > 0 && p.title && !/\{/.test(p.title + p.about))
+    && JSON.stringify(postingsOn(new Date(2026, 10, 16, 18), bh)) === JSON.stringify(posts), 'the board posts three bounties a day: a hunt in the hero\'s region first, something harder last');
+  let boards = new Set();
+  for (let i = 0; i < 20; i++) boards.add(JSON.stringify(postingsOn(new Date(2026, 10, 1 + i), bh)));
+  ok(boards.size > 15, `and they change from day to day (${boards.size} different boards in 20 days)`);
+  const taken = takeBounty(bs, bh, 0, today);
+  ok(taken && bh.bounty.kind === 'hunt' && bh.bounty.have === 0 && !canTake(bh, today) && takeBounty(bs, bh, 1, today) === null && canTake(bh, new Date(2026, 10, 17)), 'a hero takes one bounty a day');
+  const gold0 = bh.gold;
+  const be = advance(bs, 30 * HOUR);
+  const paid = be.find((e) => e.type === 'bounty');
+  const pay = bountyReward('hunt', 9);
+  ok(paid && bh.bounty === null && bh.stats.bounties === 1 && paid.gold === pay.gold && paid.xp === pay.xp && bh.chronicle.some((l) => l.k === 'bounty') && bh.gold > gold0, `a hunt is counted fight by fight and pays on the spot (${pay.gold} gp and ${pay.xp} XP)`);
+  const beforePay = be.slice(0, be.indexOf(paid)).filter((e) => e.type === 'task' && e.monster === taken.monster && (e.outcome === 'hit' || e.outcome === 'crit')).length;
+  ok(beforePay === taken.need, `after exactly the number asked (${taken.need})`);
+  {
+    // A bounty travels in the save string; an unreadable one is dropped; an older save gets empty fields.
+    const s = placed(516, 'rogue', 'elf', 6, 'saltmarrow', 'roam');
+    const h = s.heroes[0];
+    takeBounty(s, h, 2, today);
+    orderDelve(h, 'fenwicks_hole');
+    advance(s, HOUR);
+    const back = importSave(exportSave(s)).heroes[0];
+    ok(JSON.stringify(back.bounty) === JSON.stringify(h.bounty) && back.bountyDay === h.bountyDay && back.site === 'fenwicks_hole' && JSON.stringify(back.siteClears) === JSON.stringify(h.siteClears), 'the bounty and the lesser delve travel in the save string');
+    const odd = JSON.parse(JSON.stringify(s));
+    odd.heroes[0].bounty = { kind: 'nonsense' }; odd.heroes[0].site = 'nowhere'; odd.heroes[0].siteClears = { nowhere: 3, fenwicks_hole: 2 }; odd.heroes[0].errands = 'x';
+    const mended = migrate(odd).heroes[0];
+    ok(mended.bounty === null && mended.site === null && JSON.stringify(mended.siteClears) === '{"fenwicks_hole":2}' && Array.isArray(mended.errands), 'unreadable round five fields are mended');
+    const older = JSON.parse(JSON.stringify(s));
+    for (const key of ['site', 'siteClears', 'bounty', 'bountyDay', 'errands', 'seen']) delete older.heroes[0][key];
+    older.heroes[0].delve = null;
+    const up = migrate(older);
+    advance(up, HOUR);
+    ok(up.heroes[0].site === null && up.heroes[0].bounty === null && up.heroes[0].level >= 6 && up.version === SAVE_VERSION, 'a save from before round five loads and plays on');
+  }
+  // New deeds.
+  ok(['sharp_eyed', 'rarities', 'authority', 'small_doors', 'bounties', 'obliging', 'timely'].every((id) => DEEDS.some((d) => d.id === id)) && rh.deeds.includes('sharp_eyed') && gh.deeds.includes('obliging') && bh.deeds.includes('naturalist') === false,
+    'round five has seven deeds of its own, earned in play');
+  // Determinism with everything on: one long call equals many short ones, across midnight.
+  const one = placed(517, 'fighter', 'human', 10, 'peaks', 'roam'); one.lastSavedAt = new Date(2026, 10, 16, 20).getTime(); takeBounty(one, one.heroes[0], 0, new Date(one.lastSavedAt)); advance(one, 8 * HOUR);
+  const many = placed(517, 'fighter', 'human', 10, 'peaks', 'roam'); many.lastSavedAt = new Date(2026, 10, 16, 20).getTime(); takeBounty(many, many.heroes[0], 0, new Date(many.lastSavedAt)); for (let i = 0; i < 8 * 60; i++) advance(many, 60);
+  ok(JSON.stringify(one) === JSON.stringify(many), 'eight hours across midnight in one call equals 480 one-minute calls');
 }
 
 console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll checks passed.');

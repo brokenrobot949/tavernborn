@@ -20,7 +20,7 @@ const sim = { retryAt: {}, early: 0 };
 steer(hero, sim, 'balanced');
 const end = Number(days) * 86400;
 while (hero.age < end) {
-  for (const e of advance(save, 300)) if (e.type === 'confidence') sim.retryAt[e.region] = Math.min(20, hero.level + 1);
+  for (const e of advance(save, 300)) if (e.type === 'confidence') sim.retryAt[e.site ?? e.region] = Math.min(20, hero.level + 1);
   if (!unspent) grow(hero, TREES[cls].branches[0].id);
   shop(save, hero);
   steer(hero, sim, 'balanced');

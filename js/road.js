@@ -17,6 +17,8 @@
 import { CHOICES, CHOICE_BY_ID, ROAD_TEXT } from '../data/road.js';
 import { WARES, WARE_BY_ID, MERCHANT_TEXT, FESTIVALS, FESTIVAL_BY_ID } from '../data/market.js';
 import { ROAD, MERCHANT, workXp, goldUnit, random, randInt, pick } from './rules.js';
+import { dayOf, hash } from './world.js';
+export { dayOf };
 import { restedXp } from './tavern.js';
 import { chronicle, maxHp } from './hero.js';
 import { giveBoon, pruneBoons } from './boons.js';
@@ -112,10 +114,7 @@ export function answerChoice(state, hero, index, events = []) {
 
 // ---------- the travelling merchant ----------
 
-// The day number of a date by the device's calendar (days since 1 January 1970 in local time).
-export const dayOf = (date) => Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000);
-// A steady number in [0, 1) for a day and a salt, the same on every device.
-const hash = (n, salt) => ((Math.imul(n ^ (salt * 0x9e3779b1), 2654435761) >>> 0) % 100000) / 100000;
+// (The calendar itself, `dayOf` and `hash`, is in js/world.js.)
 
 // Whether the merchant is in on a day, and what is on the cart: { here, day, wares: [ware] }.
 export function merchantOn(date) {

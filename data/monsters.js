@@ -12,6 +12,8 @@
 //   hit / miss   Chronicle lines for meeting or missing the DC
 //   crit / fumble   lines for a natural 20 and a natural 1
 //   ko      second sentence of the knockout line
+import { RARE_LIST } from './rares.js';
+
 export const MONSTERS = {
   mugwick: [
     {
@@ -606,4 +608,6 @@ export const MONSTERS = {
   ],
 };
 
-export const MONSTER_BY_ID = Object.fromEntries(Object.values(MONSTERS).flat().map((m) => [m.id, m]));
+// Every monster by id: the ordinary ones above and the rare ones of data/rares.js.
+export const MONSTER_BY_ID = Object.fromEntries([...Object.values(MONSTERS).flat(), ...RARE_LIST].map((m) => [m.id, m]));
+export const COMMON_COUNT = Object.values(MONSTERS).flat().length;

@@ -36,6 +36,11 @@ Rob is the game designer and does not write code.
 - `js/road.js` choices on the road (`afterTask`, `answerChoice`), the travelling merchant (`merchantOn`, `buyWare`),
   and festivals (`festivalOn`, `joinFestival`); `js/boons.js` timed boons; `js/deeds.js` deeds and titles
   (`checkDeeds`, `wearTitle`). Text in `data/road.js`, `data/market.js`, `data/deeds.js`
+- `js/world.js` the world's clock and calendar: the time of day, the weather, and the day's happenings, read from
+  `state.lastSavedAt` (which `advance` moves on). `js/board.js` the notice board's bounties (`postingsOn`,
+  `takeBounty`, `noteBounty`). `tasks.js` also holds `orderDelve` (the dungeon or one of a region's two lesser delves).
+  Text in `data/rares.js` (rare monsters, mastery), `data/sites.js` (lesser delves), `data/board.js` (bounties,
+  regulars, happenings and their errands)
 - `js/sprite.js` LPC layer compositing and animation
 - `js/audio.js` sound: effects and the tavern tune, synthesised with the Web Audio API (no audio files), and the
   sound settings, kept in localStorage under `tavernborn.settings`, apart from the save
@@ -99,7 +104,8 @@ Rob is the game designer and does not write code.
 | 7. Polish | Writing pass, sound, credits screen, settings | Tone matches the Humor and voice section |
 
 ## Status
-- Current phase: 7 (Polish), built and waiting on Rob's phone test. This is the last phase in the plan.
+- Current phase: 7 (Polish), built and waiting on Rob's phone test. This is the last phase in the plan. The newest
+  work is round five (rare monsters, lesser delves, the notice board, happenings), described below.
   Phases 1 to 6 are also still in his phone test. Phase 0 is approved.
 - Built in Phase 7: sound effects and a tavern tune (`js/audio.js`), settings with the mute switch
   (`js/ui/settings.js`), the in-game credits screen (`js/ui/credits.js`), and a writing pass held in place by
@@ -335,6 +341,82 @@ effects, bosses, loot arriving, the hero on the map, and the barkeep (no other p
   hero is unchanged, so `node tools/simulate.mjs` (one hero) is unaffected. Rob accepted the quicker pace.
 - `node tools/check-sim.mjs` adds 7 checks: banking while waiting, the cap, the bonus, running out, the good bench,
   the save string, and mending a bad bank. The roster check now ignores `rested` when comparing a waiting hero.
+
+## Round five: roaming, questing, and delving with more in them (waiting on Rob's phone test)
+Rob's note: the Bestiary and the story quests were finished quickly, and then a region was the same thing over and over
+until the dungeon. He took all four proposals: rare monsters and mastery, lesser delves, a daily notice board, and
+regional happenings. None of it is in the design doc.
+- The world's clock (`js/world.js`): `state.lastSavedAt` is the real moment the sim has reached, and `advance` now moves
+  it on itself (`main.js` no longer does). The rules read the time of day, the weather, the day's happenings, and the
+  board from it, so they are the same lived through or spent away, and one long `advance` equals many short ones.
+  `timeOfDay` and `weatherFor` moved there from the UI (still re-exported where they were). Checks and the simulator
+  start at 1 January 1970, so they do not depend on today's date.
+- Rare monsters (`data/rares.js`, numbers in `RARE`): two per region and one elusive beast, 24 in all, written like
+  monsters but with numbers worked out from their level (a step harder, three to four times as long, more gold).
+  A roam task is a rare one 1% of the time (never one more than a level above the hero), and the elusive beast 0.6%
+  of the time while its condition holds: night in the Vale and the Underdeep, dusk in Gloamfen, dawn at Wyrmspire, and
+  the passing weather elsewhere (leaves, rain, snow, sand). A rare one beaten always leaves a piece
+  (`LOOT.shift.rare` -1.3, `.elusive` -0.8, so a rare one never has a Legendary on it and an elusive one seldom). `MONSTER_BY_ID` holds them too; `MONSTERS` is still only the ordinary 51.
+  Seen live: a banner, and the foe glows gold (pale blue for an elusive one).
+- Mastery (`MASTERY`, `masteryRank`): a monster's defeats (the Bestiary's own count) earn three ranks, Acquainted,
+  Familiar, An Authority, at 10, 100, and 500 (3, 10, and 30 for rare ones). Each rank is 10% less damage from that
+  monster and 5% more gold from it, on the road and in dungeon rooms. Never XP. Each rank is a `mastery` Chronicle
+  line (the third is a highlight).
+- Lesser delves (`data/sites.js`, numbers in `SITE`): two per region, 16 in all, the first built for the level the
+  region opens at and the second part-way up (1 and 2, 3 and 4, 5 and 7, 8 and 9, 10 and 11, 12 and 14, 15 and 17,
+  18 and 19). A site is shaped like a dungeon (4 to 6 rooms, then a keeper who takes two blows) with numbers from its
+  level, a little kinder than a dungeon's. It pays under a dungeon's rate (0.52 XP a second in rooms, 150 XP for the
+  keeper), opens no road, earns no chapter or trophy, and has no named Legendary; the keeper gives a boss's piece the
+  first time and about a chest's after (`LOOT.shift.keeper`). `hero.site` is where Delve goes (`orderDelve(hero, siteId | null)`), `delveTarget`
+  and `placeOf(run)` give the dungeon or site, and `hero.siteClears` counts clears. Defeats there are counted under
+  the site's id (`delveFails`, the `confidence` event carries `site`). Event `sitecleared`. A site uses the plain
+  stone backdrop and an ordinary foe drawing with gold eyes for its keeper.
+- Story quests by level: `storyOpensAt(region, i)` is the quest's own level, but never later than one below the
+  region's last, so the sixth (and the Feat) can be done before the dungeon. Until the next opens the board gives odd
+  jobs (`storyReady`). Quest levels and rewards are as before.
+- The regular (`REGULARS` in `data/board.js`): one named client per region with four jobs. Every fourth odd job in a
+  region is theirs (`REGULAR_EVERY`, `qp.reg`), each with its own closing line; after the fourth they send a piece of
+  gear (event and Chronicle kind `regular`).
+- Happenings (`HAPPENINGS`, `happeningsOn(date)`): three of the eight regions have one on each day, by the device's
+  calendar, from two written per region. Kinds: `gold` (everything there pays 25% more gold), `rare` (rare monsters
+  three times as common), `loot` (monsters and rooms drop gear twice as often), `jobs` (odd jobs pay 50% more gold,
+  with better gear). Each has an errand: a four-step job that comes first on that region's quest board, once per hero
+  per day (`hero.errands`), set at the hero's own level whatever the region's, paying a chest's piece and a gold unit.
+  The first task in such a region writes one `happening` line (`hero.seen`).
+- The notice board (`js/board.js`, `BOUNTIES`): three bounties a day by the device's calendar (`postingsOn`): a hunt
+  for one of the region's monsters, then luck or work (natural 20s, quests, tasks without a knockout, a second hunt),
+  then something harder (a rare monster, or a dungeon or site cleared). A hero takes one a day (`takeBounty`); it keeps
+  until done, or until another is taken in its place. `noteBounty` (called by `advance` after every task) counts it
+  and pays gold units, 30 or 45 minutes' XP, and for the hard ones a piece of gear. The simulator's player takes none.
+- Seven new deeds (31 in all): a rare monster, all 24, An Authority on 10 monsters, all 16 lesser delves, 10 bounties,
+  a regular's story, 10 errands. "The Whole Bestiary" still means the ordinary 51.
+- Screens. Map: a gold star on regions with something on; the region card has six tiles (monsters, story quests,
+  dungeon, rare ones, lesser delves, the regular), today's news, the level the next story quest opens at, and the
+  dungeon and both sites each with a "Delve here" button; a Notice board panel under the standing orders. Hero tab:
+  chips for today's happening and the bounty in hand; the task line says Errand, Odd job, or For a regular. Gear tab:
+  the Bestiary shows mastery pips and what the next rank needs, rare ones in silver, elusive ones with when to look,
+  and the keepers; Lifetime has four more tiles. The away card lists rare monsters, mastery ranks, sites, errands,
+  and bounties.
+- Saves stay version 6 (`exploreFields` in `js/state.js`): unreadable fields are dropped; an older hero starts with
+  none. A hero already past a story quest's level loses nothing; one part-way through a quest finishes it.
+- `chronicle` (js/hero.js) now remembers how many highlights a list holds instead of counting them after every task; a
+  month away resolves in about 0.6 s (0.87 s before this round).
+- The simulator's player now clears each lesser delve once on reaching its level, does each story quest as it opens,
+  and roams between (it used to quest until all six were done), so a run is mostly short roam tasks and takes about
+  ten minutes for 500 heroes.
+- Measured (`node tools/simulate.mjs`, 250 heroes on the final numbers; 500 on the numbers just before, within 0.1
+  days): median level 20 at 29.3 days (10th to 90th: 27.4 to 31.9), all clear the last dungeon. Levels 5 to 20 are
+  within 3% of target; level 3 is +19% and level 4 +13% (level 3 was +11%), because the simulated player now stops
+  for the Vale's two lesser delves. 2.7 knockouts per hero (4.2 before: more roaming, and mastery). Gear is a little
+  richer: average rarity 1.52 at level 10, 2.55 at 15, 3.49 at 20 (1.30, 2.27, 3.31 before); at the end 42% of slots
+  are Very Rare and 58% Legendary (63 / 37 before). Per hero: about 680 rare monsters beaten, all 16 lesser delves
+  cleared in 27 runs, 1,560 pieces found (800 before). Bounties are not in these numbers; one a day is worth about 2%.
+- `node tools/check-sim.mjs` (281 checks) adds 43 for this round. Three older checks changed: roam drops are counted
+  apart from rare monsters' pieces, the cloak check no longer asks for a level, and the notice board check skips
+  errands.
+- Spec departures to raise with Rob: none of this round is in the design doc. Happenings, the board, and the elusive
+  beasts follow the phone's clock and calendar. Story quests now wait for the hero's level. Mastery makes old monsters
+  safer and richer, never quicker.
 
 ## Known gaps closed after Phase 7
 - All 26 LPC hair colours are baked (`HAIR_COLORS` in `data/races.js`, natural shades first). The art is now

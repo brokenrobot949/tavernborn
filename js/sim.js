@@ -14,6 +14,7 @@ import { nextTask, resolveTask } from './tasks.js';
 import { afterTask } from './road.js';
 import { checkDeeds } from './deeds.js';
 import { restWaiting, useRest } from './tavern.js';
+import { noteBounty } from './board.js';
 
 export function advance(state, seconds) {
   const events = [];
@@ -27,10 +28,13 @@ export function advance(state, seconds) {
     const step = Math.min(left, task.duration - task.elapsed);
     task.elapsed += step;
     hero.age += step;
+    state.lastSavedAt += step * 1000; // the world's clock (js/world.js) moves with the hero's
     left -= step;
     // A task finished while any rest was left counts as rested, so the rest is used up after it.
     if (task.elapsed >= task.duration) {
+      const from = events.length;
       resolveTask(state, hero, task, events);
+      noteBounty(state, hero, events, from); // the bounty taken from the notice board, if any
       afterTask(state, hero, task, events); // choices on the road, and boons running out
       checkDeeds(hero, events);
       useRest(hero, task, step);
@@ -46,6 +50,7 @@ export function summarize(events) {
     tasks: 0, xp: 0, gold: 0, natural20s: 0, natural1s: 0, knockouts: 0, potions: 0, levels: [], newMonsters: [], knockedOutBy: [],
     quests: [], oddJobs: 0, feats: [], clears: [], chapters: [], opened: [], arrived: [], runsLost: 0, confidence: [], moves: 0,
     found: 0, upgrades: [], soldFor: 0, trophies: [], paragon: [], riftFloors: 0, choicesAlone: 0, deeds: [],
+    rares: [], sites: [], bounties: 0, mastery: 0, errands: [],
   };
   for (const e of events) {
     if (e.xp) s.xp += e.xp;
@@ -55,11 +60,12 @@ export function summarize(events) {
       if (e.source === 'rift') s.riftFloors += 1;
       if (e.outcome === 'crit') s.natural20s += 1;
       if (e.outcome === 'fumble') s.natural1s += 1;
+      if (e.rare && (e.outcome === 'hit' || e.outcome === 'crit')) s.rares.push(e.monster);
     } else if (e.type === 'levelup') s.levels.push(e.level);
     else if (e.type === 'knockout') { s.knockouts += 1; if (e.source === 'rift') s.riftFloors -= 1; s.knockedOutBy.push(e.monster ?? e.source); if (e.lost === 'run') s.runsLost += 1; }
     else if (e.type === 'potion') { s.potions += 1; s.gold -= e.cost; }
     else if (e.type === 'bestiary') s.newMonsters.push(e.monster);
-    else if (e.type === 'questdone') { if (e.story) s.quests.push(e.quest); else s.oddJobs += 1; }
+    else if (e.type === 'questdone') { if (e.story) s.quests.push(e.quest); else if (e.errand) s.errands.push(e.quest); else s.oddJobs += 1; }
     else if (e.type === 'feat') s.feats.push(e.region);
     else if (e.type === 'cleared') s.clears.push(e.region);
     else if (e.type === 'chapter') s.chapters.push(e.chapter);
@@ -71,6 +77,9 @@ export function summarize(events) {
     else if (e.type === 'paragon') s.paragon.push(e.rank);
     else if (e.type === 'choice' && e.alone) s.choicesAlone += 1;
     else if (e.type === 'deed') s.deeds.push(e.deed);
+    else if (e.type === 'sitecleared') s.sites.push(e.site);
+    else if (e.type === 'bounty') s.bounties += 1;
+    else if (e.type === 'mastery') s.mastery += 1;
     else if (e.type === 'loot') { s.found += 1; s.soldFor += e.gold; if (e.equipped) s.upgrades.push({ slot: e.slot, tier: e.tier, name: e.name }); }
   }
   return s;
