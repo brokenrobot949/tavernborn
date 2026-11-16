@@ -24,6 +24,8 @@
 //   base    name the colour the art actually ships in, where the definition gets it wrong
 //   hideHair  skip the hair layer while this is worn
 //   mirror  flip a walk-only item into the other hand (its other animations are dropped)
+//   standIn draw the standing walk frame for an animation the art lacks, e.g. ['thrust'] (the robe has no
+//           thrust art, so without it the robe vanishes whenever a Wizard attacks)
 //   bodies  draw another body type's sheet where the item has none, e.g. { muscular: 'male' }
 //   force   recolour an item that ships in one fixed look, by material (with `variant`, the look to start
 //           from; `ramp: true` maps by brightness where the art is not drawn in that material's palette)
@@ -54,6 +56,8 @@ export const BODY_FALLBACK = { muscular: 'male' };
 // Closed helmets and the cloth hood: hair is not drawn, or it pokes through.
 const HIDE_HAIR = { hideHair: true };
 const FEMALE_ONLY = { bodies: { male: 'female', muscular: 'female' } };
+// The robe and the mage belt have no thrust art, and Wizards attack with thrust.
+const ROBE = { ...FEMALE_ONLY, standIn: ['thrust'] };
 
 const heater = (kind, wood, trim, paint, pattern) => [
   L(`shield_heater${kind}_wood`, wood),
@@ -117,11 +121,11 @@ export const GEAR = {
 
   wizard: {
     body: [
-      [L('torso_clothes_longsleeve', 'brown'), L('legs_pants', 'brown'), L('torso_clothes_robe', 'brown', FEMALE_ONLY), L('belt_robe', 'white')],
-      [L('torso_clothes_longsleeve', 'charcoal'), L('legs_pants', 'charcoal'), L('torso_clothes_robe', 'dark gray', FEMALE_ONLY), L('belt_sash', 'navy')],
-      [L('torso_clothes_longsleeve', 'blue'), L('legs_pants', 'navy'), L('torso_clothes_robe', 'blue', FEMALE_ONLY), L('belt_mage', 'gold', FEMALE_ONLY)],
-      [L('torso_clothes_longsleeve', 'purple'), L('legs_pants', 'charcoal'), L('torso_clothes_robe', 'purple', FEMALE_ONLY), L('shoulders_mantal', 'navy')],
-      [L('torso_clothes_longsleeve', 'white'), L('legs_pants', 'gray'), L('torso_clothes_robe', 'white', FEMALE_ONLY), L('shoulders_mantal', 'purple')],
+      [L('torso_clothes_longsleeve', 'brown'), L('legs_pants', 'brown'), L('torso_clothes_robe', 'brown', ROBE), L('belt_robe', 'white')],
+      [L('torso_clothes_longsleeve', 'charcoal'), L('legs_pants', 'charcoal'), L('torso_clothes_robe', 'dark gray', ROBE), L('belt_sash', 'navy')],
+      [L('torso_clothes_longsleeve', 'blue'), L('legs_pants', 'navy'), L('torso_clothes_robe', 'blue', ROBE), L('belt_mage', 'gold', ROBE)],
+      [L('torso_clothes_longsleeve', 'purple'), L('legs_pants', 'charcoal'), L('torso_clothes_robe', 'purple', ROBE), L('shoulders_mantal', 'navy')],
+      [L('torso_clothes_longsleeve', 'white'), L('legs_pants', 'gray'), L('torso_clothes_robe', 'white', ROBE), L('shoulders_mantal', 'purple')],
     ],
     head: [
       [L('hat_hood_cloth', 'brown', HIDE_HAIR)],

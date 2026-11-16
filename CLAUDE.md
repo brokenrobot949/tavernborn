@@ -77,6 +77,9 @@ Rob is the game designer and does not write code.
 - Shields, the cane, and the club have no hurt art, so they vanish for the second and a half of a fall.
 - LPC's cloth hood (Wizard Common, Rogue Rare and Very Rare) has no room for hair; most styles poke through
   its top, so it hides the hair like the closed helmets (`HIDE_HAIR`).
+- The robe and the mage belt have no thrust art, and Wizards attack with thrust, so the robe used to vanish (showing the
+  shirt and trousers under it) on every attack. `standIn: ['thrust']` in `data/items.js` makes `bake` build their thrust
+  sheets from the standing walk frame (`*.standin.png`); the arm reaches out in the shirt sleeve beneath.
 
 ## Working rules
 - Build phase by phase. Finish a phase's "done when" before starting the next.

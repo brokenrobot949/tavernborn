@@ -175,7 +175,7 @@ function resolve(ref, defs, mats, tree) {
 
   const sublayers = [];
   const missingBody = new Set(), fallbackBody = new Set();
-  const animSeen = new Set();
+  const animSeen = new Set(), standIns = new Set();
   const customFor = {};
   for (const k of Object.keys(def).filter((k) => /^layer_\d+$/.test(k)).sort((a, b) => a.slice(6) - b.slice(6))) {
     const layer = def[k];
@@ -209,6 +209,14 @@ function resolve(ref, defs, mats, tree) {
         sub.files[bt][anim] = { src, out: suffix ? src.replace(/\.png$/, `${suffix}.png`) : src, mirror: !!ref.mirror };
         animSeen.add(anim);
       }
+      // `standIn`: an animation the art lacks gets the walk sheet's standing frame (column 0) of each row
+      // in every column, so the item stays on (the robe and mage belt have no thrust art)
+      for (const anim of ref.standIn ?? []) {
+        const walk = sub.files[bt].walk;
+        if (custom || sub.files[bt][anim] || !walk) continue;
+        sub.files[bt][anim] = { src: walk.src, out: walk.out.replace(`${p}walk`, `${p}${anim}`).replace(/\.png$/, '.standin.png'), mirror: false, standIn: anim };
+        standIns.add(anim);
+      }
     }
     if (Object.values(sub.files).some((f) => Object.keys(f).length)) sublayers.push(sub);
   }
@@ -216,7 +224,11 @@ function resolve(ref, defs, mats, tree) {
   for (const f of fallbackBody) notes.push(`CHECK 1 swap: ${f}`);
   const noArt = ANIMS.filter((a) => !animSeen.has(a));
   if (noArt.length === ANIMS.length) issues.push('no image files found for any animation');
-  else if (noArt.length) notes.push(`no ${noArt.join('/')} art: the item is not drawn during ${noArt.join('/')}`);
+  else if (noArt.length) {
+    const still = noArt.filter((a) => standIns.has(a)), gone = noArt.filter((a) => !standIns.has(a));
+    if (still.length) notes.push(`no ${still.join('/')} art: drawn in its standing walk frame during ${still.join('/')}`);
+    if (gone.length) notes.push(`no ${gone.join('/')} art: the item is not drawn during ${gone.join('/')}`);
+  }
 
   const used = sublayers.flatMap((s) => Object.values(s.files).flatMap((f) => Object.values(f).map((x) => x.src)));
   let credits = (def.credits ?? []).filter((c) => used.some((u) => u.startsWith(c.file.replace(/\/?$/, '/')) || u.startsWith(c.file)));
@@ -257,7 +269,7 @@ function report(resolved) {
 function sources(resolved) {
   const map = new Map(); // out -> { src, maps }
   for (const r of resolved) {
-    for (const s of r.sublayers) for (const f of Object.values(s.files)) for (const x of Object.values(f)) map.set(x.out, { src: x.src, maps: r.maps, mirror: x.mirror });
+    for (const s of r.sublayers) for (const f of Object.values(s.files)) for (const x of Object.values(f)) map.set(x.out, { src: x.src, maps: r.maps, mirror: x.mirror, standIn: x.standIn });
   }
   return map;
 }
@@ -317,6 +329,16 @@ function mirrorWalk(img) {
   img.data = out;
 }
 
+// Repeat a walk sheet's standing frame (column 0) along each row, `cols` columns wide.
+const ANIM_COLUMNS = { slash: 6, thrust: 8, hurt: 6 };
+function standingSheet(img, cols) {
+  const { width, height, data } = img, F = 64, w = cols * F;
+  const out = Buffer.alloc(w * height * 4);
+  for (let y = 0; y < height; y++) for (let c = 0; c < cols; c++) data.copy(out, (y * w + c * F) * 4, y * width * 4, (y * width + F) * 4);
+  img.width = w;
+  img.data = out;
+}
+
 function bake(resolved) {
   const bad = resolved.filter((r) => r.issues.length);
   if (bad.length) {
@@ -327,14 +349,15 @@ function bake(resolved) {
   const hitsBySrcKey = new Map();
   fs.rmSync(OUT, { recursive: true, force: true });
   let bytes = 0;
-  for (const [out, { src, maps, mirror }] of want) {
+  for (const [out, { src, maps, mirror, standIn }] of want) {
     const from = path.join(LPC, 'spritesheets', src);
     if (!fs.existsSync(from)) { console.error(`missing ${src}: run "fetch" first`); process.exit(1); }
     let buf = fs.readFileSync(from);
-    if (maps.length || mirror) {
+    if (maps.length || mirror || standIn) {
       const img = decodePng(buf);
       if (maps.length) hitsBySrcKey.set(out, recolor(img, maps));
       if (mirror) mirrorWalk(img);
+      if (standIn) standingSheet(img, ANIM_COLUMNS[standIn]);
       buf = encodePng(img);
     }
     const to = path.join(OUT, out);
