@@ -283,8 +283,10 @@ effects, bosses, loot arriving, the hero on the map, and the barkeep (no other p
   fight the hero steps back a little (`.vs-boss`).
 - Loot arriving (`lootDrop`): a chest by the foe opens and the piece, in its rarity's colour, flies to the hero.
   Very Rare and Legendary come in a beam of light. At most two shown per tick.
-- The map walker: during travel and the walk back after a knockout, the hero's sprite walks the road on the Map
-  tab, placed along the road by the journey's progress and facing along the current stretch.
+- The hero on the map: always shown on the Map tab in their own gear (the red flag is gone). Standing just right of
+  their region's dot, facing out; walking the road during travel and the walk back after a knockout, placed by the
+  journey's progress and facing along the current stretch; by the tavern's little house while recovering
+  (`TAVERN_DOOR`). It jumps to its place when the map is redrawn and eases after that (`.placed`).
 - The barkeep: a balding grey-bearded dwarf in a vest behind a new bar counter in the common room, who wanders
   along the bar now and then. Heroes walk in front of the counter.
 - Saves: version 6 (`roadFields` in `js/state.js`): unreadable choices, boons, and deeds are dropped; a hero from

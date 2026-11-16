@@ -651,7 +651,8 @@
 
 /* ----- The hero walking the road on the Map tab ----- */
 .map-frame { position: relative; }
-.map-walker { position: absolute; width: 64px; height: 64px; margin: -58px 0 0 -32px; pointer-events: none; z-index: 2; transition: left 1s linear, top 1s linear; }
+.map-walker { position: absolute; width: 64px; height: 64px; margin: -58px 0 0 -32px; pointer-events: none; z-index: 2; }
+.map-walker.placed { transition: left 1s linear, top 1s linear; }
 .map-walker canvas { width: 64px !important; height: 64px !important; image-rendering: pixelated; image-rendering: crisp-edges; filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.45)); }
 .map-walker[hidden] { display: none; }
 
