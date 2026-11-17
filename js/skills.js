@@ -16,6 +16,8 @@ import { FIGHTER } from '../data/skills-fighter.js';
 import { WIZARD } from '../data/skills-wizard.js';
 import { ROGUE } from '../data/skills-rogue.js';
 import { CLERIC } from '../data/skills-cleric.js';
+import { BARBARIAN } from '../data/skills-barbarian.js';
+import { RANGER } from '../data/skills-ranger.js';
 import { RESPEC_DONE } from '../data/chronicle.js';
 import { chronicle, maxHp } from './hero.js';
 import { respecPrice } from './rules.js';
@@ -68,7 +70,7 @@ export const SIG_TYPES = {
   onCrit: 'a natural 20 pays or heals more',
 };
 
-export const TREES = { fighter: FIGHTER, wizard: WIZARD, rogue: ROGUE, cleric: CLERIC };
+export const TREES = { fighter: FIGHTER, wizard: WIZARD, rogue: ROGUE, cleric: CLERIC, barbarian: BARBARIAN, ranger: RANGER };
 
 // Every skill by id, with where it sits: { ...skill, cls, branch, kind, tier (1 to 4), capstone }.
 export const SKILL_BY_ID = {};

@@ -55,6 +55,24 @@ export const NOUNS = {
     feet: n('boots', 'Sandals', 'Boots', 'Boots', 'Boots', 'Sabatons'),
     cloak: CLOAKS,
   },
+  barbarian: {
+    weapon: n('axe', 'Scythe', 'Bronze Axe', 'War Axe', 'Halberd', 'Golden Axe'),
+    offhand: n('jewel', 'Neck Ring', 'Tooth String', 'Trophy String', 'Chain Torc', 'Golden Torc'),
+    head: n('armour', 'Headband', 'Iron Cap', 'Nasal Helm', 'Winged Helm', 'Horned Helm'),
+    body: n('armour', 'Jerkin', 'Strapped Jerkin', 'War Leathers', 'Banded Harness', 'Golden Harness'),
+    hands: n('armour', 'Wraps', 'Bracers', 'Bracers', 'Bracers', 'Bracers'),
+    feet: n('boots', 'Sandals', 'Boots', 'Boots', 'Capped Boots', 'Capped Boots'),
+    cloak: CLOAKS,
+  },
+  ranger: {
+    weapon: n('bow', 'Shortbow', 'Hunting Bow', 'Recurve Bow', 'Great Bow', 'Golden Bow'),
+    offhand: n('cloth', 'Quiver', 'Belted Quiver', 'Slung Quiver', 'Field Quiver', 'Strapped Quiver'),
+    head: n('cloth', 'Cap', 'Feathered Cap', 'Hood', 'Feathered Hat', 'Hood and Mask'),
+    body: n('cloth', 'Tunic', 'Leather Jerkin', 'Green Leathers', 'Forest Leathers', 'Mantled Leathers'),
+    hands: n('cloth', 'Cuffs', 'Bracers', 'Gloves', 'Gloves', 'Gloves'),
+    feet: n('boots', 'Shoes', 'Boots', 'Boots', 'Boots', 'Boots'),
+    cloak: CLOAKS,
+  },
 };
 // The trinket never shows on the sprite, so every class draws from the same drawer.
 export const TRINKETS = [
@@ -71,6 +89,8 @@ export const STARTING_NAMES = {
   wizard: { weapon: 'Walking Staff', offhand: 'Oval Charm', head: 'Travelling Hood', body: 'Brown Robe', hands: 'Plain Cuffs', feet: 'House Slippers' },
   rogue: { weapon: 'Kitchen Dagger', offhand: 'Plain Belt', head: 'Bandana', body: 'Brown Vest', hands: 'Plain Cuffs', feet: 'Soft Shoes' },
   cleric: { weapon: 'Walking Cane', offhand: 'Borrowed Round Shield', head: 'White Headband', body: 'Shirt and Sash', hands: 'Plain Cuffs', feet: 'Sandals' },
+  barbarian: { weapon: 'Borrowed Scythe', offhand: 'Plain Neck Ring', head: 'Red Headband', body: 'Sleeveless Jerkin', hands: 'Leather Wraps', feet: 'Sandals' },
+  ranger: { weapon: 'Second-Hand Shortbow', offhand: 'Half-Full Quiver', head: 'Green Cap', body: 'Green Tunic', hands: 'Plain Cuffs', feet: 'Soft Shoes' },
 };
 export const STARTING_CLOAK = 'Tattered Cloak';
 
@@ -88,6 +108,8 @@ export const ADVERBS = [
 export const ADJECTIVES = {
   blade: ['Sharp', 'Pointed', 'Balanced', 'Polished'],
   blunt: ['Heavy', 'Persuasive', 'Solid', 'Convincing'],
+  axe: ['Sharp', 'Heavy', 'Decisive', 'Well-Balanced'],
+  bow: ['Straight', 'Springy', 'Accurate', 'Well-Strung'],
   staff: ['Straight', 'Learned', 'Resonant', 'Well-Read'],
   shield: ['Sturdy', 'Dependable', 'Broad', 'Reassuring'],
   armour: ['Sturdy', 'Dependable', 'Well-Fitted', 'Polished'],
@@ -146,7 +168,7 @@ export const LOOT_LINES = {
 
 // Level milestones on the sprite (design doc, "Hero visuals"). {name} is the hero, {title} the
 // title that comes with the emblem.
-export const TITLES = { fighter: 'Knight of the Taproom', wizard: 'Magister', rogue: 'Person of Interest', cleric: 'Canon of the Griffin' };
+export const TITLES = { fighter: 'Knight of the Taproom', wizard: 'Magister', rogue: 'Person of Interest', cleric: 'Canon of the Griffin', barbarian: 'Thane of the Snug', ranger: 'Verderer of the Yard' };
 export const MILESTONES = {
   5: 'A cloak comes with level 5. It is tattered, it is warm, and it is {name}\'s.',
   10: 'A clasp arrives from the guild, in the proper colours, with a title: {title}. The postage was owing.',

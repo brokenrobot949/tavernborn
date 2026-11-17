@@ -21,7 +21,7 @@
 // (chooseSubclass, learnSkill, raiseAbility): `grow` picks the planned subclass at level 3, puts
 // ability points into the class's main ability and then Constitution, and buys skills down the
 // subclass's own branch first (capstone included), then the other two branches a tier at a time.
-// Each class's three subclasses take turns, so all twelve get an equal share of heroes.
+// Each class's three subclasses take turns, so all eighteen get an equal share of heroes.
 // `growth: false` plays a player who never opens the Skills tab: every point stays banked.
 //
 // THE TAVERN (Phase 6). The player also spends gold on tavern upgrades, through the same

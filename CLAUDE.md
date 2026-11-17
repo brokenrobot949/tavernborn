@@ -61,7 +61,7 @@ Rob is the game designer and does not write code.
 - The game does no recoloring. `sprite.js` stacks the baked PNGs in `zPos` order on a small buffer and
   scales up 4x with smoothing off.
 - Frames are 64 x 64. Rows are up, left, down, right. Walk uses frames 1 to 8 of 9, slash 0 to 5,
-  thrust 0 to 7, hurt 0 to 5 (one row). Some weapons swing on 128 or 192 px "oversize" sheets; the
+  thrust 0 to 7, shoot 0 to 12 (the Ranger's bow), hurt 0 to 5 (one row). Some weapons swing on 128 or 192 px "oversize" sheets; the
   tool records those in `CUSTOM_ANIMS`.
 - Rerun `bake` whenever layers are added, so the credits stay exact. LPC licenses require credit.
 - Adding a body type, animation, or hair colour means editing the lists at the top of
@@ -98,14 +98,15 @@ Rob is the game designer and does not write code.
 | 1. Core loop | Creation, task bar, d20 rolls, XP, Chronicle, save and offline progress, Roam only, region 1 | A hero levels overnight with the tab closed |
 | 2. Simulator | `tools/simulate.html` runs 500 heroes and charts time to each level | Level 20 lands at 28 to 32 days |
 | 3. Activities and map | Quests, dungeons, knockouts with the paid skip, all eight regions, world map, story chapter cards | A simulated hero clears Wyrmspire |
-| 4. Growth | Skill trees for four classes, subclasses, ability increases, respec | Every skill has an effect and a Chronicle line |
+| 4. Growth | Skill trees for four classes (six since the Barbarian and Ranger), subclasses, ability increases, respec | Every skill has an effect and a Chronicle line |
 | 5. Gear and visuals | Loot, auto-equip, five looks per slot, milestones, backdrops | The sprite changes at each rarity tier |
 | 6. Tavern and legacy | Upgrades, roster, retirement, Hall of Legends, Planar Rifts | A hero can retire and a new one gets the bonus |
 | 7. Polish | Writing pass, sound, credits screen, settings | Tone matches the Humor and voice section |
 
 ## Status
 - Current phase: 7 (Polish), built and waiting on Rob's phone test. This is the last phase in the plan. The newest
-  work is round five (rare monsters, lesser delves, the notice board, happenings), described below.
+  work is the two new classes, Barbarian and Ranger, described below; before that, round five (rare monsters, lesser
+  delves, the notice board, happenings).
   Phases 1 to 6 are also still in his phone test. Phase 0 is approved.
 - Built in Phase 7: sound effects and a tavern tune (`js/audio.js`), settings with the mute switch
   (`js/ui/settings.js`), the in-game credits screen (`js/ui/credits.js`), and a writing pass held in place by
@@ -417,6 +418,43 @@ regional happenings. None of it is in the design doc.
 - Spec departures to raise with Rob: none of this round is in the design doc. Happenings, the board, and the elusive
   beasts follow the phone's clock and calendar. Story quests now wait for the hero's level. Mastery makes old monsters
   safer and richer, never quicker.
+
+## Barbarian and Ranger (waiting on Rob's phone test)
+Rob asked for two more classes. Neither is in the design doc, which still lists four.
+- A class is data: `data/classes.js`, a tree in `data/skills-<class>.js` (registered in `TREES`, js/skills.js), looks in
+  `GEAR`, `EMBLEM`, and `WISP_COLOR` (data/items.js), names in `NOUNS`, `STARTING_NAMES`, and `TITLES` (data/loot.js),
+  a line in `CLASS_NOTES` (js/ui/create.js), an attack effect in css/screens.css (`.scene[data-cls=...]`), and the
+  file name in `tools/check-text.mjs`. Nothing else names a class. No save change: saves stay version 6.
+- Barbarian: Strength, hit die d12 (the largest), ability order as the Fighter's. `ward: -0.1`: every hit lands 10%
+  harder, so the extra hit points are not free. Attacks with slash. Subclasses: Berserker (Might: Rage clears one bad
+  room a run, Frenzy rerolls twice a run), Ironhide (Guard: hit points, Not Today, Undying Rage), Plunderer (Fortune:
+  gold, a second piece of gear, hidden rooms, three extra boss purses). Title: Thane of the Snug.
+- Ranger: Dexterity, hit die d8, Wisdom second (quest checks and drops). Attacks with `shoot`. Subclasses: Hunter
+  (Might: criticals, Second Arrow every 15 minutes, Hunter's Mark against bosses), Wayfinder (Guard: traps, dodging,
+  Camp Craft, Fall Back, Safe Camp between rooms), Trapper (Fortune: gold and XP from the road, travel, Scout Ahead,
+  a second piece of gear and rarer finds). Title: Verderer of the Yard.
+- All 72 new skills use the passive numbers and signature moves that already existed (`FX_KEYS`, `SIG_TYPES`), so
+  `js/tasks.js` did not change. Skill ids start `b_` and `ra_`.
+- Barbarian looks: sleeveless jerkin to legion harness; headband, three LPC barbarian helms, then the horned helm;
+  bracers; a scythe (Common), the war axe in bronze, plain, and gold (bronze and gold by `ramp`, like the Cleric's
+  mace) with the halberd at Very Rare; no shield, so the off-hand is a necklace (neck ring to golden torc).
+- Ranger looks: green tunic to mantled leathers; feathered caps and hoods; three LPC bows in five colours, with the
+  arrow layer (drawn only while shooting); the off-hand is the quiver, with a different belt or strap at each rarity.
+- The shoot animation: `ANIMS.shoot` in js/sprite.js (13 frames). `tools/sprites.mjs` bakes shoot sheets only for
+  what a shooting class can wear, and for every body, head, and head of hair (`SHOOTS`), so the other four classes'
+  gear did not grow. The art went from 7.6 MB to 10.6 MB (746 layers, 153 credited items, 47 artists; CREDITS.md and
+  the credits screen were regenerated). In the sprite lab, "Shoot" on another class shows the hero without their gear.
+- Attack effects: a broad red arc and dust for the Barbarian; an arrow and a spark for the Ranger.
+- `node tools/check-sim.mjs` (281 checks, same count): the tree checks now expect six trees, 216 skills, and 18
+  capstones; all 216 skills change what happens and all 72 signature moves fire.
+- Measured (`node tools/simulate.mjs 324`, 54 heroes a class, 18 a subclass): median level 20 at 29.3 days overall
+  (10th to 90th: 27.3 to 31.8), all 324 clear the last dungeon. Level 20 in days / knockouts by class: Fighter
+  30.1 / 1.6, Wizard 27.9 / 2.8, Rogue 29.3 / 1.8, Cleric 29.0 / 3.6, Barbarian 30.0 / 1.1, Ranger 27.9 / 3.2. By
+  subclass: Berserker 29.1 / 0.9, Ironhide 31.9 / 0.3, Plunderer 30.0 / 1.9, Hunter 27.7 / 3.7, Wayfinder 30.6 / 1.4,
+  Trapper 27.7 / 4.6. So the Barbarian is the sturdiest class and among the slowest, the Ranger as quick as the Wizard
+  and nearly as fragile as the Cleric; both sit inside the range the first four already covered. Nothing was tuned.
+- Spec departures to raise with Rob: both classes are outside the design doc. The Barbarian's negative ward and the
+  Ranger's d8 (5e gives d10) are balance choices. The Fighter's creation line no longer says "the most hit points".
 
 ## Known gaps closed after Phase 7
 - All 26 LPC hair colours are baked (`HAIR_COLORS` in `data/races.js`, natural shades first). The art is now

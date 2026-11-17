@@ -16,7 +16,7 @@ import { el, pressBtn, confirmBtn, signed } from './dom.js';
 import { icon } from './icons.js';
 
 const ABILITY_USE = {
-  str: 'Fighter rolls', dex: 'Rogue rolls, dodging', con: 'Hit points, shorter knockouts',
+  str: 'Fighter and Barbarian rolls', dex: 'Rogue and Ranger rolls, dodging', con: 'Hit points, shorter knockouts',
   int: 'Wizard rolls, a little XP', wis: 'Cleric rolls, quest checks', cha: 'Gold',
 };
 const KIND_NOTE = { might: 'hits harder', guard: 'survives longer', fortune: 'earns more' };

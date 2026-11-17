@@ -13,7 +13,7 @@ The generator repository README explains how to comply when a piece lists severa
 
 ## Artists
 
-??, 7Soul, AntumDeluge, Benjamin K. Smith (BenCreating), bluecarrot16, Bluecarrot16, dalonedrau, Daniel Eddeland (daneeklu), DarkwallLKE, Dr. Jamgo, Durrani, Eliza Wyatt (ElizaWy), ElizaWy, ElizaWy; walk and down by JaidynReiman, Evert, gr3yh47, JaidynReiman, Joe White, Johannes Sjölund (wulax), laetissima, Luke Mehl, Mandi Paugh, Manuel Riecke (MrBeast), Marcel van de Steeg (MadMarcel), Matthew Krohn (makrohn), Matthew Krohn (Makrohn), Michael Whitlock (bigbeargames), MuffinElZangano, Napsio (Vitruvian Studio), Nila122, Pierre Vigier (pvigier), Pierre Vigier and DCSS artists (see https://github.com/crawl/tiles/blob/master/ARTISTS.md), PlatForge project, Sander Frenken (castelonia), Stafford McIntyre, Stephen Challener (Redshrike), Thane Brimhall (pennomi), thecilekli, TheraHedwig, Tracy, tskaufma, Tuomo Untinen (reemax), William.Thompsonj, William.Thomsponj, Zi Ye.
+??, 7Soul, AntumDeluge, Benjamin K. Smith (BenCreating), bluecarrot16, Bluecarrot16, dalonedrau, Daniel Eddeland (daneeklu), DarkwallLKE, Dr. Jamgo, Durrani, Eliza Wyatt (ElizaWy), ElizaWy, ElizaWy; walk and down by JaidynReiman, Evert, gr3yh47, JaidynReiman, Joe White, Johannes Sjölund (wulax), laetissima, Luke Mehl, macmanmatty, Mandi Paugh, Manuel Riecke (MrBeast), Marcel van de Steeg (MadMarcel), Matthew Krohn (makrohn), Matthew Krohn (Makrohn), Michael Whitlock (bigbeargames), MuffinElZangano, Napsio (Vitruvian Studio), Nila122, Pierre Vigier (pvigier), Pierre Vigier and DCSS artists (see https://github.com/crawl/tiles/blob/master/ARTISTS.md), PlatForge project, Sander Frenken (castelonia), Shaun Williams, Stafford McIntyre, Stephen Challener (Redshrike), Thane Brimhall (pennomi), thecilekli, TheraHedwig, Tracy, tskaufma, Tuomo Untinen (reemax), William.Thompsonj, William.Thomsponj, Zi Ye.
 
 ## Layers
 
@@ -71,6 +71,15 @@ Definition: `sheet_definitions/arms/bauldron.json`
   - Authors: Nila122, JaidynReiman
   - Licenses: GPL 2.0, GPL 3.0, OGA-BY 3.0, CC-BY-SA 3.0
   - https://opengameart.org/content/more-lpc-clothes-and-hair
+
+### Legion
+
+Definition: `sheet_definitions/arms/shoulders/shoulders_legion.json`
+
+- `shoulders/legion`
+  - Authors: Nila122
+  - Licenses: OGA-BY 3.0, CC-BY-SA 3.0, GPL 2.0, GPL 3.0
+  - https://opengameart.org/content/lpc-roman-armor
 
 ### Mantal
 
@@ -178,6 +187,26 @@ Definition: `sheet_definitions/body/lizard/tail_lizard.json`
   - Authors: Nila122, bluecarrot16, JaidynReiman
   - Licenses: OGA-BY 3.0, CC-BY-SA 3.0, GPL 3.0
   - https://opengameart.org/content/drakes-and-lizardfolk
+
+### Thick Plated Toe
+
+Definition: `sheet_definitions/feet/accessory/feet_plate_toe_thick.json`
+
+- `feet/accessory/plate_toe_thick`
+  - Authors: JaidynReiman
+  - Licenses: OGA-BY 3.0+, CC-BY 3.0+, GPL 3.0
+  - https://opengameart.org/content/lpc-kimono-relm
+  - https://opengameart.org/content/lpc-expanded-socks-shoes
+
+### Plated Toe
+
+Definition: `sheet_definitions/feet/accessory/feet_plate_toe.json`
+
+- `feet/accessory/plate_toe`
+  - Authors: JaidynReiman
+  - Licenses: OGA-BY 3.0+, CC-BY 3.0+, GPL 3.0
+  - https://opengameart.org/content/lpc-kimono-relm
+  - https://opengameart.org/content/lpc-expanded-socks-shoes
 
 ### Basic Boots
 
@@ -634,6 +663,16 @@ Definition: `sheet_definitions/headwear/coverings/headbands/hat_headband_thick.j
   - https://opengameart.org/content/lpc-relm-hair-xlong-ponytail
   - https://opengameart.org/content/lpc-expanded-hats-facial-helmets
 
+### Tied Headband
+
+Definition: `sheet_definitions/headwear/coverings/headbands/hat_headband_tied.json`
+
+- `hat/headband/tied`
+  - Authors: Nila122
+  - Licenses: OGA-BY 3.0, CC-BY-SA 3.0, GPL 3.0
+  - https://opengameart.org/content/lpc-lizard-headgear
+  - https://opengameart.org/content/lpc-expanded-hats-facial-helmets
+
 ### Hood
 
 Definition: `sheet_definitions/headwear/coverings/hoods/hat_hood_cloth.json`
@@ -645,6 +684,28 @@ Definition: `sheet_definitions/headwear/coverings/hoods/hat_hood_cloth.json`
   - https://opengameart.org/content/lpc-medieval-fantasy-character-sprites
   - https://opengameart.org/content/lpc-expanded-hats-facial-helmets
 
+### Bonnie feather
+
+Definition: `sheet_definitions/headwear/hats/caps/hat_cap_bonnie_feather.json`
+
+- `hat/pirate/bonnie`
+  - Notes: Bonnie Hat by Bluecarrot16, layers and added animations by JaidynReiman
+  - Authors: bluecarrot16, JaidynReiman
+  - Licenses: OGA-BY 3.0
+  - https://opengameart.org/content/lpc-pirates
+  - https://opengameart.org/content/lpc-expanded-hats-facial-helmets
+
+### Bonnie
+
+Definition: `sheet_definitions/headwear/hats/caps/hat_cap_bonnie.json`
+
+- `hat/pirate/bonnie`
+  - Notes: Bonnie Hat by Bluecarrot16, layers and added animations by JaidynReiman
+  - Authors: bluecarrot16, JaidynReiman
+  - Licenses: OGA-BY 3.0
+  - https://opengameart.org/content/lpc-pirates
+  - https://opengameart.org/content/lpc-expanded-hats-facial-helmets
+
 ### Cavalier
 
 Definition: `sheet_definitions/headwear/hats/caps/hat_cap_cavalier.json`
@@ -654,6 +715,17 @@ Definition: `sheet_definitions/headwear/hats/caps/hat_cap_cavalier.json`
   - Authors: bluecarrot16, JaidynReiman
   - Licenses: OGA-BY 3.0
   - https://opengameart.org/content/lpc-pirates
+  - https://opengameart.org/content/lpc-expanded-hats-facial-helmets
+
+### Leather Cap Feather
+
+Definition: `sheet_definitions/headwear/hats/caps/hat_cap_leather_feather.json`
+
+- `hat/cloth/leather_cap`
+  - Notes: original by Johannes Sjölund (wulax), female by Matthew Krohn, mapped to all frames w/recolors by JaidynReiman
+  - Authors: Johannes Sjölund (wulax), Matthew Krohn (Makrohn), JaidynReiman
+  - Licenses: OGA-BY 3.0, CC-BY-SA 3.0, GPL 3.0
+  - https://opengameart.org/content/lpc-medieval-fantasy-character-sprites
   - https://opengameart.org/content/lpc-expanded-hats-facial-helmets
 
 ### Leather Cap
@@ -743,6 +815,39 @@ Definition: `sheet_definitions/headwear/helmets/helmets/hat_helmet_armet.json`
   - https://opengameart.org/content/lpc-medieval-fantasy-character-sprites
   - https://opengameart.org/content/lpc-expanded-hats-facial-helmets
 
+### Barbarian nasal
+
+Definition: `sheet_definitions/headwear/helmets/helmets/hat_helmet_barbarian_nasal.json`
+
+- `hat/helmet/barbarian_nasal`
+  - Notes: original version by bluecarrot16, color reduction by Napsio (Vitruvian Studio)
+  - Authors: bluecarrot16, JaidynReiman, Napsio (Vitruvian Studio)
+  - Licenses: CC-BY 3.0, CC-BY 4.0, OGA-BY 3.0, GPL 2.0, GPL 3.0
+  - https://opengameart.org/content/lpc-helmets
+  - https://opengameart.org/content/lpc-expanded-hats-facial-helmets
+
+### Barbarian Viking
+
+Definition: `sheet_definitions/headwear/helmets/helmets/hat_helmet_barbarian_viking.json`
+
+- `hat/helmet/barbarian_viking`
+  - Notes: original version by bluecarrot16, color reduction by Napsio (Vitruvian Studio)
+  - Authors: bluecarrot16, JaidynReiman, Napsio (Vitruvian Studio)
+  - Licenses: CC-BY 3.0, CC-BY 4.0, OGA-BY 3.0, GPL 2.0, GPL 3.0
+  - https://opengameart.org/content/lpc-helmets
+  - https://opengameart.org/content/lpc-expanded-hats-facial-helmets
+
+### Barbarian
+
+Definition: `sheet_definitions/headwear/helmets/helmets/hat_helmet_barbarian.json`
+
+- `hat/helmet/barbarian`
+  - Notes: original version by bluecarrot16, color reduction by Napsio (Vitruvian Studio)
+  - Authors: bluecarrot16, JaidynReiman, Napsio (Vitruvian Studio)
+  - Licenses: CC-BY 3.0, CC-BY 4.0, OGA-BY 3.0, GPL 2.0, GPL 3.0
+  - https://opengameart.org/content/lpc-helmets
+  - https://opengameart.org/content/lpc-expanded-hats-facial-helmets
+
 ### Barbuta
 
 Definition: `sheet_definitions/headwear/helmets/helmets/hat_helmet_barbuta.json`
@@ -761,6 +866,19 @@ Definition: `sheet_definitions/headwear/helmets/helmets/hat_helmet_bascinet.json
   - Authors: bluecarrot16, ElizaWy, Sander Frenken (castelonia)
   - Licenses: OGA-BY 3.0, CC-BY-SA 4.0, CC-BY-SA 3.0, GPL 3.0
   - https://opengameart.org/content/lpc-realistic-helmet-pack
+  - https://opengameart.org/content/lpc-helmets-mega-pack
+  - https://opengameart.org/content/lpc-expanded-hats-facial-helmets
+
+### Horned helmet
+
+Definition: `sheet_definitions/headwear/helmets/helmets/hat_helmet_horned.json`
+
+- `hat/helmet/horned`
+  - Authors: bluecarrot16, Shaun Williams, Matthew Krohn (makrohn), Johannes Sjölund (wulax), Sander Frenken (castelonia)
+  - Licenses: CC-BY-SA 3.0, GPL 3.0
+  - https://opengameart.org/content/lpc-medieval-fantasy-character-sprites
+  - https://opengameart.org/content/lpc-full-plate-golden-armor
+  - https://opengameart.org/content/lpc-full-plate-golden-armor-0
   - https://opengameart.org/content/lpc-helmets-mega-pack
   - https://opengameart.org/content/lpc-expanded-hats-facial-helmets
 
@@ -863,6 +981,43 @@ Definition: `sheet_definitions/headwear/neck/neck_capeclip.json`
   - https://opengameart.org/content/lpc-curly-hair-elven-ears-white-cape-with-blue-trim-and-more
   - http://opengameart.org/content/lpc-clothing-updates
 
+### Large Beaded Necklace
+
+Definition: `sheet_definitions/headwear/neck/neck_necklace_beaded_large.json`
+
+- `neck/necklace/beaded_large`
+  - Authors: bluecarrot16
+  - Licenses: CC0
+  - https://opengameart.org/content/lpc-jewelry
+
+### Small Beaded Necklace
+
+Definition: `sheet_definitions/headwear/neck/neck_necklace_beaded_small.json`
+
+- `neck/necklace/beaded_small`
+  - Notes: minor cleanup + Jump/Run/Sit/Emote by JaidynReiman
+  - Authors: bluecarrot16, JaidynReiman
+  - Licenses: CC0
+  - https://opengameart.org/content/lpc-jewelry
+
+### Chain Necklace
+
+Definition: `sheet_definitions/headwear/neck/neck_necklace_chain.json`
+
+- `neck/necklace/chain`
+  - Authors: bluecarrot16
+  - Licenses: CC0
+  - https://opengameart.org/content/lpc-jewelry
+
+### Simple Necklace
+
+Definition: `sheet_definitions/headwear/neck/neck_necklace_simple.json`
+
+- `neck/necklace/simple`
+  - Authors: bluecarrot16
+  - Licenses: CC0
+  - https://opengameart.org/content/lpc-jewelry
+
 ### Scarf
 
 Definition: `sheet_definitions/headwear/neck/neck_scarf.json`
@@ -921,6 +1076,18 @@ Definition: `sheet_definitions/legs/pants/legs_pants.json`
   - http://opengameart.org/content/lpc-clothing-updates
   - https://opengameart.org/content/lpc-expanded-pants
 
+### Legion skirt
+
+Definition: `sheet_definitions/legs/skirts/legs_skirts_legion.json`
+
+- `legs/skirts/legion`
+  - Notes: original by Nila122 to legion, adapted to v3 bases by bluecarrot16, climb/jump/sit/run by JaidynReiman
+  - Authors: bluecarrot16, Nila122, JaidynReiman
+  - Licenses: OGA-BY 3.0, CC-BY-SA 3.0, GPL 2.0, GPL 3.0
+  - https://opengameart.org/content/lpc-roman-armor
+  - http://opengameart.org/content/lpc-clothing-updates
+  - https://opengameart.org/content/lpc-expanded-armour
+
 ### Leather
 
 Definition: `sheet_definitions/torso/armour/torso_armour_leather.json`
@@ -941,6 +1108,16 @@ Definition: `sheet_definitions/torso/armour/torso_armour_leather.json`
   - https://opengameart.org/content/lpc-clothing-updates
   - https://opengameart.org/content/lpc-expanded-armor
 
+### Legion
+
+Definition: `sheet_definitions/torso/armour/torso_armour_legion.json`
+
+- `torso/armour/legion`
+  - Notes: adapted to v3 bases by bluecarrot16, jump/run/sit/combat and teen by JaidynReiman, color reduction to 6 colors inspired by Napsio (Vitruvian Studio)
+  - Authors: Napsio (Vitruvian Studio), JaidynReiman, bluecarrot16, Nila122
+  - Licenses: OGA-BY 3.0, CC-BY-SA 3.0, GPL 2.0, GPL 3.0
+  - https://opengameart.org/content/lpc-roman-armor
+
 ### Plate
 
 Definition: `sheet_definitions/torso/armour/torso_armour_plate.json`
@@ -958,6 +1135,25 @@ Definition: `sheet_definitions/torso/armour/torso_armour_plate.json`
   - https://opengameart.org/content/lpc-medieval-fantasy-character-sprites
   - https://opengameart.org/content/lpc-combat-armor-for-women
   - http://opengameart.org/content/lpc-clothing-updates
+
+### Straps
+
+Definition: `sheet_definitions/torso/backpack/backpack_straps.json`
+
+- `backpack/straps`
+  - Notes: trivial adjustments by bluecarrot16 to be compatible with v3 bases
+  - Authors: Benjamin K. Smith (BenCreating), macmanmatty
+  - Licenses: CC-BY-SA 3.0, GPL 3.0
+  - https://opengameart.org/content/lpc-backpacks
+
+### Quiver
+
+Definition: `sheet_definitions/torso/backpack/quiver.json`
+
+- `quiver`
+  - Authors: Johannes Sjölund (wulax)
+  - Licenses: OGA-BY 3.0, CC-BY-SA 3.0, GPL 3.0
+  - https://opengameart.org/content/lpc-medieval-fantasy-character-sprites
 
 ### Solid
 
@@ -1044,6 +1240,26 @@ Definition: `sheet_definitions/torso/shirts/longsleeve/torso_clothes_longsleeve.
   - https://github.com/ElizaWy/LPC/tree/main/Characters/Clothing
   - https://opengameart.org/content/lpc-expanded-sit-run-jump-more
   - https://opengameart.org/content/lpc-expanded-simple-shirts
+
+### Sleeveless
+
+Definition: `sheet_definitions/torso/shirts/sleeveless/torso_clothes_sleeveless.json`
+
+- `torso/clothes/sleeveless/sleeveless/male`
+  - Authors: bluecarrot16, Matthew Krohn (makrohn), JaidynReiman, Marcel van de Steeg (MadMarcel), Nila122, Johannes Sjölund (wulax), Stephen Challener (Redshrike)
+  - Licenses: OGA-BY 3.0, CC-BY-SA 3.0, GPL 3.0
+  - https://opengameart.org/content/lpc-female-orcogregoblintroll-base-walkcycle
+  - https://opengameart.org/content/lpc-curly-hair-elven-ears-white-cape-with-blue-trim-and-more
+  - https://opengameart.org/content/more-lpc-clothes-and-hair
+  - https://opengameart.org/content/lpc-pirates
+- `torso/clothes/sleeveless/sleeveless/female`
+  - Notes: "pirate shirt" by MadMarcel, edited to all poses by makrohn, edited from tube-top/tanktop to sleeveless by JaidynReiman, cleanup and re-drawing by ElizaWy, edits for v3 bases and further cleanup by bluecarrot16
+  - Authors: ElizaWy, JaidynReiman, Matthew Krohn (makrohn), Marcel van de Steeg (MadMarcel), Stephen Challener (Redshrike), Johannes Sjölund (wulax)
+  - Licenses: OGA-BY 3.0, CC-BY-SA 3.0, GPL 3.0
+  - https://opengameart.org/content/lpc-female-orcogregoblintroll-base-walkcycle
+  - https://opengameart.org/content/lpc-curly-hair-elven-ears-white-cape-with-blue-trim-and-more
+  - https://opengameart.org/content/lpc-7-womens-shirts
+  - http://opengameart.org/content/lpc-clothing-updates
 
 ### Robe
 
@@ -1242,6 +1458,66 @@ Definition: `sheet_definitions/weapons/polearm/weapon_polearm_cane.json`
   - Authors: bluecarrot16
   - Licenses: CC-BY-SA 3.0, GPL 3.0
   - https://opengameart.org/content/lpc-gentleman
+
+### Halberd
+
+Definition: `sheet_definitions/weapons/polearm/weapon_polearm_halberd.json`
+
+- `weapon/polearm/halberd`
+  - Authors: Benjamin K. Smith (BenCreating), bluecarrot16, Sander Frenken (castelonia)
+  - Licenses: CC-BY-SA 3.0, GPL 3.0
+  - https://opengameart.org/content/lpc-medieval-weapons
+
+### Scythe
+
+Definition: `sheet_definitions/weapons/polearm/weapon_polearm_scythe.json`
+
+- `weapon/polearm/scythe`
+  - Authors: bluecarrot16
+  - Licenses: CC-BY-SA 3.0
+  - https://opengameart.org/content/lpc-extended-weapon-animations
+
+### Ammo
+
+Definition: `sheet_definitions/weapons/ranged/bow/weapon_ranged_bow_arrow.json`
+
+- `weapon/ranged/bow/arrow`
+  - Authors: Johannes Sjölund (wulax)
+  - Licenses: OGA-BY 3.0, CC-BY-SA 3.0, GPL 3.0
+  - https://opengameart.org/content/lpc-medieval-fantasy-character-sprites
+
+### Great
+
+Definition: `sheet_definitions/weapons/ranged/bow/weapon_ranged_bow_great.json`
+
+- `weapon/ranged/bow/great`
+  - Notes: modified by daneeklu, from "normal" bow by wulax; walk animations by pvigier; split into layers and tweaked for v3 character bases by bluecarrot16
+  - Authors: Daniel Eddeland (daneeklu), gr3yh47, Johannes Sjölund (wulax), Pierre Vigier (pvigier)
+  - Licenses: CC-BY-SA 3.0
+  - https://opengameart.org/content/lpc-weapons-two-bows-a-spear-and-a-trident
+  - https://opengameart.org/content/lpc-walk-animations-for-bows
+
+### Normal
+
+Definition: `sheet_definitions/weapons/ranged/bow/weapon_ranged_bow_normal.json`
+
+- `weapon/ranged/bow/normal`
+  - Notes: original by wulax, walk animations by pvigier, split into layers and tweaked for v3 character bases by bluecarrot16. pvigier has agreed to license this sheet as OGA-BY 3.0+.
+  - Authors: Johannes Sjölund (wulax), Pierre Vigier (pvigier)
+  - Licenses: OGA-BY 3.0+, GPL 3.0, CC-BY 4.0
+  - https://opengameart.org/content/lpc-medieval-fantasy-character-sprites
+  - https://opengameart.org/content/lpc-walk-animations-for-bows
+
+### Recurve
+
+Definition: `sheet_definitions/weapons/ranged/bow/weapon_ranged_bow_recurve.json`
+
+- `weapon/ranged/bow/recurve`
+  - Notes: modified by daneeklu, from "normal" bow by wulax; walk animations by pvigier; split into layers and tweaked for v3 character bases by bluecarrot16
+  - Authors: Daniel Eddeland (daneeklu), gr3yh47, Johannes Sjölund (wulax), Pierre Vigier (pvigier)
+  - Licenses: CC-BY-SA 3.0
+  - https://opengameart.org/content/lpc-weapons-two-bows-a-spear-and-a-trident
+  - https://opengameart.org/content/lpc-walk-animations-for-bows
 
 ### Crusader shield
 

@@ -274,6 +274,113 @@ export const GEAR = {
       [L('cape_solid', 'white'), L('cape_trim', 'gold')],
     ],
   },
+  // The Barbarian carries no shield: the off-hand is a string of trophies at the neck. The Uncommon and
+  // Legendary axes are the war axe recoloured by brightness, as the Cleric's bronze mace is.
+  barbarian: {
+    body: [
+      [L('torso_clothes_sleeveless', 'brown'), L('legs_pants', 'walnut')],
+      [L('torso_clothes_sleeveless', 'leather'), L('bauldron', 'walnut'), L('legs_pants', 'walnut')],
+      [L('torso_armour_leather', 'walnut'), L('shoulders_legion', 'iron'), L('legs_pants', 'charcoal')],
+      [L('torso_armour_legion', 'steel'), L('shoulders_legion', 'steel'), L('legs_skirts_legion', 'maroon'), L('legs_pants', 'charcoal')],
+      [L('torso_armour_legion', 'gold'), L('shoulders_pauldrons', 'gold'), L('legs_skirts_legion', 'red'), L('legs_pants', 'black')],
+    ],
+    head: [
+      [L('hat_headband_tied', 'maroon')],
+      [L('hat_helmet_barbarian', 'iron', { color2: 'brown' })],
+      [L('hat_helmet_barbarian_nasal', 'steel', { color2: 'brown' })],
+      [L('hat_helmet_barbarian_viking', 'silver', { color2: 'maroon' })],
+      [L('hat_helmet_horned', 'gold')],
+    ],
+    hands: [
+      [L('wrists_cuffs', 'leather')],
+      [L('arms_bracers', 'leather')],
+      [L('arms_bracers', 'iron')],
+      [L('arms_bracers', 'silver')],
+      [L('arms_bracers', 'gold')],
+    ],
+    feet: [
+      [L('feet_sandals', 'leather')],
+      [L('feet_boots_basic', 'walnut')],
+      [L('feet_boots_fold', 'walnut')],
+      [L('feet_boots_rim', 'charcoal'), L('feet_plate_toe', 'steel')],
+      [L('feet_boots_rim', 'black'), L('feet_plate_toe_thick', 'gold')],
+    ],
+    weapon: [
+      [L('weapon_polearm_scythe', 'scythe')],
+      [L('weapon_blunt_waraxe', 'bronze', { force: 'metal', variant: 'waraxe', ramp: true })],
+      [L('weapon_blunt_waraxe', 'waraxe')],
+      [L('weapon_polearm_halberd', 'halberd')],
+      [L('weapon_blunt_waraxe', 'gold', { force: 'metal', variant: 'waraxe', ramp: true })],
+    ],
+    offhand: [
+      [L('neck_necklace_simple', 'iron')],
+      [L('neck_necklace_beaded_small', 'bronze')],
+      [L('neck_necklace_beaded_large', 'bronze')],
+      [L('neck_necklace_chain', 'silver')],
+      [L('neck_necklace_beaded_large', 'gold')],
+    ],
+    cloak: [
+      [L('cape_tattered', 'walnut')],
+      [L('cape_solid', 'walnut')],
+      [L('cape_solid', 'brown')],
+      [L('cape_solid', 'charcoal'), L('cape_trim', 'silver')],
+      [L('cape_solid', 'maroon'), L('cape_trim', 'gold')],
+    ],
+  },
+
+  // The Ranger attacks with the shoot animation: the bow, and an arrow that is drawn only while shooting.
+  // The off-hand is the quiver and what it hangs from.
+  ranger: {
+    body: [
+      [L('torso_clothes_longsleeve', 'forest'), L('legs_pants', 'brown')],
+      [L('torso_clothes_longsleeve', 'forest'), L('torso_armour_leather', 'leather'), L('legs_pants', 'walnut')],
+      [L('torso_clothes_longsleeve', 'tan'), L('torso_armour_leather', 'forest'), L('legs_leggings', 'walnut')],
+      [L('torso_clothes_longsleeve', 'charcoal'), L('torso_armour_leather', 'forest'), L('bauldron', 'walnut'), L('legs_leggings', 'charcoal')],
+      [L('torso_clothes_longsleeve', 'white'), L('torso_armour_leather', 'green', { color2: 'gold' }), L('shoulders_mantal', 'forest'), L('legs_leggings', 'forest')],
+    ],
+    head: [
+      [L('hat_cap_leather', 'forest')],
+      [L('hat_cap_leather', 'forest'), L('hat_cap_leather_feather', 'white')],
+      [L('hat_hood_cloth', 'forest', HIDE_HAIR)],
+      [L('hat_cap_bonnie', 'forest'), L('hat_cap_bonnie_feather', 'white')],
+      [L('hat_hood_cloth', 'green', HIDE_HAIR), L('facial_mask_plain', 'forest')],
+    ],
+    hands: [
+      [L('wrists_cuffs', 'forest')],
+      [L('arms_bracers', 'leather')],
+      [L('arms_gloves', 'brown')],
+      [L('arms_gloves', 'forest')],
+      [L('arms_gloves', 'green'), L('arms_bracers', 'gold')],
+    ],
+    feet: [
+      [L('feet_shoes_basic', 'brown')],
+      [L('feet_boots_basic', 'brown')],
+      [L('feet_boots_fold', 'walnut')],
+      [L('feet_boots_revised', 'forest')],
+      [L('feet_boots_rim', 'forest')],
+    ],
+    weapon: [
+      [L('weapon_ranged_bow_normal', 'light'), L('weapon_ranged_bow_arrow', 'arrow')],
+      [L('weapon_ranged_bow_normal', 'dark'), L('weapon_ranged_bow_arrow', 'arrow')],
+      [L('weapon_ranged_bow_recurve', 'medium'), L('weapon_ranged_bow_arrow', 'arrow')],
+      [L('weapon_ranged_bow_great', 'silver'), L('weapon_ranged_bow_arrow', 'arrow')],
+      [L('weapon_ranged_bow_great', 'gold'), L('weapon_ranged_bow_arrow', 'arrow')],
+    ],
+    offhand: [
+      [L('quiver', 'quiver')],
+      [L('quiver', 'quiver'), L('belt_leather', 'leather')],
+      [L('quiver', 'quiver'), L('belt_loose', 'walnut')],
+      [L('quiver', 'quiver'), L('belt_double', 'charcoal')],
+      [L('quiver', 'quiver'), L('belt_double', 'walnut'), L('backpack_straps', 'forest')],
+    ],
+    cloak: [
+      [L('cape_tattered', 'forest')],
+      [L('cape_solid', 'forest')],
+      [L('cape_solid', 'green')],
+      [L('cape_solid', 'forest'), L('cape_trim', 'silver')],
+      [L('cape_solid', 'green'), L('cape_trim', 'gold')],
+    ],
+  },
 };
 
 // Level 10 milestone: a class emblem, worn as a clip at the neck in the class's cloth and metal.
@@ -281,10 +388,12 @@ export const GEAR = {
 export const EMBLEM_LEVEL = 10;
 // The level 15 wisp (in the class colour) and the level 20 glow are drawn in code by js/sprite.js.
 export const WISP_LEVEL = 15, GLOW_LEVEL = 20;
-export const WISP_COLOR = { fighter: 'rgba(255, 150, 90, 0.85)', wizard: 'rgba(120, 180, 255, 0.85)', rogue: 'rgba(150, 225, 120, 0.85)', cleric: 'rgba(255, 232, 150, 0.85)' };
+export const WISP_COLOR = { fighter: 'rgba(255, 150, 90, 0.85)', wizard: 'rgba(120, 180, 255, 0.85)', rogue: 'rgba(150, 225, 120, 0.85)', cleric: 'rgba(255, 232, 150, 0.85)', barbarian: 'rgba(255, 96, 80, 0.85)', ranger: 'rgba(120, 225, 205, 0.85)' };
 export const EMBLEM = {
   fighter: [L('neck_capeclip', 'red', { color2: 'steel' })],
   wizard: [L('neck_capeclip', 'blue', { color2: 'silver' })],
   rogue: [L('neck_capeclip', 'charcoal', { color2: 'brass' })],
   cleric: [L('neck_capeclip', 'white', { color2: 'gold' })],
+  barbarian: [L('neck_capeclip', 'maroon', { color2: 'iron' })],
+  ranger: [L('neck_capeclip', 'forest', { color2: 'bronze' })],
 };

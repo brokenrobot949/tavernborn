@@ -25,11 +25,15 @@ const OUT = path.join(ROOT, 'assets', 'lpc');
 const load = (rel) => import(pathToFileURL(path.join(ROOT, rel)).href);
 const { RACES, BODY_TYPES, HAIR_STYLES, HAIR_COLORS } = await load('data/races.js');
 const { GEAR, SLOTS, TIERS, BODY_FALLBACK, EMBLEM } = await load('data/items.js');
+const { CLASSES } = await load('data/classes.js');
 const { layerKey } = await load('js/layer-key.js');
 
 // Animations the game uses, and the oversize weapon animations that map onto them.
 // Frame lists are body-frame indices; an oversize sheet has one column per list entry.
+// `shoot` (the bow) is baked only for what a class that attacks with it can wear, and for every body,
+// head, and head of hair; the other classes' gear never needs it.
 const ANIMS = ['walk', 'slash', 'thrust', 'hurt'];
+const SHOOTS = (where) => where.some((w) => { const cls = w.split(' ')[0]; return !CLASSES[cls] || CLASSES[cls].attack === 'shoot'; });
 const CUSTOM = {
   slash_128: { anim: 'slash', size: 128, frames: [0, 1, 2, 3, 4, 5] },
   slash_oversize: { anim: 'slash', size: 192, frames: [0, 1, 2, 3, 4, 5] },
@@ -140,8 +144,9 @@ function slotPalettes(mats, slot, color, issues, forced) {
   return from && to ? { from: from.map(hex), to: to.map(hex) } : null;
 }
 
-function resolve(ref, defs, mats, tree) {
+function resolve(ref, defs, mats, tree, where = []) {
   const issues = [], notes = [];
+  const ANIMS_HERE = SHOOTS(where) ? [...ANIMS, 'shoot'] : ANIMS;
   const def = defs[ref.def];
   if (!def) return { ref, key: layerKey(ref), issues: [`no sheet definition named ${ref.def}`], notes, sublayers: [], credits: [] };
 
@@ -199,7 +204,7 @@ function resolve(ref, defs, mats, tree) {
       if (!p) { missingBody.add(bt); continue; }
       if (!p.endsWith('/')) p += '/';
       sub.files[bt] = {};
-      for (const anim of ANIMS) {
+      for (const anim of ANIMS_HERE) {
         if (custom && CUSTOM[custom].anim !== anim) continue;
         if (ref.mirror && anim !== 'walk') continue; // attack poses are not symmetric, so only walk is mirrored
         const src = custom
@@ -222,8 +227,8 @@ function resolve(ref, defs, mats, tree) {
   }
   for (const bt of missingBody) issues.push(`CHECK 1: no ${bt} files`);
   for (const f of fallbackBody) notes.push(`CHECK 1 swap: ${f}`);
-  const noArt = ANIMS.filter((a) => !animSeen.has(a));
-  if (noArt.length === ANIMS.length) issues.push('no image files found for any animation');
+  const noArt = ANIMS_HERE.filter((a) => !animSeen.has(a));
+  if (noArt.length === ANIMS_HERE.length) issues.push('no image files found for any animation');
   else if (noArt.length) {
     const still = noArt.filter((a) => standIns.has(a)), gone = noArt.filter((a) => !standIns.has(a));
     if (still.length) notes.push(`no ${still.join('/')} art: drawn in its standing walk frame during ${still.join('/')}`);
@@ -239,7 +244,7 @@ function resolve(ref, defs, mats, tree) {
 function resolveAll() {
   const defs = loadDefs(), mats = loadPalettes(), tree = loadTree();
   const out = [];
-  for (const { ref, where } of allRefs().values()) out.push({ ...resolve(ref, defs, mats, tree), where });
+  for (const { ref, where } of allRefs().values()) out.push({ ...resolve(ref, defs, mats, tree, where), where });
   return out;
 }
 
@@ -330,7 +335,7 @@ function mirrorWalk(img) {
 }
 
 // Repeat a walk sheet's standing frame (column 0) along each row, `cols` columns wide.
-const ANIM_COLUMNS = { slash: 6, thrust: 8, hurt: 6 };
+const ANIM_COLUMNS = { slash: 6, thrust: 8, hurt: 6, shoot: 13 };
 function standingSheet(img, cols) {
   const { width, height, data } = img, F = 64, w = cols * F;
   const out = Buffer.alloc(w * height * 4);

@@ -17,10 +17,12 @@ const STEPS = ['Race', 'Class', 'Ability scores', 'Name'];
 // The preview leaves the hat off so the hair being chosen can be seen.
 const START_TIERS = { body: 0, head: null, hands: 0, feet: 0, weapon: 0, offhand: 0, cloak: null };
 const CLASS_NOTES = {
-  fighter: 'Strength. Mail, a sword, and a shield. The most hit points.',
+  fighter: 'Strength. Mail, a sword, and a shield. Plenty of hit points.',
   wizard: 'Intelligence. Robes and a staff. Learns a little faster and bruises easily.',
   rogue: 'Dexterity. Leathers and a dagger. Hard to hit squarely.',
   cleric: 'Wisdom. Vestments and a stout stick. Sturdy and sensible.',
+  barbarian: 'Strength. A borrowed scythe, and an axe as soon as one turns up. The most hit points, and takes every blow a little harder.',
+  ranger: 'Dexterity. A bow and a quiver. Hard to hit, and a good eye for what is lying about.',
 };
 
 // A tavern with legends in its Hall says what they are worth to the newcomer.

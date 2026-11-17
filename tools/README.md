@@ -43,7 +43,7 @@ drawn in that material's palette (the mace is plain greys), and the tool maps ev
 outline onto the target colours by brightness. The Cleric's bronze mace is made this way.
 
 Draw order, body-type paths, recolor palettes, and credits are all read from the generator's
-`sheet_definitions/` and `palette_definitions/`. Nothing is hard-coded here except the four
+`sheet_definitions/` and `palette_definitions/`. Nothing is hard-coded here except the five
 animations the game uses and the oversize weapon animations that map onto them.
 
 ## lineup.html: every look on one page
@@ -72,15 +72,15 @@ round-trips. Then the Phase 3 activities: six story quests earn a Feat, a dungeo
 chapter and opens the next region, travel works and locked regions refuse it, a knockout loses the
 run and nothing else, three knockouts running switch the hero to Roam, the cleric's fee, the Dwarf,
 Half-Orc, and Dragonborn quirks, a version 1 save keeping its level, and one hero clearing all
-eight dungeons. Then Phase 4, growth: the four trees have the right shape (144 skills, twelve
-capstones, no exclamation marks); each of the 144 skills changes what happens to a hero over two
-scripted days compared with a twin who lacks it, and each of the 48 signature moves fires and
+eight dungeons. Then Phase 4, growth: the six trees have the right shape (216 skills, eighteen
+capstones, no exclamation marks); each of the 216 skills changes what happens to a hero over two
+scripted days compared with a twin who lacks it, and each of the 72 signature moves fires and
 writes its own Chronicle line; learning writes each skill's line; a tier opens after two skills in
 the tier above; only the chosen subclass's capstone can be learned; 27 skills at most; ability
 points bank at levels 4, 8, 12, 16, and 19 and stop at a score of 20; respec refunds every point
 for a price that rises with level; a hero with skills is still deterministic; and a Phase 3 save
 loads with every level, skill point, and Feat. Then Phase 5, gear: every class has five different
-baked looks in each of the seven visible slots, and the four emblems are baked; the starting kit is
+baked looks in each of the seven visible slots, and the six emblems are baked; the starting kit is
 worth nothing and a rarer piece always beats a commoner one; 4,000 random pieces go through
 auto-equip and auto-sell without one worse piece being worn or one sale going unpaid; monsters,
 rooms, quests, odd jobs, and bosses each drop as they should, with bosses dropping the best; every

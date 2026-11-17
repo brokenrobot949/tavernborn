@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 // Data files that hold player-facing text. Sprite layers, credits, and items are generated or art.
-const DATA = ['chronicle', 'monsters', 'quests', 'dungeons', 'story', 'regions', 'races', 'classes', 'names', 'loot', 'tavern', 'skills-fighter', 'skills-wizard', 'skills-rogue', 'skills-cleric', 'road', 'market', 'deeds', 'rares', 'sites', 'board'];
+const DATA = ['chronicle', 'monsters', 'quests', 'dungeons', 'story', 'regions', 'races', 'classes', 'names', 'loot', 'tavern', 'skills-fighter', 'skills-wizard', 'skills-rogue', 'skills-cleric', 'skills-barbarian', 'skills-ranger', 'road', 'market', 'deeds', 'rares', 'sites', 'board'];
 // Keys whose values are code, not text.
 const NOT_TEXT = new Set(['id', 'def', 'color', 'type', 'source', 'scope', 'on', 'kind', 'cls', 'slot', 'main', 'priority', 'check_', 'body', 'head', 'hair', 'beard', 'skin', 'skins', 'builds', 'extras', 'region', 'requires', 'attack', 'icon', 'legend', 'tone']);
 // Keys whose text is a task-bar line (shown in one or two lines on a phone).

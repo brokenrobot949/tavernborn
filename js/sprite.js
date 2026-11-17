@@ -16,6 +16,8 @@ export const ANIMS = {
   walk: { frames: [1, 2, 3, 4, 5, 6, 7, 8], fps: 9, rows: 4 },
   slash: { frames: [0, 1, 2, 3, 4, 5], fps: 10, rows: 4, rest: 350 },
   thrust: { frames: [0, 1, 2, 3, 4, 5, 6, 7], fps: 10, rows: 4, rest: 350 },
+  // the bow: baked only for the Ranger's gear (and every body and head of hair), see tools/sprites.mjs
+  shoot: { frames: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], fps: 12, rows: 4, rest: 300 },
   hurt: { frames: [0, 1, 2, 3, 4, 5], fps: 8, rows: 1, rest: 900 },
 };
 export const FACINGS = ['up', 'left', 'down', 'right'];

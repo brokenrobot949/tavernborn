@@ -4,8 +4,8 @@
 // same result, that one big call equals many one-second calls, that a month runs quickly, and
 // that the save string round-trips. It then checks the Phase 3 activities: quests, dungeon runs,
 // travel, what a knockout costs, the cleric's fee, the race quirks, and that a Phase 1 or 2 save
-// still loads without losing a level. Then Phase 4, growth: the shape of the four skill trees,
-// proof that each of the 144 skills changes what happens and writes its Chronicle line, tier
+// still loads without losing a level. Then Phase 4, growth: the shape of the six skill trees,
+// proof that each of the 216 skills changes what happens and writes its Chronicle line, tier
 // gating, the capstone rule, the 27-point cap, ability score increases, respec, and that a
 // Phase 3 save loads with every level, skill point, and Feat. Then Phase 5, gear: five different
 // looks per visible slot, drops from every source, auto-equip and auto-sell, the guaranteed quest
@@ -259,11 +259,11 @@ ok(full.level === MAX_LEVEL, 'and reaches level 20');
 // ---------- Phase 4: growth ----------
 console.log('\nPhase 4 growth:');
 
-// 17. The shape of the trees: four classes, three branches of twelve, one capstone each.
+// 17. The shape of the trees: six classes, three branches of twelve, one capstone each.
 const branches = Object.values(TREES).flatMap((t) => t.branches);
-ok(Object.keys(TREES).length === 4 && branches.length === 12 && branches.every((b) => b.skills.length === 12) && ALL_SKILLS.length === 144, 'four trees, three branches of twelve skills each: 144 skills, every id unique');
+ok(Object.keys(TREES).length === 6 && branches.length === 18 && branches.every((b) => b.skills.length === 12) && ALL_SKILLS.length === 216, 'six trees, three branches of twelve skills each: 216 skills, every id unique');
 ok(Object.values(TREES).every((t) => ['might', 'guard', 'fortune'].every((k) => t.branches.filter((b) => b.kind === k).length === 1)), 'every class has one Might, one Guard, and one Fortune branch');
-ok(ALL_SKILLS.filter((x) => x.capstone).length === 12 && ALL_SKILLS.filter((x) => x.capstone).every((x) => x.tier === 4), 'twelve capstones, each the last skill of its branch');
+ok(ALL_SKILLS.filter((x) => x.capstone).length === 18 && ALL_SKILLS.filter((x) => x.capstone).every((x) => x.tier === 4), 'eighteen capstones, each the last skill of its branch');
 const badShape = ALL_SKILLS.filter((x) => {
   const fx = Object.entries(x.fx ?? {});
   const fxOk = fx.every(([k, v]) => k in FX_KEYS && typeof v === 'number' && v > 0);
@@ -276,7 +276,7 @@ ok(lines.every((l) => !l.includes('!')), 'no skill line has an exclamation mark'
 const moves = ALL_SKILLS.filter((x) => x.sig);
 console.log(`  ${ALL_SKILLS.length - moves.length} passives, ${moves.length} signature moves of ${new Set(moves.map((x) => x.sig.type)).size} kinds`);
 
-// 18. Every skill does something. For each of the 144: one hero has only that skill, a twin has
+// 18. Every skill does something. For each of the 216: one hero has only that skill, a twin has
 // none, and both live the same two days (roaming, quests, a dungeon at their level, a journey, and
 // two dungeons above them, where the knockouts are). The skill must change how those days went,
 // and a signature move must fire and write its own Chronicle line.
@@ -314,7 +314,7 @@ for (const skill of ALL_SKILLS) {
   if (!changed) noEffect.push(skill.id);
   if (!line) noLine.push(skill.id);
 }
-ok(noEffect.length === 0, `each of the 144 skills changes what happens to the hero${noEffect.length ? ' (no effect: ' + noEffect.join(', ') + ')' : ''}`);
+ok(noEffect.length === 0, `each of the 216 skills changes what happens to the hero${noEffect.length ? ' (no effect: ' + noEffect.join(', ') + ')' : ''}`);
 ok(noLine.length === 0, `each of the ${moves.length} signature moves fires and writes its own Chronicle line (${firedTotal} firings seen)${noLine.length ? ' (never fired: ' + noLine.join(', ') + ')' : ''}`);
 
 // A hero with points to spend, for the rules of the tree.
@@ -324,7 +324,7 @@ function student(cls, level, points) {
   h.skillPoints = points;
   return h;
 }
-// Learning writes the skill's own line, for all 144.
+// Learning writes the skill's own line, for all 216.
 let learnedLines = 0;
 for (const skill of ALL_SKILLS) {
   const h = student(skill.cls, 10, 40);
@@ -336,7 +336,7 @@ for (const skill of ALL_SKILLS) {
   const before = h.skillPoints;
   if (learnSkill(h, skill.id) && h.skillPoints === before - 1 && h.chronicle.at(-1).text === skill.learn.replace('{name}', h.name) && h.chronicle.at(-1).k === 'learned') learnedLines += 1;
 }
-ok(learnedLines === 144, `learning a skill costs one point and writes that skill's Chronicle line (${learnedLines} of 144)`);
+ok(learnedLines === 216, `learning a skill costs one point and writes that skill's Chronicle line (${learnedLines} of 216)`);
 
 // 19. Tiers: a tier opens after two points in the tier above it.
 const g = student('fighter', 10, 10);
@@ -446,8 +446,8 @@ for (const [cls, slots] of Object.entries(GEAR)) {
   }
   for (const ref of EMBLEM[cls]) if (!LAYERS[layerKey(ref)]) unbaked.push(layerKey(ref));
 }
-ok(sameLook.length === 0, `each rarity is a different look in every visible slot of every class (4 classes x 7 slots x 5 tiers)${sameLook.length ? ' (same: ' + sameLook.join(', ') + ')' : ''}`);
-ok(unbaked.length === 0, `every gear layer and all four level 10 emblems are baked${unbaked.length ? ' (missing: ' + unbaked.join(', ') + ')' : ''}`);
+ok(sameLook.length === 0, `each rarity is a different look in every visible slot of every class (6 classes x 7 slots x 5 tiers)${sameLook.length ? ' (same: ' + sameLook.join(', ') + ')' : ''}`);
+ok(unbaked.length === 0, `every gear layer and all six level 10 emblems are baked${unbaked.length ? ' (missing: ' + unbaked.join(', ') + ')' : ''}`);
 ok(GEAR_SLOTS.length === 8 && TIERS.map((t) => t.name).join() === 'Common,Uncommon,Rare,Very Rare,Legendary', 'eight slots and the five 5e rarities');
 ok(Object.keys(CLASSES).every((cls) => SLOTS.filter((x) => x.id !== 'cloak').every((x) => NOUNS[cls][x.id].length === 5)), 'every class has a name for every look');
 
