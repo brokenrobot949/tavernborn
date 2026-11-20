@@ -98,7 +98,7 @@ export const GROWTH_FIELDS = () => ({ abilityPoints: 0, raised: {}, cooldowns: {
 // Ability points a hero of this level has been granted in all.
 export const abilityPointsBy = (level) => ABILITY_POINTS * ABILITY_LEVELS.filter((l) => l <= level).length;
 
-export const STATS = { knockouts: 0, mostEmbarrassingDefeat: null, natural20s: 0, natural1s: 0, tasks: 0, quests: 0, oddJobs: 0, dungeonRuns: 0, dungeonClears: 0, itemsFound: 0, upgrades: 0, soldFor: 0, riftRuns: 0, riftFloors: 0, riftBest: 0, choices: 0, choicesAlone: 0, bought: 0, festivals: 0, rares: 0, authorities: 0, siteRuns: 0, siteClears: 0, bounties: 0, errands: 0, regulars: 0 };
+export const STATS = { knockouts: 0, mostEmbarrassingDefeat: null, natural20s: 0, natural1s: 0, tasks: 0, quests: 0, oddJobs: 0, dungeonRuns: 0, dungeonClears: 0, itemsFound: 0, upgrades: 0, soldFor: 0, riftRuns: 0, riftFloors: 0, riftBest: 0, choices: 0, choicesAlone: 0, bought: 0, festivals: 0, rares: 0, authorities: 0, siteRuns: 0, siteClears: 0, bounties: 0, errands: 0, regulars: 0, forged: 0, enchanted: 0, mentorWords: 0 };
 // What Phase 6 keeps on a hero.
 //   rift           the Planar Rifts run in progress: { floor }, or null
 //   paragon        Paragon ranks already announced in the Chronicle (titles only)
@@ -123,6 +123,27 @@ export const ROAD_FIELDS = () => ({ choice: null, nextChoiceAt: null, lastChoice
 //   errands     happenings' errands already done, as 'id-day'
 //   seen        the happening last written into the Chronicle, as 'id-day'
 export const EXPLORE_FIELDS = () => ({ site: null, siteClears: {}, bounty: null, bountyDay: null, errands: [], seen: null });
+
+// What the smith, mentors, the Rifts' rules, Paragon keepsakes, and the Stats tab's charts keep (after round five).
+//   career        for the charts: `days` (per day of the hero's age, [XP, gold held, knockouts, level] as the day's
+//                 last task left them), `levelAt` (the hero's age at each level), `ko` (knockouts by region id, or 'rift')
+//   enchants      the smith's enchantments, by slot: { weapon: 'keen', ... } (js/smith.js)
+//   mentor        the id of the legend in the Hall who has this hero in hand, or null; `mentorDay` the hero's day of
+//                 the last word from them, `mentorRescue` the hero's day of the last knockout they shortened
+//   riftBests     the deepest floor of the Planar Rifts under each of the Rifts' rules
+//   wisp          the colour chosen for the level 15 wisp (an id from WISP_CHOICES), or null for the class's own
+export const LATE_FIELDS = () => ({ career: { days: [], levelAt: { 1: 0 }, ko: {} }, enchants: {}, mentor: null, mentorDay: null, mentorRescue: null, riftBests: {}, wisp: null });
+
+// The career, for the Stats tab's charts. `noteCareer` is called by `advance` after every task, so each day
+// keeps how it ended; `noteLevel` when a level is reached.
+export function noteCareer(hero) {
+  const c = (hero.career ??= LATE_FIELDS().career);
+  c.days[Math.floor(hero.age / 86400)] = [Math.round(hero.xp), Math.round(hero.gold), hero.stats.knockouts, hero.level];
+}
+export function noteLevel(hero, level) {
+  const c = (hero.career ??= LATE_FIELDS().career);
+  c.levelAt[level] ??= hero.age;
+}
 
 // A region is open once the dungeon of the region before it has been cleared. The first always is.
 export function regionOpen(hero, regionId) {
@@ -157,6 +178,7 @@ export function createHero(state, { name, race, cls, appearance, baseScores }) {
     ...LEGACY_FIELDS(),
     ...ROAD_FIELDS(),
     ...EXPLORE_FIELDS(),
+    ...LATE_FIELDS(),
     bestiary: {},
     feats: [],
     stats: { ...STATS },

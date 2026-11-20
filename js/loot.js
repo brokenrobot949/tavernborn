@@ -20,7 +20,7 @@ import {
   GEAR_SLOTS, NOUNS, TRINKETS, STARTING_NAMES, STARTING_CLOAK, ADVERBS, ADJECTIVES, DEGREES, QUALITIES, WHICH, WHAT, LEGENDARIES,
 } from '../data/loot.js';
 import { DUNGEONS } from '../data/dungeons.js';
-import { GEAR_STATS, GEAR_MAX_POWER, LOOT, sellPrice, mod, pick, random, gearPower } from './rules.js';
+import { GEAR_STATS, GEAR_MAX_POWER, LOOT, ENCHANTS, sellPrice, mod, pick, random, gearPower } from './rules.js';
 
 export const SLOT_IDS = GEAR_SLOTS.map((s) => s.id);
 export const SLOT_BY_ID = Object.fromEntries(GEAR_SLOTS.map((s) => [s.id, s]));
@@ -41,7 +41,7 @@ export const slotOpen = (hero, slot) => slot !== 'cloak' || hero.level >= LOOT.c
 // ---------- what a piece does ----------
 
 const amount = (rule, item) => {
-  if (rule.perLevel != null) return Math.max(0, item.level - 1) * rule.perLevel;
+  if (rule.perLevel != null) return Math.max(0, item.level - 1 + (item.forge ?? 0)) * rule.perLevel; // the smith's work counts as levels
   const v = (gearPower(item) / GEAR_MAX_POWER) * rule.at20;
   return rule.whole ? Math.round(v) : v;
 };
@@ -63,6 +63,7 @@ const pct = (v) => {
 };
 const WORDS = {
   roll: (v) => `+${v} to every roll`,
+  crit: (v) => `criticals on a ${20 - v} or better`,
   critReward: (v) => `criticals pay ${pct(v / 1.5)} more`,
   dodge: (v) => `+${pct(v)} chance to halve a hit`,
   hp: (v) => `+${pct(v)} hit points`,
@@ -81,16 +82,20 @@ export function describe(slot, item) {
 export const rarityName = (item) => TIERS[item.tier].name;
 export const flavorOf = (item) => (item?.legend ? LEGENDARIES[item.legend]?.flavor ?? null : null);
 
-// Everything the hero is wearing, added up. Cached until a slot's piece changes.
+// Everything the hero is wearing, added up, with the smith's enchantments (js/smith.js), which belong to
+// the slots. Cached until a slot's piece or the enchantments change (both are replaced, never edited).
 const cache = new WeakMap();
 export function gearMods(hero) {
   const hit = cache.get(hero);
-  if (hit && SLOT_IDS.every((id, i) => hit.items[i] === hero.gear[id])) return hit.mods;
+  if (hit && hit.enchants === hero.enchants && SLOT_IDS.every((id, i) => hit.items[i] === hero.gear[id])) return hit.mods;
   const mods = {};
   for (const id of SLOT_IDS) {
     for (const [k, v] of Object.entries(itemStats(id, hero.gear[id]))) mods[k] = (mods[k] ?? 0) + v;
   }
-  cache.set(hero, { items: SLOT_IDS.map((id) => hero.gear[id]), mods });
+  for (const e of Object.values(hero.enchants ?? {})) {
+    for (const [k, v] of Object.entries(ENCHANTS[e] ?? {})) mods[k] = (mods[k] ?? 0) + v;
+  }
+  cache.set(hero, { items: SLOT_IDS.map((id) => hero.gear[id]), enchants: hero.enchants, mods });
   return mods;
 }
 // The same totals in words, for the Gear tab.

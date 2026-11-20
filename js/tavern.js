@@ -11,11 +11,13 @@
 // `switchHero`, `retire`, and `dismissHero`. Each returns null or false when it cannot be done.
 // The simulator calls the same ones.
 
-import { UPGRADES, UPGRADE_BY_ID, TROPHIES, PARAGON_TITLES, RETIRED, LEGEND_LINES, LEGEND_UNBEATEN, RENAMED, SIGN } from '../data/tavern.js';
+import { UPGRADES, UPGRADE_BY_ID, TROPHIES, PARAGON_TITLES, RETIRED, LEGEND_LINES, LEGEND_UNBEATEN, RENAMED, SIGN, MENTOR_TEXT, PARAGON_KEEPSAKES, WISP_CHOICES } from '../data/tavern.js';
+import { BOON_TEXT } from '../data/market.js';
+import { giveBoon } from './boons.js';
 import { SLOTS, EMBLEM_LEVEL, WISP_LEVEL, GLOW_LEVEL, WISP_COLOR } from '../data/items.js';
 import { MONSTER_BY_ID } from '../data/monsters.js';
 import { BOSS_BY_ID } from '../data/dungeons.js';
-import { TAVERN, REST, MAX_HEROES, MAX_LEVEL, legacyFor, paragonRankFor, paragonXpFor, xpForLevel, pick } from './rules.js';
+import { TAVERN, REST, MAX_HEROES, MAX_LEVEL, MENTOR, legacyFor, paragonRankFor, paragonXpFor, xpForLevel, pick } from './rules.js';
 import { chronicle } from './hero.js';
 import { SLOT_IDS, better } from './loot.js';
 import { LEGENDARIES } from '../data/loot.js';
@@ -169,11 +171,28 @@ export function dismissHero(state, id) {
 // it, and a retired hero's portrait keeps a copy, so the portrait redraws exactly.
 export function portraitOf(hero) {
   const tiers = Object.fromEntries(SLOTS.map((s) => [s.id, hero.gear[s.id]?.tier ?? null]));
-  const fx = hero.level >= WISP_LEVEL ? { wisp: WISP_COLOR[hero.class], glow: hero.level >= GLOW_LEVEL } : null;
+  const fx = hero.level >= WISP_LEVEL ? { wisp: wispColor(hero), glow: hero.level >= GLOW_LEVEL } : null;
   return { race: hero.race, cls: hero.class, ...hero.appearance, tiers, emblem: hero.level >= EMBLEM_LEVEL, fx };
 }
 
 // ---------- Paragon ranks ----------
+
+// The highest Paragon rank any hero of the tavern has reached: on the roster or in the Hall.
+export const tavernParagon = (state) => Math.max(0, ...state.heroes.map((h) => h.paragon ?? 0), ...state.tavern.legends.map((l) => l.paragon ?? 0));
+// Keepsakes (data/tavern.js) unlocked by going from one best rank to another, and whether one is unlocked now.
+export const keepsakesBetween = (from, to) => PARAGON_KEEPSAKES.filter((k) => k.rank > from && k.rank <= to);
+export const unlockedAt = (state, rank) => tavernParagon(state) >= rank;
+// A sign choice (a board, letters, an emblem, or a motto) that waits on a Paragon rank, and whether it is open.
+export const signOpen = (state, choice, motto = null) => unlockedAt(state, motto != null ? SIGN.mottoParagon?.[motto] ?? 0 : choice?.paragon ?? 0);
+
+// The wisp's colour: the class's own, or the one chosen once that keepsake is open (rank 3).
+export const WISP_RANK = 3;
+export const wispColor = (hero) => WISP_CHOICES.find((w) => w.id === hero.wisp && w.color)?.color ?? WISP_COLOR[hero.class];
+export function chooseWisp(state, hero, id) {
+  if (!unlockedAt(state, WISP_RANK) || !WISP_CHOICES.some((w) => w.id === id)) return false;
+  hero.wisp = id === 'class' ? null : id;
+  return true;
+}
 
 // XP earned past level 20, and the Paragon rank it is worth. Titles only.
 export const paragonXp = (hero) => (hero.level >= MAX_LEVEL ? Math.max(0, hero.xp - xpForLevel(MAX_LEVEL)) : 0);
@@ -255,4 +274,53 @@ export function retire(state, id) {
   state.heroes.splice(i, 1);
   if (state.activeHeroId === id) state.activeHeroId = state.heroes[0]?.id ?? null;
   return legend;
+}
+
+// ---------- mentors ----------
+
+// A legend in the Hall may take one hero on the roster in hand (`hero.mentor`, the legend's id). Once in each of
+// the hero's own days (24 hours adventuring) word comes from the mentor with a boon of their class's kind
+// (MENTOR_TEXT), and the first knockout of each such day is over in half the time (`mentorRescue`, read by
+// knockOut in tasks.js). A legend mentors one hero at a time.
+export const legendById = (state, id) => state.tavern.legends.find((l) => l.id === id) ?? null;
+export const mentorOf = (state, hero) => (hero?.mentor ? legendById(state, hero.mentor) : null);
+export const menteeOf = (state, legendId) => state.heroes.find((h) => h.mentor === legendId) ?? null;
+const heroDay = (hero) => Math.floor(hero.age / 86400);
+
+// Put a hero in a legend's hands, or (legendId null) part ways. Returns true if anything changed.
+export function chooseMentor(state, hero, legendId) {
+  const l = legendId == null ? null : legendById(state, legendId);
+  if (!hero || (legendId != null && !l)) return false;
+  const other = l ? menteeOf(state, l.id) : null;
+  if (other && other !== hero) return false;
+  const old = mentorOf(state, hero);
+  if ((old?.id ?? null) === (l?.id ?? null)) return false;
+  if (old) chronicle(hero, 'mentor', fill(MENTOR_TEXT.parted, { mentor: old.name, name: hero.name }));
+  hero.mentor = l ? l.id : null;
+  if (l) chronicle(hero, 'mentor', fill(MENTOR_TEXT.chosen, { mentor: l.name, name: hero.name }));
+  return true;
+}
+
+// The day's word from the mentor, after a task (called by `advance`). Not while the hero is on the good bench.
+export function mentorWord(state, hero, events) {
+  const l = mentorOf(state, hero);
+  if (!l || hero.knockedOutUntil != null) return;
+  const day = heroDay(hero);
+  if (hero.mentorDay === day) return;
+  hero.mentorDay = day;
+  const m = MENTOR_TEXT[l.class] ?? MENTOR_TEXT.fighter;
+  giveBoon(hero, m.boon, MENTOR.hours);
+  hero.stats.mentorWords = (hero.stats.mentorWords ?? 0) + 1;
+  const text = fill(pick(state, m.lines), { mentor: l.name, name: hero.name });
+  events.push({ type: 'mentor', at: hero.age, text, mentor: l.id, boon: m.boon });
+  const b = BOON_TEXT[m.boon];
+  chronicle(hero, 'mentor', text, { roll: `${b.title}: ${b.does}, for ${MENTOR.hours} hours` });
+}
+
+// The first knockout of the hero's day, with a mentor: returns the mentor (and marks the day), or null.
+export function mentorRescue(state, hero) {
+  const l = mentorOf(state, hero);
+  if (!l || hero.mentorRescue === heroDay(hero)) return null;
+  hero.mentorRescue = heroDay(hero);
+  return l;
 }

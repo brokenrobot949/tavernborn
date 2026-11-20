@@ -108,6 +108,7 @@ const LINE_LOOK = {
   tavern: ['tavern', 'mug'], rift: ['rift', 'vortex'],
   story: ['story', 'book'], confidence: ['story', 'eye'], bestiary: ['story', 'eye'],
   choice: ['road', 'signpost'], deed: ['grow', 'medal'], festival: ['tavern', 'lantern'],
+  mentor: ['tavern', 'people'], smith: ['tavern', 'hammer'],
   rare: ['crit', 'eye'], mastery: ['skill', 'book'], sitecleared: ['dungeon', 'flag'], bounty: ['quest', 'board'], regular: ['quest', 'heart'], happening: ['road', 'star'],
 };
 const lookOf = (line) => LINE_LOOK[line.k] ?? ['plain', 'd20'];

@@ -4,6 +4,7 @@
 //   roam   the same road, but the hero only roams between dungeon attempts
 //   vale   the hero never leaves Mugwick Vale
 //   unspent  the standard road, played by someone who never spends a skill or ability point
+//   smith  the standard road, with the player also buying enchantments and reforgings (js/smith.js)
 // After the standard run it also plays a second hero for the first 100: each starts in the tavern
 // the first one left (the upgrades they bought) with one legend in the Hall, so +2% XP.
 // Exits with an error if, on the standard run, the median hero does not reach level 20 in 28 to
@@ -12,9 +13,9 @@
 import { prepareWorld, heroPlan, runHero, summarize, formatTime, subclassLabel, tavernAfter, TIER_NAMES, DAY, MAX_LEVEL } from './simulate-core.js';
 
 const heroes = Number(process.argv[2]) || 500;
-const mode = ['roam', 'vale', 'unspent'].includes(process.argv[3]) ? process.argv[3] : 'road';
+const mode = ['roam', 'vale', 'unspent', 'smith'].includes(process.argv[3]) ? process.argv[3] : 'road';
 const damageTimes = Number(process.argv[4]) || 1;
-const options = { world: mode === 'vale' ? 'vale' : 'road', style: mode === 'roam' ? 'roam' : 'balanced', growth: mode !== 'unspent' };
+const options = { world: mode === 'vale' ? 'vale' : 'road', style: mode === 'roam' ? 'roam' : 'balanced', growth: mode !== 'unspent', smith: mode === 'smith' };
 
 prepareWorld({ damageTimes });
 const t0 = performance.now();
@@ -24,7 +25,7 @@ const s = summarize(results);
 const secs = ((performance.now() - t0) / 1000).toFixed(1);
 const road = options.world === 'road';
 
-const what = { road: 'quests, dungeons, and travel up the road', roam: 'roaming, dungeons, and travel up the road', vale: 'staying in Mugwick Vale', unspent: 'the standard road with every skill and ability point left unspent' }[mode];
+const what = { road: 'quests, dungeons, and travel up the road', roam: 'roaming, dungeons, and travel up the road', vale: 'staying in Mugwick Vale', unspent: 'the standard road with every skill and ability point left unspent', smith: 'the standard road, with the player also paying the smith' }[mode];
 console.log(`${heroes} heroes, ${what}, monster damage x${damageTimes} (${secs} s). Real monsters in every region; no stand-ins.`);
 console.log('\nlevel  target      10th        median      90th        median vs target');
 for (const l of s.levels) {
@@ -52,7 +53,7 @@ console.log(`          ${s.rares.toFixed(1)} rare monsters beaten, ${s.siteClear
 console.log(`          ${s.skills.toFixed(1)} skills learned, ${Math.round(s.moves)} signature moves fired, ${Math.round(s.gold)} gp in the purse at the end.`);
 if (options.shop !== false) {
   console.log(`
-Tavern upgrades bought (average rank at level 10, 15, 20): ${s.tavernRanks.map((u) => `${u.id} ${u.at.map((v) => v.toFixed(1)).join(' / ')}`).join(', ')}. ${Math.round(s.tavernSpent)} gp spent on them per hero.`);
+Tavern upgrades bought (average rank at level 10, 15, 20): ${s.tavernRanks.map((u) => `${u.id} ${u.at.map((v) => v.toFixed(1)).join(' / ')}`).join(', ')}. ${Math.round(s.tavernSpent)} gp spent on them per hero.${mode === 'smith' ? ` ${Math.round(results.reduce((a, r) => a + r.smithSpent, 0) / heroes)} gp at the smith.` : ''}`);
 }
 
 // A second hero in the same tavern: the first hero's upgrades and one legend's +2% XP.

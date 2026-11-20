@@ -189,7 +189,8 @@ export const respecPrice = (level) => 25 * level * (level + 3);
 // less than it was. `keys` are the same numbers skills change (FX_KEYS in js/skills.js). The weapon
 // has two lines: power sets its bonus to rolls (a whole number), level what a critical pays.
 export const GEAR_LEVEL_STEP = 1 / 7;
-export const gearPower = (item) => (item ? item.tier + Math.max(0, item.level - 1) * GEAR_LEVEL_STEP : -1);
+// A piece the smith has reforged (`forge`, 0 to 3) counts each time as one level more.
+export const gearPower = (item) => (item ? item.tier + (Math.max(0, item.level - 1) + (item.forge ?? 0)) * GEAR_LEVEL_STEP : -1);
 export const GEAR_MAX_POWER = 4 + 19 * GEAR_LEVEL_STEP;
 export const GEAR_STATS = {
   weapon: { keys: ['roll'], at20: 4, whole: true, also: { keys: ['critReward'], perLevel: 0.02 } },
@@ -323,3 +324,29 @@ export const SITE = { xpPerSecond: 0.52, bossXp: 150, bossSeconds: [180, 240] };
 export const HAPPENING = { gold: 0.25, rare: 3, loot: 2, jobsGold: 0.5, jobsQuality: 0.3, errandGold: 1 };
 // Regulars: every `every`th odd job in a region is for its regular client, while their story lasts.
 export const REGULAR_EVERY = 4;
+
+// ----- after round five: the smith, mentors, the Rifts' rules, and Paragon keepsakes -----
+// The smith at the tavern, paid from the hero's purse in gold units (goldUnit above).
+//   Reforging a piece makes it count as one level more (`gearPower`), three times at most; the n-th time
+//   costs 2n gold units of the piece's own level. The work goes with the piece: when something better
+//   comes along and the piece is sold, so is the work.
+//   An enchantment belongs to a slot, not a piece, so it stays when the piece in that slot changes. Each
+//   of the eight may be on one slot at a time; putting it on another slot moves it. Each costs
+//   `enchantUnits` gold units of the hero's level, and the numbers are the same ones skills and gear change.
+export const SMITH = { forgeMax: 3, forgeUnits: 2, enchantUnits: 8 };
+export const ENCHANTS = {
+  keen: { crit: 1 },
+  sure: { roll: 1 },
+  warding: { dr: 0.05 },
+  vigour: { hp: 0.05 },
+  thrift: { gold: 0.1 },
+  learning: { xp: 0.03 },
+  wayfaring: { travel: 0.15, recovery: 0.15 },
+  mending: { rest: 0.15, potion: 0.15 },
+};
+export const forgePrice = (item) => (item && (item.forge ?? 0) < SMITH.forgeMax ? goldUnit(item.level) * SMITH.forgeUnits * ((item.forge ?? 0) + 1) : null);
+export const enchantPrice = (level) => goldUnit(level) * SMITH.enchantUnits;
+// Mentors: a legend in the Hall may take one hero on the roster in hand. Once in each of that hero's own
+// days (24 hours adventuring) the mentor sends word, with a boon of their class's kind for `hours`; and the
+// first knockout of each such day is over in `rescue` of the usual time.
+export const MENTOR = { hours: 4, rescue: 0.5 };

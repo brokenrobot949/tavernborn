@@ -743,3 +743,55 @@
 .beast-region .beast.rare.unknown .beast-icon { background: var(--parchment-deep); color: var(--ink-soft); box-shadow: 0 0 0 2px #b9b2a2; }
 .beast-region .beast.keeper .beast-icon { background: #8a6a3a; color: #fff; }
 .beast-region .beast.keeper.unknown .beast-icon { background: var(--parchment-deep); color: var(--ink-soft); }
+
+/* ----- After round five: the quest log (Quests tab) ----- */
+.view-subtitle { margin: 14px 0 6px; font-size: 1rem; }
+.quest-log h3 { display: flex; align-items: center; gap: 6px; }
+.quest-log .log { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.log-entry { --region: #8a6a3a; display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: start; width: 100%; min-height: var(--tap);
+  padding: 8px 10px; border-radius: 6px; background: #fff; border: 1px solid var(--line); box-shadow: inset 4px 0 0 var(--region);
+  font: inherit; color: inherit; text-align: left; }
+button.log-entry { cursor: pointer; }
+button.log-entry:active { background: #f6efdc; }
+.log-entry.done { opacity: 0.65; }
+.log-icon { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--region); color: #fff; }
+.log-icon .icon { width: 18px; height: 18px; }
+.log-body { display: grid; gap: 2px; min-width: 0; }
+.log-kind { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); }
+.log-title { font: 700 0.98rem var(--display); }
+.log-body .hint { margin: 0; }
+.log-body .bar.thin { margin-top: 4px; }
+
+/* ----- After round five: the career charts (Stats tab) ----- */
+.career-intro { margin: 0 2px 8px; }
+.career-card h3 { margin-bottom: 4px; }
+.career-chart { display: block; width: 100%; height: auto; margin-top: 4px; overflow: visible; }
+.career-chart .grid { stroke: #e6dcc6; stroke-width: 1; }
+.career-chart .axis { stroke: #b9a988; stroke-width: 1; }
+.career-chart .tick { font: 10px var(--body); fill: var(--ink-soft); }
+.career-chart .tick.name { font-weight: 600; fill: var(--ink); }
+.career-chart .tick.count { fill: var(--ink); }
+.career-chart .line { fill: none; stroke: #8a2f24; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.career-chart .target { fill: none; stroke: #9b8f78; stroke-width: 1.5; stroke-dasharray: 4 3; }
+.career-chart .dot { fill: #8a2f24; stroke: var(--panel); stroke-width: 1.5; }
+.career-chart .bar { fill: #8a2f24; }
+.career-chart .bar.today { fill: #c27a6c; }
+.career-chart .hit { fill: transparent; cursor: pointer; }
+.career-chart .hit:hover { fill: rgba(138, 47, 36, 0.06); }
+.chart-readout { margin-top: 6px; font-size: 0.85rem; color: var(--ink); min-height: 2.6em; }
+.chart-legend { list-style: none; margin: 0; padding: 0; display: flex; gap: 14px; font-size: 0.8rem; color: var(--ink-soft); }
+.chart-legend li { display: flex; align-items: center; gap: 5px; }
+.chart-legend .key { width: 22px; height: 8px; }
+.chart-legend .key line { stroke-width: 2; }
+.chart-legend .key.line line { stroke: #8a2f24; }
+.chart-legend .key.target line { stroke: #9b8f78; stroke-dasharray: 4 3; stroke-width: 1.5; }
+.level-list li span:last-child { color: var(--ink-soft); font-size: 0.85rem; }
+/* The smith's enchantment on a slot card, and the wisp's colours. */
+.slot-ench { display: flex; gap: 5px; align-items: center; font-size: 0.82rem; color: #5a3e8a; margin-top: 4px; }
+.wisp-pick .row { flex-wrap: wrap; }
+/* The smith's slot cards, and a legend's mentoring row in the Hall. */
+.smith-grid { grid-template-columns: 1fr; }
+.smith-card .pick { width: 100%; min-height: var(--tap); margin-top: 6px; }
+.smith-card .row .btn { min-height: var(--tap); }
+.mentor-row { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.mentor-row .hint { margin: 0 0 4px; }

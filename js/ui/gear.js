@@ -1,5 +1,6 @@
-// Gear tab: the eight slots (what is worn, its rarity, and what it does), ability scores,
-// lifetime stats, deeds and titles, and the Bestiary, each behind its own section tab. There is nothing to manage
+// Stats tab (it was the Gear tab): the eight slots (what is worn, its rarity, and what it does), the career
+// charts (js/ui/career.js), ability scores, lifetime stats, deeds and titles, and the Bestiary, each behind
+// its own section tab. There is nothing to manage
 // here: gear equips and sells itself. A named Legendary's card is full width, with its story line.
 //
 // Each section is rebuilt only when something it shows changes, so a tap is never lost to the
@@ -21,11 +22,16 @@ import { LOOT, MASTERY, masteryRank } from '../rules.js';
 import { RARES, RARE_LIST, MASTERY_TEXT } from '../../data/rares.js';
 import { SITES, SITE_LIST } from '../../data/sites.js';
 import { drawStill } from '../sprite.js';
-import { el, num, signed, duration, sectionTabs } from './dom.js';
+import { el, num, signed, duration, sectionTabs, pressBtn } from './dom.js';
 import { icon } from './icons.js';
 import { heroSpriteLook } from './hero.js';
 import { DEEDS, DEED_TEXT } from '../../data/deeds.js';
 import { wearTitle } from '../deeds.js';
+import { careerPage, careerKey } from './career.js';
+import { ENCHANT_TEXT, WISP_CHOICES } from '../../data/tavern.js';
+import { enchantOn } from '../smith.js';
+import { unlockedAt, chooseWisp, WISP_RANK, wispColor } from '../tavern.js';
+import { WISP_LEVEL } from '../../data/items.js';
 
 // 'travel 21% quicker' -> 'Travel 21% quicker.'
 const sentence = (text) => text[0].toUpperCase() + text.slice(1) + (text.endsWith('.') ? '' : '.');
@@ -37,14 +43,16 @@ export function mountGear(root, app) {
   const abilityPage = el('div', {});
   const lifePage = el('div', {});
   const beastPage = el('div', {});
+  const careerBox = el('div', {});
   const tabs = sectionTabs('gear', [
     { id: 'gear', label: 'Gear', icon: icon('weapon'), node: gearPage },
+    { id: 'career', label: 'Career', icon: icon('up'), node: careerBox },
     { id: 'abilities', label: 'Abilities', icon: icon('d20'), node: abilityPage },
     { id: 'lifetime', label: 'Lifetime', icon: icon('book'), node: lifePage },
     { id: 'deeds', label: 'Deeds', icon: icon('medal'), node: deedPage },
     { id: 'bestiary', label: 'Bestiary', icon: icon('eye'), node: beastPage },
   ]);
-  root.append(el('h2', { className: 'view-title', textContent: 'Gear and records' }), tabs.nav, gearPage, abilityPage, lifePage, deedPage, beastPage);
+  root.append(el('h2', { className: 'view-title', textContent: 'Stats' }), tabs.nav, gearPage, careerBox, abilityPage, lifePage, deedPage, beastPage);
 
   const keys = {};
   const changed = (name, value) => { const k = JSON.stringify(value); if (keys[name] === k) return false; keys[name] = k; return true; };
@@ -52,11 +60,12 @@ export function mountGear(root, app) {
   // ----- gear -----
   const portrait = el('canvas', { className: 'paperdoll', attrs: { 'aria-label': 'Your hero in their gear' } });
   let lookKey = '';
-  function drawGear(hero) {
+  function drawGear(state, hero) {
     const look = heroSpriteLook(hero);
     const lk = JSON.stringify(look);
     if (lk !== lookKey) { lookKey = lk; drawStill(portrait, look, { facing: 'down', scale: 2 }); }
-    if (!changed('gear', [hero.id, hero.gear, hero.level])) return;
+    const wispOpen = unlockedAt(state, WISP_RANK) && hero.level >= WISP_LEVEL;
+    if (!changed('gear', [hero.id, hero.gear, hero.level, hero.enchants, wispOpen, hero.wisp])) return;
     const slots = GEAR_SLOTS.map((slot) => {
       const item = hero.gear[slot.id];
       if (!item) {
@@ -68,11 +77,13 @@ export function mountGear(root, app) {
       }
       const tier = TIERS[item.tier];
       const flavor = flavorOf(item);
+      const ench = enchantOn(hero, slot.id);
       const card = el('li', { className: `slot-card t${item.tier}${item.legend ? ' named' : ''}` },
         el('div', { className: 'slot-head' }, el('span', { className: 'slot-icon' }, icon(slot.id)), el('span', { className: 'slot-name', textContent: slot.name })),
         el('p', { className: 'slot-item', textContent: item.name }),
-        el('span', { className: 'rarity-chip', textContent: `${tier.name} · Level ${item.level}` }),
+        el('span', { className: 'rarity-chip', textContent: `${tier.name} · Level ${item.level}${item.forge ? ` · Reforged ${['', 'once', 'twice', 'three times'][item.forge]}` : ''}` }),
         el('p', { className: 'slot-does', textContent: sentence(describe(slot.id, item)) }),
+        ench ? el('p', { className: 'slot-ench' }, icon('spark'), el('span', { textContent: `${ENCHANT_TEXT[ench].name}: ${ENCHANT_TEXT[ench].does}.` })) : null,
         flavor ? el('p', { className: 'slot-flavor', textContent: flavor }) : null);
       card.style.setProperty('--tier', tier.color);
       return card;
@@ -88,12 +99,25 @@ export function mountGear(root, app) {
           : el('p', { className: 'hint', textContent: 'Nothing yet. The starting kit is worth what was paid for it.' })));
     doll.style.setProperty('--tier', TIERS[Math.max(0, best)].color);
     const key = el('div', { className: 'rarity-key' }, ...TIERS.map((t) => { const s = el('span', { textContent: t.name }); s.style.setProperty('--tier', t.color); return s; }));
+    // The wisp's colour, once a hero of the tavern has reached Paragon 3 (a keepsake) and this hero has a wisp.
+    const wisp = wispOpen ? el('section', { className: 'panel wisp-pick' },
+      el('h3', { textContent: 'The wisp' }),
+      el('p', { className: 'hint', textContent: 'A keepsake of the Paragons of the tavern: the wisp may be any of these colours.' }),
+      el('div', { className: 'row' }, ...WISP_CHOICES.map((w) => {
+        const on = (hero.wisp ?? 'class') === w.id;
+        const b = pressBtn('', on, () => { if (chooseWisp(state, hero, w.id)) app?.changed(); }, 'btn swatch');
+        b.style.background = w.color ?? wispColor({ class: hero.class });
+        b.setAttribute('aria-label', w.name);
+        b.title = w.name;
+        return b;
+      }))) : null;
     gearPage.replaceChildren(
       doll,
+      ...(wisp ? [wisp] : []),
       el('ul', { className: 'slot-grid' }, ...slots),
       key,
       el('details', { className: 'panel how' }, el('summary', { textContent: 'How gear works' }),
-        el('p', { className: 'hint', textContent: 'Gear looks after itself. A better piece goes on the moment it is found and everything else is sold. Better means rarer, or the same rarity at a higher level. Rarity sets the size of a piece\'s bonus and its look on the hero; level adds a little on top. Monsters drop gear rarely and a rare monster always, every finished quest pays one piece, and dungeon bosses drop the best. Each dungeon also has one named Legendary.' })));
+        el('p', { className: 'hint', textContent: 'Gear looks after itself. A better piece goes on the moment it is found and everything else is sold. Better means rarer, or the same rarity at a higher level. Rarity sets the size of a piece\'s bonus and its look on the hero; level adds a little on top. Monsters drop gear rarely and a rare monster always, every finished quest pays one piece, and dungeon bosses drop the best. Each dungeon also has one named Legendary. The smith at the tavern can reforge a piece, or enchant a slot.' })));
   }
 
   // ----- ability scores -----
@@ -240,8 +264,15 @@ export function mountGear(root, app) {
       el('div', { className: 'beast-regions' }, ...regions)));
   }
 
+  // ----- career -----
+  function drawCareer(hero) {
+    if (careerBox.hidden || !changed('career', careerKey(hero))) return; // drawn only while it is showing
+    careerBox.replaceChildren(...careerPage(hero));
+  }
+
   function update(state, hero) {
-    drawGear(hero);
+    drawGear(state, hero);
+    drawCareer(hero);
     drawAbilities(hero);
     drawLifetime(hero);
     drawDeeds(hero);

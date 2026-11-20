@@ -25,7 +25,7 @@ const TASK_KEYS = new Set(['tasks', 'roomTasks', 'TAVERN_TASKS', 'TRAVEL_TASKS',
 // Keys whose text is a full sentence in the Chronicle or the Bestiary.
 const SENTENCE_KEYS = new Set(['hit', 'miss', 'crit', 'fumble', 'ko', 'about', 'learn', 'fire', 'done', 'win', 'enter', 'chosen', 'flavor', 'arrive', 'bought']);
 // Placeholders the game fills in.
-const FILLED = new Set(['count', 'tavern', 'deed', 'when', 'name', 'level', 'cost', 'points', 'monster', 'place', 'dungeon', 'quest', 'breath', 'notice', 'item', 'old', 'gold', 'slot', 'flavor', 'title', 'rank', 'floor', 'worst', 'weapon', 'trophy', 'done', 'does', 'he', 'she']);
+const FILLED = new Set(['count', 'tavern', 'deed', 'when', 'name', 'level', 'cost', 'points', 'monster', 'place', 'dungeon', 'quest', 'breath', 'notice', 'item', 'old', 'gold', 'slot', 'flavor', 'title', 'rank', 'floor', 'worst', 'weapon', 'trophy', 'done', 'does', 'he', 'she', 'mentor', 'what', 'enchant', 'times', 'rule']);
 
 const BANNED = [
   /!/, /\p{Extended_Pictographic}/u,
@@ -75,7 +75,7 @@ export async function gather() {
       collect(value, `${name}.${exp}`, lines, exp);
     }
   }
-  const code = ['js/ui/hero.js', 'js/ui/map.js', 'js/ui/skills.js', 'js/ui/gear.js', 'js/ui/tavern.js', 'js/ui/create.js', 'js/ui/away.js', 'js/ui/story.js', 'js/ui/legacy.js', 'js/ui/settings.js', 'js/ui/credits.js', 'js/ui/scene-fx.js', 'js/ui/foes.js', 'js/ui/common-room.js', 'js/ui/bosses.js', 'js/road.js', 'js/board.js', 'js/world.js', 'js/deeds.js', 'js/boons.js', 'js/tasks.js', 'js/tavern.js', 'js/loot.js', 'js/skills.js', 'js/hero.js', 'js/state.js', 'js/main.js'];
+  const code = ['js/ui/hero.js', 'js/ui/map.js', 'js/ui/skills.js', 'js/ui/gear.js', 'js/ui/tavern.js', 'js/ui/create.js', 'js/ui/away.js', 'js/ui/story.js', 'js/ui/legacy.js', 'js/ui/settings.js', 'js/ui/credits.js', 'js/ui/scene-fx.js', 'js/ui/foes.js', 'js/ui/common-room.js', 'js/ui/bosses.js', 'js/road.js', 'js/board.js', 'js/world.js', 'js/deeds.js', 'js/boons.js', 'js/tasks.js', 'js/tavern.js', 'js/loot.js', 'js/skills.js', 'js/hero.js', 'js/state.js', 'js/main.js', 'js/smith.js', 'js/rifts.js', 'js/ui/questlog.js', 'js/ui/career.js', 'js/ui/smithy.js'];
   for (const f of code) if (fs.existsSync(ROOT + f)) lines.push(...codeStrings(f));
   return lines;
 }

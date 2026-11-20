@@ -40,6 +40,7 @@ import { createHero, assignScores, defaultAppearance, raiseAbility, STANDARD_ARR
 import { TREES, BRANCH_BY_ID, canChooseSubclass, chooseSubclass, canLearn, learnSkill } from '../js/skills.js';
 import { ABILITY_MAX } from '../js/rules.js';
 import { setFocus, orderTravel, orderDelve, storyReady } from '../js/tasks.js';
+import { enchant, reforge, enchantPrice, forgePrice } from '../js/smith.js';
 import { SITES } from '../data/sites.js';
 import { MAX_LEVEL, LEVEL_TARGET_HOURS, STORY_QUESTS, WHAT_IF } from '../js/rules.js';
 import { CLASSES } from '../data/classes.js';
@@ -110,6 +111,27 @@ export function shop(save, hero) {
     spent += buyUpgrade(save, hero, cheapest.id);
   }
 }
+// A player who also uses the smith (after round five): after the upgrades, an enchantment whenever the purse
+// holds twice its price (the ones that speed a hero first), then a reforging of any Very Rare or Legendary piece
+// near the hero's level, on the same rule. `node tools/simulate.mjs <heroes> smith` measures what it is worth.
+const ENCHANT_ORDER = ['sure', 'keen', 'learning', 'vigour', 'warding', 'thrift', 'mending', 'wayfaring'];
+export function smithShop(save, hero) {
+  let spent = 0;
+  for (const id of ENCHANT_ORDER) {
+    if (Object.values(hero.enchants ?? {}).includes(id)) continue;
+    const slot = SLOT_IDS.find((s) => !hero.enchants?.[s] && hero.gear[s]);
+    if (!slot || hero.gold < 2 * enchantPrice(hero.level)) break;
+    spent += enchant(save, hero, slot, id) ?? 0;
+  }
+  for (const slot of SLOT_IDS) {
+    const it = hero.gear[slot];
+    const price = forgePrice(it);
+    if (!it || it.tier < 3 || it.level < hero.level - 2 || price == null || hero.gold < 2 * price) continue;
+    spent += reforge(save, hero, slot) ?? 0;
+  }
+  return spent;
+}
+
 // A tavern after `legends` heroes have retired from it, with the upgrades it already has.
 export const tavernAfter = (upgrades, legends = 1) => ({ upgrades: { ...upgrades }, legends: Array.from({ length: legends }, (_, i) => ({ name: `Legend ${i + 1}` })), legacyBonus: legacyFor(legends), trophies: [] });
 
@@ -133,7 +155,7 @@ export function steer(hero, sim, style) {
 
 // Run one hero from creation until they are level 20 and have cleared the last dungeon (or
 // `maxDays`). `world` is 'road' or 'vale'; `style` is 'balanced' or 'roam'.
-export function runHero({ seed, cls, race, subclass = TREES[cls].branches[0].id }, { world = 'road', style = 'balanced', early = 0, maxDays = 60, chunk = 300, growth = true, shop: shops = true, tavern = null, sites = true } = {}) {
+export function runHero({ seed, cls, race, subclass = TREES[cls].branches[0].id }, { world = 'road', style = 'balanced', early = 0, maxDays = 60, chunk = 300, growth = true, shop: shops = true, smith = false, tavern = null, sites = true } = {}) {
   const save = newSave(seed, 0);
   if (tavern) save.tavern = JSON.parse(JSON.stringify(tavern));
   const hero = createHero(save, { name: 'Sim', race, cls, appearance: defaultAppearance(race), baseScores: assignScores(cls, STANDARD_ARRAY) });
@@ -143,7 +165,7 @@ export function runHero({ seed, cls, race, subclass = TREES[cls].branches[0].id 
     cls, race, subclass, moves: 0, reach: new Array(MAX_LEVEL + 1).fill(null), knockouts: 0, potions: 0, koSeconds: 0, koAtLevel: new Array(MAX_LEVEL + 1).fill(0),
     koBy: { roam: 0, quest: 0, delve: 0, boss: 0 }, clears: {}, runsLost: {}, quests: 0, feats: 0, tasks: 0, level: 1,
     tierAt: new Array(MAX_LEVEL + 1).fill(null), worn: Object.fromEntries(SLOT_IDS.map((id) => [id, new Set([0])])), legends: [], worse: 0,
-    tavernSpent: 0, upgradesAt: new Array(MAX_LEVEL + 1).fill(null),
+    tavernSpent: 0, smithSpent: 0, upgradesAt: new Array(MAX_LEVEL + 1).fill(null),
   };
   const sim = { retryAt: {}, early, sites }; // `early`: levels below the dungeon's own at which to first try it
   const road = world === 'road';
@@ -169,6 +191,7 @@ export function runHero({ seed, cls, race, subclass = TREES[cls].branches[0].id 
     }
     if (growth) grow(hero, subclass);
     if (shops) out.tavernSpent += shop(save, hero);
+    if (smith) out.smithSpent += smithShop(save, hero);
     if (road) steer(hero, sim, style);
   }
   out.tavern = { ...save.tavern.upgrades };

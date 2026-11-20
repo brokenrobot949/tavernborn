@@ -32,7 +32,9 @@ Rob is the game designer and does not write code.
   the player's standing orders (`setFocus`, `orderTravel`, `payCleric`); `skills.js` and `hero.js` hold the
   growth choices (`learnSkill`, `chooseSubclass`, `respec`, `raiseAbility`)
 - `js/tavern.js` the tavern and legacy: upgrades (`buyUpgrade`, `tavernMods`), the trophy wall, the roster
-  (`switchHero`, `dismissHero`), retirement and the Hall (`retire`, `portraitOf`), Paragon ranks. Text in `data/tavern.js`
+  (`switchHero`, `dismissHero`), retirement and the Hall (`retire`, `portraitOf`), Paragon ranks and their keepsakes
+  (`tavernParagon`, `chooseWisp`), mentors (`chooseMentor`, `mentorWord`, `mentorRescue`). Text in `data/tavern.js`
+- `js/smith.js` the smith (`reforge`, `enchant`); `js/rifts.js` the Rifts' rule of the day (`riftRuleOn`, `riftNumbers`)
 - `js/road.js` choices on the road (`afterTask`, `answerChoice`), the travelling merchant (`merchantOn`, `buyWare`),
   and festivals (`festivalOn`, `joinFestival`); `js/boons.js` timed boons; `js/deeds.js` deeds and titles
   (`checkDeeds`, `wearTitle`). Text in `data/road.js`, `data/market.js`, `data/deeds.js`
@@ -45,7 +47,8 @@ Rob is the game designer and does not write code.
 - `js/audio.js` sound: effects and the tavern tune, synthesised with the Web Audio API (no audio files), and the
   sound settings, kept in localStorage under `tavernborn.settings`, apart from the save
 - `js/ui/` one module per tab, plus `create.js` (creation), `away.js` (the summary card), `story.js` (chapter
-  cards), `legacy.js` (the retirement card and Hall portraits), `settings.js` (sound switches, volume, credits
+  cards), `legacy.js` (the retirement card and Hall portraits), `questlog.js` (the Quests tab's log), `career.js` (the Stats
+  tab's charts), `smithy.js` (the smith's section of the Tavern tab), `settings.js` (sound switches, volume, credits
   button), `credits.js` (the credits screen), `dom.js` (helpers, and `sectionTabs`, the pill row that splits a
   long tab into sections), `icons.js` (the small line icons, drawn as inline SVG);
   `data/` all content (`data/loot.js` holds gear names and the named Legendaries; `data/items.js` the
@@ -105,7 +108,8 @@ Rob is the game designer and does not write code.
 
 ## Status
 - Current phase: 7 (Polish), built and waiting on Rob's phone test. This is the last phase in the plan. The newest
-  work is the two new classes, Barbarian and Ranger, described below; before that, round five (rare monsters, lesser
+  work is round six (the quest log, career charts, the smith, mentors, the Rifts' rules), described below; before that,
+  the two new classes, Barbarian and Ranger, and round five (rare monsters, lesser
   delves, the notice board, happenings).
   Phases 1 to 6 are also still in his phone test. Phase 0 is approved.
 - Built in Phase 7: sound effects and a tavern tune (`js/audio.js`), settings with the mute switch
@@ -462,6 +466,54 @@ Rob asked for two more classes. Neither is in the design doc, which still lists 
 - Walking left or right, every shield is drawn behind the body (`side` in `prepare`, js/sprite.js), as LPC's heater
   shield already is. The older shields (round, kite, spartan, crusader, plus, engrailed) drew their side walk views in
   front, so walking right the shield sat over the sword arm. Attacks and the up and down walks are unchanged.
+
+## Round six: the quest log, career charts, the smith, mentors, the Rifts' rules (waiting on Rob's phone test)
+Rob picked five of six suggestions (not the rival adventurer). None of it is in the design doc. Saves stay version 6
+(`lateFields` in `js/state.js`: anything unreadable is dropped; an older hero starts with none of it).
+- The quest log (`js/ui/questlog.js`), at the top of the Quests tab: the story quest in hand, story quests ready or
+  waiting in every open region, today's errands, the bounty in hand, the regular here, the dungeon that opens the road
+  on, lesser delves not yet cleared up to the hero's level, and at level 20 today's Rift rule. An entry with a place
+  opens that region's card on the map below. It only gathers what other screens already said.
+- Career charts (`js/ui/career.js`, Stats tab, Career section): Pace (the level by day against `LEVEL_TARGET_HOURS`,
+  dashed), XP each day, gold in the purse at the end of each day, knockouts by place. Tapping a mark shows its
+  numbers under the chart; "Every level, written out" lists them. Data in `hero.career`: `days` ([XP, gold,
+  knockouts, level] as each of the hero's days ended, written by `noteCareer` after every task), `levelAt` (`noteLevel`),
+  `ko` (by region id or 'rift', in `knockOut`). An older hero's charts begin the day the save loads.
+- The smith, Brannoc Ashby (`js/smith.js`, Tavern tab, Smith section; numbers `SMITH`, `ENCHANTS` in `js/rules.js`):
+  - Reforging (`reforge`): the piece counts as a level more (`forge` on the piece, 3 at most; `gearPower` and the
+    weapon's critical line both read it). The n-th costs 2n gold units of the piece's level (10,040 gp first at 10). The work
+    goes with the piece: a better piece replaces it as usual.
+  - Enchanting (`enchant`): eight enchantments (`ENCHANTS`): +1 to rolls, criticals on a 19, 5% less damage, +5% hit
+    points, +10% gold, +3% XP, travel and recovery 15% quicker, rests and potions 15% better. One per slot, each on
+    one slot at a time (another slot moves it), kept in `hero.enchants` by slot, so it stays when the piece changes.
+    8 gold units of the hero's level each (about 40,000 gp at 10, 320,000 at 20). `gearMods` adds them.
+- Mentors (`js/tavern.js`): a legend in the Hall may take one hero on the roster in hand (`chooseMentor`, from the
+  legend's card in the Hall). Once in each of the hero's days (`mentorWord`, called by `advance` after every task, not
+  while knocked out) word comes with a 4-hour boon of the mentor's class (`MENTOR_TEXT`: Fighter Well fed, Wizard
+  Clear-headed, Rogue In good standing, Cleric Blessed, Barbarian Lucky, Ranger Keen-edged). The first knockout of
+  each such day lasts half as long (`mentorRescue`, `MENTOR.rescue`). One hero per legend. Chronicle kind `mentor`.
+- The Rifts' rules (`js/rifts.js`, `RIFT_RULES` in `data/tavern.js`): one of seven each day by the device's calendar
+  (`riftRuleOn`): Still Air (none), the Dry Stair (no potions carried in; the merchant's wait), Teeming (gold x1.5,
+  damage x1.1), the Wardens' Watch (a Warden every 5th floor), Thin Walls (floors half as long, paying for the time they
+  take, no healing between them), Bright Halls (DC -1, XP x0.8), the Steep Stair (+1 DC every 2nd floor, pay rising
+  twice as fast). A run keeps its rule (`hero.rift.rule`) past midnight; `hero.riftBests` keeps the best floor under
+  each. Shown on the Quests tab (the log and the Rifts order).
+- Paragon keepsakes (`PARAGON_KEEPSAKES`): the first time any hero of the tavern (roster or Hall, `tavernParagon`)
+  reaches a rank: 1 a medal emblem for the sign, 2 a motto, 3 a choice of wisp colour on the Stats tab (`hero.wisp`,
+  `WISP_CHOICES`, `chooseWisp`), 4 black lacquer for the board, 5 talk about the tavern's Paragons at the bar
+  (`BAR_TALK_PARAGON`), 7 starlight letters and a portrait emblem. Each writes a `tavern` Chronicle line. The sign
+  editor shows a choice only once open (`signOpen`) and says what comes next. Nothing changes a rule.
+- `node tools/check-sim.mjs` (313 checks) adds 32 for this round. `node tools/simulate.mjs <heroes> smith` plays the
+  standard road with a player who also pays the smith (`smithShop` in `tools/simulate-core.js`).
+- Measured (`node tools/simulate.mjs 200`, and `200 smith`): the standard player, who never visits the smith, is
+  unchanged: median level 20 at 29.3 days (10th to 90th: 27.3 to 31.9), all clear the last dungeon. A player who buys
+  every enchantment and reforging they can afford twice over reaches level 20 at 28.7 days (27.1 to 31.3) and spends
+  about 1.8 million gp at the smith (and 270,000 on upgrades, against 1.37 million without it). The first prices
+  (half these) brought that to 26.6 days, under the target, so they were doubled before Rob saw them.
+- Spec departures to raise with Rob: none of this is in the design doc. The smith makes a hero who uses it quicker;
+  the simulated standard player does not use it, so the 28 to 32 day target is for a player who never does.
+  The Rifts' rules follow the phone's calendar. Mentors need a retired legend, so the single-hero simulator never
+  has one.
 
 ## Known gaps closed after Phase 7
 - All 26 LPC hair colours are baked (`HAIR_COLORS` in `data/races.js`, natural shades first). The art is now

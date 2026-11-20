@@ -5,18 +5,18 @@
 import { RACES } from '../data/races.js';
 import { CLASSES } from '../data/classes.js';
 import { REGION_BY_ID, START_REGION } from '../data/regions.js';
-import { ADVENTURE_FIELDS, GROWTH_FIELDS, LEGACY_FIELDS, ROAD_FIELDS, EXPLORE_FIELDS, STATS, abilityPointsBy } from './hero.js';
+import { ADVENTURE_FIELDS, GROWTH_FIELDS, LEGACY_FIELDS, ROAD_FIELDS, EXPLORE_FIELDS, LATE_FIELDS, STATS, abilityPointsBy } from './hero.js';
 import { SITE_BY_ID } from '../data/sites.js';
 import { BOUNTIES, HAPPENING_BY_ID } from '../data/board.js';
 import { CHOICE_BY_ID } from '../data/road.js';
 import { DEED_BY_ID } from '../data/deeds.js';
-import { BOONS, REST } from './rules.js';
+import { BOONS, REST, SMITH, ENCHANTS } from './rules.js';
 import { startingGear, startingCloak, SLOT_IDS, MAX_TIER } from './loot.js';
 import { LEGENDARIES } from '../data/loot.js';
 import { SKILL_BY_ID, BRANCH_BY_ID, MAX_SKILLS } from './skills.js';
 import { MAX_LEVEL, MAX_HEROES, PAST_CURVES, LOOT, TAVERN, xpForLevel, legacyFor } from './rules.js';
 import { paragonRank, cleanTavernName, signOf } from './tavern.js';
-import { TROPHIES } from '../data/tavern.js';
+import { TROPHIES, RIFT_RULES, WISP_CHOICES } from '../data/tavern.js';
 import { REGIONS } from '../data/regions.js';
 
 export const SAVE_VERSION = 6;
@@ -74,6 +74,8 @@ function gearFields(h) {
     const named = typeof it.name === 'string' && it.name;
     h.gear[id] = { tier: it.tier, level: Math.max(1, Math.min(MAX_LEVEL, Math.floor(it.level) || 1)), name: named ? it.name : start[id]?.name ?? 'Unlabelled Piece' };
     if (LEGENDARIES[it.legend]?.slot === id) h.gear[id].legend = it.legend;
+    const forge = Math.min(SMITH.forgeMax, Math.floor(Number(it.forge) || 0)); // the smith's work (after round five)
+    if (forge > 0) h.gear[id].forge = forge;
   }
   if (!h.gear.cloak && h.level >= LOOT.cloakLevel) h.gear.cloak = startingCloak();
 }
@@ -143,6 +145,34 @@ function exploreFields(h) {
   }
 }
 
+// After round five (no version change): the career for the charts, the smith's enchantments, the mentor, the
+// best floor under each of the Rifts' rules, and the wisp's colour. Anything unreadable is dropped; a hero from
+// an older save starts with an empty career (the charts begin from the day it loads) and none of the rest.
+function lateFields(h) {
+  for (const [key, value] of Object.entries(LATE_FIELDS())) h[key] ??= value;
+  const c = h.career && typeof h.career === 'object' ? h.career : {};
+  const days = Array.isArray(c.days) ? c.days.map((d) => (Array.isArray(d) && d.length === 4 && d.every(Number.isFinite) ? d : null)) : [];
+  const levelAt = {};
+  for (const [l, t] of Object.entries(c.levelAt && typeof c.levelAt === 'object' ? c.levelAt : {})) if (l >= 1 && l <= MAX_LEVEL && Number.isFinite(t)) levelAt[l] = t;
+  const ko = {};
+  for (const [k, n] of Object.entries(c.ko && typeof c.ko === 'object' ? c.ko : {})) if ((REGION_BY_ID[k] || k === 'rift') && n > 0) ko[k] = Math.floor(n);
+  h.career = { days, levelAt, ko };
+  const enchants = {};
+  const used = new Set();
+  for (const id of SLOT_IDS) {
+    const e = h.enchants?.[id];
+    if (ENCHANTS[e] && !used.has(e)) { enchants[id] = e; used.add(e); }
+  }
+  h.enchants = enchants;
+  if (typeof h.mentor !== 'string') h.mentor = null;
+  for (const k of ['mentorDay', 'mentorRescue']) if (!Number.isInteger(h[k])) h[k] = null;
+  const bests = {};
+  for (const r of RIFT_RULES) if (h.riftBests?.[r.id] > 0) bests[r.id] = Math.floor(h.riftBests[r.id]);
+  h.riftBests = bests;
+  if (h.rift && !RIFT_RULES.some((r) => r.id === h.rift.rule)) h.rift.rule = 'still';
+  if (!WISP_CHOICES.some((w) => w.id === h.wisp && w.color)) h.wisp = null;
+}
+
 // Bring an older or partial save up to the current shape, or throw if it is not a save at all.
 export function migrate(save) {
   if (!save || typeof save !== 'object' || !Array.isArray(save.heroes)) throw new Error('That is not a Tavernborn save.');
@@ -160,6 +190,7 @@ export function migrate(save) {
     for (const [key, value] of Object.entries(LEGACY_FIELDS())) h[key] ??= value;
     roadFields(h);
     exploreFields(h);
+    lateFields(h);
     if (!['roam', 'quest', 'delve', 'rift'].includes(h.focus) || (h.focus === 'rift' && h.level < MAX_LEVEL)) h.focus = 'roam';
     // XP never sits below the hero's own level, whatever happened to the curve.
     h.xp = Math.max(Number(h.xp) || 0, xpForLevel(Math.min(h.level, MAX_LEVEL)));
@@ -171,6 +202,12 @@ export function migrate(save) {
   }
   if (save.heroes.length > MAX_HEROES) throw new Error('That save has more heroes than the roster holds.');
   tavernFields(save);
+  // A mentor must be a legend in the Hall, and a legend mentors one hero at a time.
+  const taken = new Set();
+  for (const h of save.heroes) {
+    if (h.mentor && (!save.tavern.legends.some((l) => l.id === h.mentor) || taken.has(h.mentor))) h.mentor = null;
+    if (h.mentor) taken.add(h.mentor);
+  }
   save.rngSeed = (Number(save.rngSeed) || 1) >>> 0;
   if (!Number.isFinite(save.lastSavedAt)) save.lastSavedAt = Date.now();
   if (!save.heroes.some((h) => h.id === save.activeHeroId)) save.activeHeroId = save.heroes[0]?.id ?? null;

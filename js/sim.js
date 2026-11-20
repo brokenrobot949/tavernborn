@@ -9,11 +9,11 @@
 // `lastSavedAt`. Time moves task by task, not second by second, so a month away costs about as
 // much work as the number of tasks in it.
 
-import { activeHero } from './hero.js';
+import { activeHero, noteCareer } from './hero.js';
 import { nextTask, resolveTask } from './tasks.js';
 import { afterTask } from './road.js';
 import { checkDeeds } from './deeds.js';
-import { restWaiting, useRest } from './tavern.js';
+import { restWaiting, useRest, mentorWord } from './tavern.js';
 import { noteBounty } from './board.js';
 
 export function advance(state, seconds) {
@@ -36,7 +36,9 @@ export function advance(state, seconds) {
       resolveTask(state, hero, task, events);
       noteBounty(state, hero, events, from); // the bounty taken from the notice board, if any
       afterTask(state, hero, task, events); // choices on the road, and boons running out
+      mentorWord(state, hero, events); // once a day of the hero's own, word from a mentor in the Hall
       checkDeeds(hero, events);
+      noteCareer(hero); // how the day stands, for the Stats tab's charts
       useRest(hero, task, step);
       hero.currentTask = nextTask(state, hero, events);
     } else useRest(hero, task, step);

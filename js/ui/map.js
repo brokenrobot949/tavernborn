@@ -1,4 +1,5 @@
-// Map tab: the world map (drawn in code, nothing to download), the details of the region tapped,
+// Quests tab (it was the Map tab): the quest log (js/ui/questlog.js) at the top, then the world map (drawn in
+// code, nothing to download), the details of the region tapped,
 // travel, and the standing order: Roam, Quest, or Delve, and from level 20 the Planar Rifts.
 // Round five adds what is going on today (a star on the map and a box on the region's card), the two
 // lesser delves beside each dungeon, and the notice board with the day's three bounties.
@@ -27,6 +28,8 @@ import { showChapter } from './story.js';
 import { icon, ICONS } from './icons.js';
 import { SpriteView, heroLook } from '../sprite.js';
 import { portraitOf } from '../tavern.js';
+import { questLog, questLogKey } from './questlog.js';
+import { riftRuleOn, RIFT_RULE_BY_ID } from '../rifts.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const svg = (tag, attrs = {}, ...kids) => {
@@ -100,6 +103,13 @@ function mapIcon(name, transform) {
   return g;
 }
 
+// Today's rule in the Rifts, or the rule of the run in progress.
+function riftRuleNote(hero) {
+  const r = hero.rift ? RIFT_RULE_BY_ID[hero.rift.rule] ?? riftRuleOn(new Date()) : riftRuleOn(new Date());
+  const best = hero.riftBests?.[r.id];
+  return `${hero.rift ? 'This run' : 'Today'}: ${r.name}. ${r.does}${best ? ` Deepest under it: floor ${best}.` : ''}`;
+}
+
 const FOCUS_LABEL = { roam: 'Roam', quest: 'Quest', delve: 'Delve', rift: 'Rifts' };
 const FOCUS_ICON = { roam: 'swords', quest: 'scroll', delve: 'door', rift: 'vortex' };
 const times = (n) => (n === 1 ? 'once' : n === 2 ? 'twice' : `${n} times`);
@@ -137,6 +147,8 @@ export function mountMap(root, app) {
   let svgNow = null; // the map drawn last, for measuring the road
   let frameNow = null;
   let legs = []; // the road's legs as path elements, for measuring
+  let cardNow = null; // the region card drawn last
+  let scrollToCard = false; // set when the quest log opens a region, so the card is brought into view
 
   function draw(hero) {
     const here = REGION_INDEX[hero.region];
@@ -298,7 +310,7 @@ export function mountMap(root, app) {
       roam: `Roam: ${hero.name} fights the monsters of ${r.name} one at a time. Low risk, steady XP, and it fills the Bestiary.`,
       quest: `Quest: ${hero.name} takes jobs from the quest board, 5 to 8 steps each. Better gold, and finishing all ${STORY_QUESTS} story quests in a region earns a Feat, worth one bonus skill point. Each story quest opens at its own level, with odd jobs in between, and every fourth odd job is for ${REGULARS[r.id].name}. Every finished quest also pays one piece of gear; a story quest's is picked for the slot that needs it most.`,
       delve: `Delve: ${hero.name} runs ${d.name}, ${d.rooms[0]} to ${d.rooms[1]} rooms and then ${d.boss.name}. Hit points do not come back between rooms, and a knockout loses the run and nothing else. ${d.site ? 'A lesser delve: short, and it opens no road. Its keeper gives a good piece of gear the first time.' : 'The first clear opens the next region.'} Built for level ${d.level}${hero.level < d.level ? `; at level ${hero.level} ${hero.name} will be outmatched.` : '.'} Choose where to delve on the region's card above.`,
-      rift: `Rifts: ${hero.name} goes down ${RIFT_NAME.replace(/^The /, 'the ')}, one floor at a time, from wherever they stand. ${RIFT_TEXT.about} Hit points come back a little between floors, but only the potions carried in can be drunk. A Warden on every ${RIFT.wardenEvery}th floor leaves gear, and sometimes one of the eight named Legendaries. A knockout ends the run; the next starts at floor 1. ${hero.rift ? `Now on floor ${hero.rift.floor}. ` : ''}${hero.stats.riftBest ? `Deepest so far: floor ${hero.stats.riftBest}.` : 'Not yet entered.'}`,
+      rift: `Rifts: ${hero.name} goes down ${RIFT_NAME.replace(/^The /, 'the ')}, one floor at a time, from wherever they stand. ${RIFT_TEXT.about} Hit points come back a little between floors, but only the potions carried in can be drunk. A Warden on every ${RIFT.wardenEvery}th floor leaves gear, and sometimes one of the eight named Legendaries. A knockout ends the run; the next starts at floor 1. Each day the Rifts follow a rule, and a run keeps the rule it began under. ${riftRuleNote(hero)} ${hero.rift ? `Now on floor ${hero.rift.floor}. ` : ''}${hero.stats.riftBest ? `Deepest so far: floor ${hero.stats.riftBest}.` : 'Not yet entered.'}`,
     }[hero.focus];
     const focuses = Object.entries(FOCUS_LABEL).filter(([id]) => id !== 'rift' || hero.level >= MAX_LEVEL);
     return el('section', { className: 'panel orders' },
@@ -347,7 +359,7 @@ export function mountMap(root, app) {
     if (followed !== hero.id + hero.region) { followed = hero.id + hero.region; selected = hero.region; }
     if (!REGION_INDEX[selected] && selected !== REGIONS[0].id) selected = hero.region;
     const qp = hero.questProgress[selected];
-    const next = JSON.stringify([
+    const next = JSON.stringify([questLogKey(state, hero), riftRuleOn(new Date()).id,
       hero.id, hero.name, hero.level, hero.region, hero.travelTo, hero.focus, selected, hero.dungeonClears, hero.feats.length,
       qp?.done, qp?.step, qp?.odd, qp?.started, hero.delve?.room, hero.delve?.rooms, hero.rift?.floor, hero.stats.riftBest,
       MONSTERS[selected].filter((m) => hero.bestiary[m.id]).length,
@@ -359,12 +371,23 @@ export function mountMap(root, app) {
     svgNow = draw(hero);
     walker.classList.remove('placed');
     frameNow = el('div', { className: 'map-frame' }, svgNow, walker);
+    cardNow = details(state, hero);
     root.replaceChildren(
-      el('h2', { className: 'view-title', textContent: 'The road from The Wobbly Griffin' }),
+      el('h2', { className: 'view-title', textContent: 'Quests' }),
+      questLog(state, hero, goTo),
+      el('h3', { className: 'view-subtitle', textContent: 'The road from The Wobbly Griffin' }),
       frameNow,
-      details(state, hero),
+      cardNow,
       orders(hero),
       board(state, hero));
+    if (scrollToCard) { scrollToCard = false; requestAnimationFrame(() => cardNow?.scrollIntoView({ block: 'start', behavior: 'smooth' })); }
+  }
+
+  // The quest log opens a region's card on the map.
+  function goTo(regionId) {
+    selected = regionId;
+    scrollToCard = true;
+    app.changed();
   }
 
   // Where the hero is on the map. On the road: from one spot to another, a share of the way there,

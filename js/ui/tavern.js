@@ -1,7 +1,7 @@
 // Tavern tab: the inn sign, the common room (the roster standing about, the trophy plaques, and a
 // line overheard at the bar), a festival card while one runs, then sections behind tabs: the
-// travelling merchant; upgrades; heroes; the Hall of
-// Legends and the trophy wall; the bard, who sings back the story chapters the tavern has heard;
+// travelling merchant; upgrades; the smith (js/ui/smithy.js); heroes; the Hall of
+// Legends (with mentors) and the trophy wall; the bard, who sings back the story chapters the tavern has heard;
 // the cleric and respec; and settings, the save string, and the workshop links.
 //
 // Each panel is rebuilt only when something it shows changes, so a tap is never lost to the
@@ -11,7 +11,7 @@ import { exportSave, importSave } from '../state.js';
 import { clericFee, payCleric, foeName } from '../tasks.js';
 import { respec, respecCost, subclassName, BRANCH_BY_ID } from '../skills.js';
 import { respecPrice, MAX_HEROES, MAX_LEVEL, REST } from '../rules.js';
-import { UPGRADES, TROPHIES, TROPHY_COLORS, BAR_TALK, BARD, SIGN } from '../../data/tavern.js';
+import { UPGRADES, TROPHIES, TROPHY_COLORS, BAR_TALK, BARD, SIGN, BAR_TALK_PARAGON, MENTOR_TEXT, PARAGON_KEEPSAKES } from '../../data/tavern.js';
 import { CHAPTERS, STORY_TITLE } from '../../data/story.js';
 import { REGIONS } from '../../data/regions.js';
 import { DUNGEONS } from '../../data/dungeons.js';
@@ -23,7 +23,8 @@ import { RACES } from '../../data/races.js';
 import { CLASSES } from '../../data/classes.js';
 import { TIERS } from '../../data/items.js';
 import { SLOT_BY_ID } from '../loot.js';
-import { upgradeRank, upgradePrice, upgradeEffect, maxRank, buyUpgrade, trophyWall, canRecruit, canRetire, paragonTitle, portraitOf, nameTavern, signOf, paintSign, TAVERN_NAME_MAX, restedOf } from '../tavern.js';
+import { upgradeRank, upgradePrice, upgradeEffect, maxRank, buyUpgrade, trophyWall, canRecruit, canRetire, paragonTitle, portraitOf, nameTavern, signOf, paintSign, TAVERN_NAME_MAX, restedOf, tavernParagon, signOpen, mentorOf, menteeOf, chooseMentor } from '../tavern.js';
+import { smithPanel, smithKey } from './smithy.js';
 import { el, confirmBtn, num, sectionTabs, named, getTavernName, DEFAULT_TAVERN, pressBtn } from './dom.js';
 import { drawPortrait } from './legacy.js';
 import { icon } from './icons.js';
@@ -127,7 +128,7 @@ export function mountTavern(root, app) {
     const s = signOf(state);
     const board = SIGN.boards.find((b) => b.id === s.board);
     const ink = SIGN.inks.find((b) => b.id === s.ink);
-    const key = JSON.stringify([s, getTavernName(), signEditor.hidden]);
+    const key = JSON.stringify([s, getTavernName(), signEditor.hidden, tavernParagon(state)]);
     if (key === signKey) return;
     signKey = key;
     for (const [k, v] of Object.entries({ '--sign-wood': board.wood, '--sign-grain': board.grain, '--sign-rim': board.rim, '--sign-ink': ink.ink, '--sign-trim': ink.trim })) signBoard.style.setProperty(k, v);
@@ -148,16 +149,18 @@ export function mountTavern(root, app) {
       b.title = label;
       return b;
     };
+    const open = (choice) => signOpen(state, choice); // some choices wait on a Paragon rank (a keepsake)
     const motto = el('select', { className: 'pick', attrs: { 'aria-label': 'Motto' }, onchange: () => paint({ motto: Number(motto.value) }) },
-      ...SIGN.mottos.map((m, i) => el('option', { value: String(i), textContent: m, selected: i === s.motto })));
+      ...SIGN.mottos.map((m, i) => (signOpen(state, null, i) ? el('option', { value: String(i), textContent: m, selected: i === s.motto }) : null)));
+    const next = PARAGON_KEEPSAKES.find((k) => k.rank > tavernParagon(state));
     signEditor.replaceChildren(
       el('h3', {}, icon('hammer'), el('span', { textContent: 'The sign over the door' })),
       el('p', { className: 'hint', textContent: 'A new name changes it everywhere, the Chronicle included. Leave the box empty for the old name.' }),
       input,
       el('div', { className: 'row' }, rename, el('button', { className: 'btn', type: 'button', textContent: 'Done', onclick: () => signBoard.onclick() })),
-      row('Board', ...SIGN.boards.map((b) => swatch(s.board === b.id, b.wood, b.name, () => paint({ board: b.id })))),
-      row('Letters', ...SIGN.inks.map((b) => swatch(s.ink === b.id, b.ink, b.name, () => paint({ ink: b.id })))),
-      row('Emblem', el('div', { className: 'emblem-picks' }, ...SIGN.emblems.map((e) => {
+      row('Board', ...SIGN.boards.filter(open).map((b) => swatch(s.board === b.id, b.wood, b.name, () => paint({ board: b.id })))),
+      row('Letters', ...SIGN.inks.filter(open).map((b) => swatch(s.ink === b.id, b.ink, b.name, () => paint({ ink: b.id })))),
+      row('Emblem', el('div', { className: 'emblem-picks' }, ...SIGN.emblems.filter(open).map((e) => {
         const b = pressBtn('', s.emblem === e.id, () => paint({ emblem: e.id }), 'btn emblem-pick');
         b.append(e.id === 'none' ? el('span', { textContent: 'None' }) : icon(e.id));
         b.setAttribute('aria-label', e.name);
@@ -165,12 +168,16 @@ export function mountTavern(root, app) {
         return b;
       }))),
       row('Motto', motto),
+      ...(next ? [el('p', { className: 'hint', textContent: `More for the sign, and for the tavern, as its heroes become Paragons. Next, at Paragon ${next.rank}: ${next.what}.` })] : []),
     );
   }
 
   // ----- a festival, while one runs -----
   const festivalBox = el('section', { className: 'panel festival-card', hidden: true });
   let festivalKey = '';
+  // ----- the smith -----
+  const smithBox = el('div', {});
+  let smithKeyNow = '';
   // ----- the travelling merchant -----
   const merchantBox = el('div', {});
   let merchantKey = '';
@@ -184,6 +191,8 @@ export function mountTavern(root, app) {
         el('h3', { textContent: 'Upgrades' }),
         upgradesNote,
         upgradesBox)),
+    page('smith', 'Smith', 'weapon',
+      el('section', { className: 'panel smith' }, smithBox)),
     page('heroes', 'Heroes', 'people',
       el('section', { className: 'panel' },
         el('h3', { textContent: 'Heroes' }),
@@ -235,7 +244,7 @@ export function mountTavern(root, app) {
         el('p', { className: 'hint', textContent: 'Runs 500 heroes through the game rules at high speed and charts when each level lands. It does not touch your save.' }))),
   ];
   const tabs = sectionTabs('tavern', pages);
-  tabs.nav.classList.add('two-rows'); // seven sections: four pills above, three below, so the names have room
+  tabs.nav.classList.add('two-rows'); // eight sections: four pills above, four below, so the names have room
   root.append(
     el('header', { className: 'inn-sign' }, el('span', { className: 'sign-chain left' }), el('span', { className: 'sign-chain right' }),
       signBoard),
@@ -258,7 +267,10 @@ export function mountTavern(root, app) {
     const at = Math.floor(Date.now() / 1000 / TALK_SECONDS);
     if (at !== talkAt) {
       talkAt = at;
-      talk.textContent = named(fest && at % 2 ? fest.talk[Math.floor(at / 2) % fest.talk.length] : BAR_TALK[at % BAR_TALK.length]);
+      const star = paragonStar(state);
+      talk.textContent = named(fest && at % 2 ? fest.talk[Math.floor(at / 2) % fest.talk.length]
+        : star && at % 3 === 0 ? BAR_TALK_PARAGON[Math.floor(at / 3) % BAR_TALK_PARAGON.length].replace(/\{name\}/g, star)
+        : BAR_TALK[at % BAR_TALK.length]);
     }
   }
 
@@ -330,6 +342,20 @@ export function mountTavern(root, app) {
   }
 
   // ---------- panels ----------
+
+  function drawSmith(state, hero) {
+    const key = smithKey(hero);
+    if (key === smithKeyNow) return;
+    smithKeyNow = key;
+    smithBox.replaceChildren(...smithPanel(state, hero, () => { smithKeyNow = ''; app.changed(); }));
+  }
+
+  // The hero of the tavern with the highest Paragon rank, once one is Paragon 5: the bar talks about them.
+  function paragonStar(state) {
+    if (tavernParagon(state) < 5) return null;
+    const all = [...state.heroes, ...state.tavern.legends].filter((h) => (h.paragon ?? 0) >= 5);
+    return all.sort((a, b) => (b.paragon ?? 0) - (a.paragon ?? 0))[0]?.name ?? null;
+  }
 
   function drawUpgrades(state, hero) {
     upgradesNote.textContent = `Bought from ${hero.name}'s purse (${num(hero.gold)} gp). Upgrades belong to the tavern: every hero, now and later, has them.`;
@@ -410,14 +436,15 @@ export function mountTavern(root, app) {
   }
 
   function drawRoster(state) {
-    const key = JSON.stringify([state.activeHeroId, state.heroes.map((h) => [h.id, h.name, h.level, h.knockedOutUntil != null, h.subclass, portraitOf(h)]), state.tavern.legends.length]);
+    const key = JSON.stringify([state.activeHeroId, state.heroes.map((h) => [h.id, h.name, h.level, h.knockedOutUntil != null, h.subclass, portraitOf(h), h.mentor]), state.tavern.legends.length]);
     if (key === rosterKey) return;
     rosterKey = key;
     restBars.clear();
     const rows = state.heroes.map((h) => {
       const active = h.id === state.activeHeroId;
       const sub = subclassName(h);
-      const status = active ? 'Out adventuring' : h.knockedOutUntil != null ? 'Waiting at the tavern, still on the good bench' : 'Waiting at the tavern';
+      const mentor = mentorOf(state, h);
+      const status = (active ? 'Out adventuring' : h.knockedOutUntil != null ? 'Waiting at the tavern, still on the good bench' : 'Waiting at the tavern') + (mentor ? `. Mentored by ${mentor.name}` : '');
       const buttons = [];
       if (!active) buttons.push(el('button', { className: 'btn primary', type: 'button', textContent: 'Send out', onclick: () => app.switchHero(h.id) }));
       if (canRetire(h)) buttons.push(confirmBtn('Retire', 'Tap again: retire for good', () => app.retire(h.id)));
@@ -468,9 +495,9 @@ export function mountTavern(root, app) {
     }
   }
 
-  function drawHall(state) {
+  function drawHall(state, hero) {
     const legends = state.tavern.legends;
-    const key = String(legends.length);
+    const key = JSON.stringify([legends.length, hero?.id, hero?.name, state.heroes.map((h) => [h.id, h.mentor])]);
     if (key === hallKey) return;
     hallKey = key;
     const bonus = state.tavern.legacyBonus ?? 0;
@@ -486,6 +513,14 @@ export function mountTavern(root, app) {
       const stat = (label, value) => el('li', {}, el('span', { textContent: label }), el('span', { textContent: value }));
       const s = l.stats ?? {};
       const sub = BRANCH_BY_ID[l.subclass]?.name;
+      // Mentoring: whom this legend has in hand, and a button for the hero who is out.
+      const mentee = menteeOf(state, l.id);
+      const mine = hero && mentee === hero;
+      const word = MENTOR_TEXT[l.class] ?? MENTOR_TEXT.fighter;
+      const mentorRow = el('div', { className: 'mentor-row' },
+        el('p', { className: 'hint', textContent: mentee ? `Mentoring ${mentee.name}. Sends word once a day, with ${BOON_TEXT[word.boon].does} for a few hours.` : `Free to mentor a hero. Would send word once a day, with ${BOON_TEXT[word.boon].does} for a few hours.` }),
+        hero && !mentee ? el('div', { className: 'row' }, el('button', { className: 'btn primary', type: 'button', textContent: mentorOf(state, hero) ? `Mentor ${hero.name} instead` : `Mentor ${hero.name}`, onclick: () => { if (chooseMentor(state, hero, l.id)) app.changed(); } })) : null,
+        mine ? el('div', { className: 'row' }, confirmBtn('Part ways', 'Tap again: no mentor', () => { if (chooseMentor(state, hero, null)) app.changed(); })) : null);
       return el('li', { className: 'legend' },
         el('div', { className: 'legend-top' },
           el('div', { className: 'portrait-frame' }, canvas),
@@ -503,9 +538,10 @@ export function mountTavern(root, app) {
           stat('Monsters in the Bestiary', num(l.monsters ?? 0)),
           stat('Natural 20s', num(s.natural20s ?? 0)),
           l.riftBest ? stat('Deepest in the Rifts', `floor ${l.riftBest}`) : null,
-          stat('Gold at retirement', `${num(l.gold ?? 0)} gp`)));
+          stat('Gold at retirement', `${num(l.gold ?? 0)} gp`)),
+        mentorRow);
     });
-    hallBox.replaceChildren(el('p', { className: 'hint', textContent: intro }), ...(cards.length ? [el('ul', { className: 'hall' }, ...cards)] : []));
+    hallBox.replaceChildren(el('p', { className: 'hint', textContent: intro }), ...(legends.length ? [el('p', { className: 'hint', textContent: MENTOR_TEXT.about })] : []), ...(cards.length ? [el('ul', { className: 'hall' }, ...cards)] : []));
   }
 
   // The bard: every chapter the tavern has heard, from any hero's first clear of a dungeon (the
@@ -584,12 +620,13 @@ export function mountTavern(root, app) {
     drawCase(state);
     drawBard(state);
     drawUpgrades(state, hero);
+    drawSmith(state, hero);
     drawTrophies(state);
     drawCleric(hero);
     drawRespec(hero);
     drawRoster(state);
     drawRest(state);
-    drawHall(state);
+    drawHall(state, hero);
   }
   return { update };
 }

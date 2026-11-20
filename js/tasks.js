@@ -58,19 +58,20 @@ import {
   DELVE_XP_PER_SECOND, DELVE_GOLD, BOSS_SECONDS, BOSS_XP, BOSS_LOSS_SHARE, bossGold, DUNGEON_POTIONS, CONFIDENCE_LIMIT,
   TRAVEL_SECONDS_PER_REGION, RETURN_SECONDS_PER_REGION, LOOT, MAX_LEVEL, RIFT, sellPrice,
 } from './rules.js';
-import { chronicle, gainXp, maxHp, regionOpen } from './hero.js';
+import { chronicle, gainXp, maxHp, regionOpen, noteLevel } from './hero.js';
 import { skillMods, SUBCLASS_LEVEL } from './skills.js';
 import { gearMods, rollItem, weakestSlot, legendItem, wearsLegend, receive, dropChance, startingCloak, describe, rarityName, flavorOf, SLOT_BY_ID } from './loot.js';
 import { displayLegend, restedXp } from './tavern.js';
 import { LOOT_LINES, LEGENDARIES, MILESTONES, TITLES } from '../data/loot.js';
-import { RIFT_TEXT, TROPHIES, TROPHY_HUNG, TROPHY_WAITING, PARAGON_LINE, RIFTS_OPEN } from '../data/tavern.js';
-import { tavernMods, recordTrophy, paragonRank, paragonTitle } from './tavern.js';
+import { RIFT_TEXT, TROPHIES, TROPHY_HUNG, TROPHY_WAITING, PARAGON_LINE, RIFTS_OPEN, RIFT_RULE_LINE, KEEPSAKE_LINE, MENTOR_TEXT } from '../data/tavern.js';
+import { tavernMods, recordTrophy, paragonRank, paragonTitle, tavernParagon, keepsakesBetween, mentorRescue } from './tavern.js';
+import { riftRuleOn, riftNumbers } from './rifts.js';
 import { boonMods } from './boons.js';
 import { RARES, MASTERY_TEXT } from '../data/rares.js';
 import { SITE_LIST, SITE_BY_ID, KEEPER_BY_ID, SITE_TEXT } from '../data/sites.js';
 import { REGULARS, BOARD_TEXT, HAPPENING_BY_ID, HAPPENING_EFFECT } from '../data/board.js';
-import { RARE, MASTERY, masteryRank, SITE, HAPPENING, REGULAR_EVERY, goldUnit } from './rules.js';
-import { conditionAt, happeningAt } from './world.js';
+import { RARE, MASTERY, masteryRank, SITE, HAPPENING, REGULAR_EVERY, goldUnit, MENTOR } from './rules.js';
+import { conditionAt, happeningAt, worldDate } from './world.js';
 
 export const FOCUSES = ['roam', 'quest', 'delve', 'rift'];
 
@@ -420,15 +421,20 @@ function delveTask(state, hero, events) {
 }
 const random50 = (state) => randInt(state, 0, 1) === 1;
 
-// The Planar Rifts: one floor per task, wherever the hero happens to be standing.
+// The Planar Rifts: one floor per task, wherever the hero happens to be standing. A run follows the rule
+// of the day it starts (js/rifts.js) to its end.
 function riftTask(state, hero, events) {
   if (!hero.rift) {
-    hero.rift = { floor: 1, potions: DUNGEON_POTIONS + modsOf(hero).n.potions + takeSupplies(hero) }; // potions are carried in, as into a dungeon
+    const rule = riftRuleOn(worldDate(state));
+    const nr = riftNumbers(rule.id);
+    // Potions are carried in, as into a dungeon. Under a rule that allows none, the merchant's wait for the next run.
+    hero.rift = { floor: 1, rule: rule.id, potions: nr.potions ?? DUNGEON_POTIONS + modsOf(hero).n.potions + takeSupplies(hero) };
     hero.fresh = true;
     hero.stats.riftRuns = (hero.stats.riftRuns ?? 0) + 1;
-    emit(hero, events, 'story', RIFT_TEXT.enter);
+    emit(hero, events, 'story', RIFT_TEXT.enter, { rule: rule.id }, { roll: fill(RIFT_RULE_LINE, { rule: rule.name, does: rule.does }) });
   }
-  const worth = randInt(state, RIFT.secs[0], RIFT.secs[1]);
+  // A rule that makes floors quicker makes them pay for the time they take, not the time they would have.
+  const worth = Math.max(5, Math.round(randInt(state, RIFT.secs[0], RIFT.secs[1]) * riftNumbers(hero.rift.rule).time));
   return { kind: 'rift', floor: hero.rift.floor, text: pick(state, RIFT_TEXT.tasks), worth, duration: quicker(worth, modsOf(hero).n.speedDelve), elapsed: 0 };
 }
 
@@ -593,6 +599,7 @@ function takeDamage(hero, amount, sk, ctx) {
 export function giveXp(state, hero, xp, events) { return levelUps(state, hero, xp, events); }
 function levelUps(state, hero, xp, events) {
   for (const level of gainXp(hero, xp)) {
+    noteLevel(hero, level);
     emit(hero, events, 'levelup', fill(pick(state, LEVEL_UP), { level, name: hero.name }), { level });
     if (level === SUBCLASS_LEVEL && !hero.subclass) emit(hero, events, 'growth', SUBCLASS_READY, { waiting: 'subclass' });
     if (ABILITY_LEVELS.includes(level)) emit(hero, events, 'growth', ABILITY_READY, { waiting: 'ability' });
@@ -605,8 +612,11 @@ function levelUps(state, hero, xp, events) {
   if (hero.level >= MAX_LEVEL) {
     const rank = paragonRank(hero);
     while ((hero.paragon ?? 0) < rank) {
+      const before = tavernParagon(state); // the highest rank any hero of the tavern has reached so far
       hero.paragon = (hero.paragon ?? 0) + 1;
       emit(hero, events, 'paragon', fill(PARAGON_LINE, { rank: hero.paragon, title: paragonTitle(hero.paragon), name: hero.name }), { rank: hero.paragon });
+      // A rank no hero of the tavern has reached before may unlock a keepsake (nothing that changes a rule).
+      for (const k of keepsakesBetween(before, hero.paragon)) emit(hero, events, 'tavern', fill(KEEPSAKE_LINE, { name: hero.name, what: k.what }), { keepsake: k.rank });
     }
   }
 }
@@ -891,21 +901,22 @@ function resolveRiftFloor(state, hero, task, events) {
   if (!run) return;
   const floor = run.floor;
   const d = DUNGEONS[REGIONS[REGIONS.length - 1].id];
-  const up = 1 + RIFT.rewardPerFloor * (floor - 1);
+  const nr = riftNumbers(run.rule); // the rule of the day the run began
+  const up = 1 + nr.per * (floor - 1);
   const f = (text) => fill(text, { floor, name: hero.name });
   const foe = {
     name: `Floor ${floor}`, level: MAX_LEVEL, check: RIFT_TEXT.check, trap: true,
-    dc: d.dc + Math.floor((floor - 1) / RIFT.dcEvery),
-    dmg: Math.round(d.dmg * (1 + RIFT.damagePerFloor * (floor - 1))),
-    xp: Math.round((task.worth ?? task.duration) * DELVE_XP_PER_SECOND * up),
-    gold: [Math.round(d.gold[0] * up), Math.round(d.gold[1] * up)],
+    dc: d.dc + nr.dc + Math.floor((floor - 1) / nr.dcEvery),
+    dmg: Math.round(d.dmg * nr.dmg * (1 + RIFT.damagePerFloor * (floor - 1))),
+    xp: Math.round((task.worth ?? task.duration) * DELVE_XP_PER_SECOND * up * nr.xp),
+    gold: [Math.round(d.gold[0] * up * nr.gold), Math.round(d.gold[1] * up * nr.gold)],
     hit: RIFT_TEXT.hit.map(f), miss: RIFT_TEXT.miss.map(f), crit: f(RIFT_TEXT.crit), fumble: f(RIFT_TEXT.fumble),
     defeat: f(RIFT_TEXT.ko),
   };
   const result = encounter(state, hero, foe, events, 'rift');
   if (!result.ok) return; // knocked out: the run is over
   hero.stats.riftFloors = (hero.stats.riftFloors ?? 0) + 1;
-  if (floor % RIFT.wardenEvery === 0) {
+  if (floor % nr.warden === 0) {
     emit(hero, events, 'story', f(RIFT_TEXT.warden), { warden: floor });
     loot(state, hero, events, { level: MAX_LEVEL, source: 'boss' });
     const missing = Object.keys(LEGENDARIES).filter((r) => !wearsLegend(hero, r));
@@ -917,8 +928,13 @@ function resolveRiftFloor(state, hero, task, events) {
     hero.stats.riftBest = floor;
     if (floor % 5 === 0) emit(hero, events, 'story', f(RIFT_TEXT.deepest), { deepest: floor });
   }
+  const bests = (hero.riftBests ??= {}); // the deepest floor under each rule
+  const rule = run.rule ?? 'still';
+  if (floor > (bests[rule] ?? 0)) bests[rule] = floor;
   run.floor += 1;
-  if (hero.knockedOutUntil == null) rest(state, hero, events);
+  if (hero.knockedOutUntil != null) return;
+  if (nr.noRest) drinkPotion(state, hero, events); // no hit points between floors, but a potion may still be drunk
+  else rest(state, hero, events);
 }
 
 // How embarrassing it is to lose to something: lower level first, then lower DC.
@@ -944,7 +960,12 @@ function knockOut(state, hero, foe, events, source) {
   let seconds = recoverySeconds(hero.level) * (1 - 0.03 * Math.max(0, mod(hero.abilities.con)));
   if (hero.race === 'elf') seconds *= 0.8;
   seconds *= 1 - Math.min(0.6, modsOf(hero).n.recovery + tavernMods(state).recovery); // boots, skills, and the tavern's room
+  const mentor = mentorRescue(state, hero); // the first knockout of the hero's day, with a mentor, is over sooner
+  if (mentor) seconds *= MENTOR.rescue;
   hero.knockedOutUntil = hero.age + Math.round(seconds);
+  const ko = (hero.career ??= { days: [], levelAt: {}, ko: {} }).ko; // for the Stats tab: knockouts by place
+  const where = source === 'rift' ? 'rift' : hero.region;
+  ko[where] = (ko[where] ?? 0) + 1;
 
   const inDungeon = source === 'delve' || source === 'boss';
   const lost = inDungeon ? 'run' : source === 'quest' ? 'step' : source === 'rift' ? 'rift' : null;
@@ -954,6 +975,7 @@ function knockOut(state, hero, foe, events, source) {
   const site = place.site ? place.id : undefined; // a lesser delve keeps its own count of defeats
   let text = foe.defeat + (lost === 'run' ? ' ' + RUN_LOST : lost === 'step' ? ' ' + STEP_LOST : '');
   emit(hero, events, 'knockout', text, { monster: foe.id, source, lost, region, site, seconds: Math.round(seconds) });
+  if (mentor) emit(hero, events, 'mentor', fill(MENTOR_TEXT.rescue, { mentor: mentor.name, name: hero.name }), { mentor: mentor.id });
 
   if (inDungeon) {
     hero.delve = null;

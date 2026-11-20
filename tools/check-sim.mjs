@@ -17,7 +17,8 @@
 // loading intact. Then Phase 7: every line of game text against the Humor and voice rules
 // (tools/check-text.mjs), which sound plays for what, the tavern tune, the default sound settings,
 // and the credits data. Then round five: rare monsters and mastery, lesser delves, story quests by
-// level, the regular, happenings and their errands, and the notice board. Exits with an error if any check fails.
+// level, the regular, happenings and their errands, and the notice board. Then after round five: the career
+// kept for the charts, the smith, mentors, the Rifts' rules, and Paragon keepsakes. Exits with an error if any check fails.
 
 import { advance, summarize } from '../js/sim.js';
 import { newSave, exportSave, importSave, migrate, SAVE_VERSION } from '../js/state.js';
@@ -58,6 +59,11 @@ import { activeHero } from '../js/hero.js';
 import { nextTask } from '../js/tasks.js';
 import { heroLook } from '../js/sprite.js';
 import { MONSTER_BY_ID } from '../data/monsters.js';
+import { reforge, enchant, SMITH, enchantPrice } from '../js/smith.js';
+import { goldUnit, MENTOR } from '../js/rules.js';
+import { chooseMentor, mentorRescue, tavernParagon, unlockedAt, chooseWisp, signOpen } from '../js/tavern.js';
+import { riftRuleOn, RIFT_RULES } from '../js/rifts.js';
+import { WISP_CHOICES, SIGN } from '../data/tavern.js';
 const num = (n) => Math.round(n).toLocaleString('en-US');
 
 let failed = 0;
@@ -1244,6 +1250,147 @@ console.log('\nRound five: rare monsters, lesser delves, the notice board, happe
   const one = placed(517, 'fighter', 'human', 10, 'peaks', 'roam'); one.lastSavedAt = new Date(2026, 10, 16, 20).getTime(); takeBounty(one, one.heroes[0], 0, new Date(one.lastSavedAt)); advance(one, 8 * HOUR);
   const many = placed(517, 'fighter', 'human', 10, 'peaks', 'roam'); many.lastSavedAt = new Date(2026, 10, 16, 20).getTime(); takeBounty(many, many.heroes[0], 0, new Date(many.lastSavedAt)); for (let i = 0; i < 8 * 60; i++) advance(many, 60);
   ok(JSON.stringify(one) === JSON.stringify(many), 'eight hours across midnight in one call equals 480 one-minute calls');
+}
+
+// ---------- After round five: the career charts, the smith, mentors, the Rifts' rules, Paragon keepsakes ----------
+console.log('\nAfter round five: career, smith, mentors, the Rifts\' rules, keepsakes:');
+{
+  const recruit = (s, cls, race, name = 'Recruit') => createHero(s, { name, race, cls, appearance: defaultAppearance(race), baseScores: assignScores(cls, STANDARD_ARRAY) });
+
+  // The career, for the Stats tab's charts.
+  const cs = fresh(601, 'wizard', 'elf');
+  const ch = cs.heroes[0];
+  advance(cs, 2.5 * 24 * HOUR);
+  const days = ch.career.days.filter(Boolean);
+  ok(days.length === 3 && days.every((d) => d.length === 4) && days[2][0] === Math.round(ch.xp) && days[2][3] === ch.level && days[0][0] < days[1][0],
+    `the career keeps how each day ended: XP, gold, knockouts, and level (${days.length} days)`);
+  const lv = Object.keys(ch.career.levelAt).map(Number);
+  ok(lv.length === ch.level && ch.career.levelAt[1] === 0 && Object.values(ch.career.levelAt).every((t, i, all) => i === 0 || t >= all[i - 1]), `and the moment each level came (${lv.length} levels)`);
+  const koCount = Object.values(ch.career.ko).reduce((a, b) => a + b, 0);
+  ok(koCount === ch.stats.knockouts, `and knockouts by place (${koCount}, the same as the Lifetime count)`);
+  const cBack = importSave(exportSave(cs)).heroes[0];
+  ok(JSON.stringify(cBack.career) === JSON.stringify(ch.career), 'the career travels in the save string');
+
+  // The smith: reforging.
+  const sm = placed(602, 'fighter', 'human', 10, 'peaks', 'roam');
+  const sh = sm.heroes[0];
+  sh.gold = 10 ** 7;
+  sh.gear.weapon = { tier: 2, level: 10, name: 'Test Blade' };
+  const p0 = gearPower(sh.gear.weapon), crit0 = itemStats('weapon', sh.gear.weapon).critReward;
+  const paid = [reforge(sm, sh, 'weapon'), reforge(sm, sh, 'weapon'), reforge(sm, sh, 'weapon'), reforge(sm, sh, 'weapon')];
+  ok(paid[0] === 2 * goldUnit(10) && paid[1] === 4 * goldUnit(10) && paid[2] === 6 * goldUnit(10) && paid[3] === null && sh.gear.weapon.forge === 3,
+    `reforging costs 2, 4, then 6 gold units of the piece's level (${num(2 * goldUnit(10))} gp first at 10), three times at most`);
+  ok(Math.abs(gearPower(sh.gear.weapon) - p0 - 3 / 7) < 1e-9 && itemStats('weapon', sh.gear.weapon).critReward > crit0 && sh.stats.forged === 3 && sh.chronicle.filter((l) => l.k === 'smith').length === 3,
+    'each reforging counts as a level of the piece, and writes a Chronicle line');
+  receive(sh, 'weapon', { tier: 3, level: 10, name: 'Better Blade' });
+  ok(sh.gear.weapon.name === 'Better Blade' && !sh.gear.weapon.forge, 'the work goes with the piece: a better piece goes on without it');
+  // Enchanting.
+  const hp0 = maxHp(sh), gold0 = sh.gold, roll0 = gearMods(sh).roll ?? 0;
+  const e1 = enchant(sm, sh, 'head', 'vigour');
+  const e2 = enchant(sm, sh, 'weapon', 'sure');
+  ok(e1 === enchantPrice(10) && e2 === enchantPrice(10) && sh.gold === gold0 - 2 * enchantPrice(10) && maxHp(sh) > hp0 && gearMods(sh).roll === roll0 + 1,
+    `an enchantment costs ${SMITH.enchantUnits} gold units of the hero's level and adds its numbers (+1 to rolls, +5% hit points)`);
+  enchant(sm, sh, 'body', 'sure');
+  ok(sh.enchants.body === 'sure' && !sh.enchants.weapon && gearMods(sh).roll === roll0 + 1 && enchant(sm, sh, 'body', 'sure') === null, 'each enchantment is on one slot at a time: another slot moves it');
+  receive(sh, 'head', { tier: 4, level: 12, name: 'Better Helm' });
+  ok(sh.enchants.head === 'vigour' && maxHp(sh) > hp0, 'an enchantment belongs to the slot, so it stays when the piece changes');
+  const poor = placed(603, 'rogue', 'human', 10, 'peaks', 'roam');
+  poor.heroes[0].gold = 10;
+  ok(reforge(poor, poor.heroes[0], 'weapon') === null && enchant(poor, poor.heroes[0], 'weapon', 'keen') === null && poor.heroes[0].gold === 10, 'nothing is done without the gold');
+  const sBack = importSave(exportSave(sm)).heroes[0];
+  ok(JSON.stringify(sBack.enchants) === JSON.stringify(sh.enchants), 'enchantments travel in the save string');
+  const odd = JSON.parse(JSON.stringify(sm));
+  odd.heroes[0].enchants = { head: 'vigour', feet: 'vigour', hands: 'nonsense' };
+  odd.heroes[0].gear.body.forge = 99;
+  const mended = migrate(odd).heroes[0];
+  ok(JSON.stringify(mended.enchants) === '{"head":"vigour"}' && mended.gear.body.forge === SMITH.forgeMax, 'an unreadable or doubled enchantment is dropped, and the smith\'s work is kept within three');
+  const forged = placed(604, 'fighter', 'human', 10, 'peaks', 'roam');
+  forged.heroes[0].gear.weapon = { tier: 2, level: 10, name: 'Kept Blade', forge: 2 };
+  ok(importSave(exportSave(forged)).heroes[0].gear.weapon.forge === 2, 'a reforged piece keeps its work in the save string');
+
+  // Mentors.
+  const ms = fresh(605, 'fighter', 'human');
+  ms.heroes = []; ms.activeHeroId = null;
+  const old = recruit(ms, 'cleric', 'dwarf', 'Old Hand'); old.level = MAX_LEVEL; old.xp = xpForLevel(MAX_LEVEL); ms.heroes.push(old);
+  const legend = retire(ms, old.id);
+  const pupil = recruit(ms, 'wizard', 'elf', 'Pupil'); ms.heroes.push(pupil); ms.activeHeroId = pupil.id;
+  // Out of their depth, so there are knockouts to shorten.
+  pupil.level = 4; pupil.xp = xpForLevel(4); pupil.hp = maxHp(pupil);
+  for (const r of REGIONS) { if (r.id === 'gloamfen') break; pupil.dungeonClears[r.id] = 1; }
+  pupil.region = 'gloamfen'; setFocus(pupil, 'delve');
+  const other = recruit(ms, 'rogue', 'human', 'Other'); ms.heroes.push(other);
+  ok(chooseMentor(ms, pupil, legend.id) && pupil.mentor === legend.id && !chooseMentor(ms, other, legend.id) && other.mentor === null, 'a legend takes one hero in hand at a time');
+  const me = advance(ms, 3.5 * 24 * HOUR);
+  const words = me.filter((e) => e.type === 'mentor' && e.boon);
+  ok(words.length >= 3 && words.every((e) => e.boon === 'blessed') && pupil.stats.mentorWords === words.length && new Set(words.map((e) => Math.floor(e.at / 86400))).size === words.length, `word comes once in each of the hero's days, with a boon of the mentor's kind (${words.length} in 3.5 days, none while on the good bench; from a Cleric, Blessed)`);
+  const kos = me.filter((e) => e.type === 'knockout');
+  const rescues = me.filter((e) => e.type === 'mentor' && !e.boon);
+  const rescuedDays = new Set(kos.filter((e, i) => me[me.indexOf(e) + 1]?.type === 'mentor').map((e) => Math.floor(e.at / 86400)));
+  const day0 = kos.filter((e) => Math.floor(e.at / 86400) === Math.floor(kos[0].at / 86400) && e.seconds);
+  ok(day0.length >= 2 && Math.abs(day0[0].seconds / day0[1].seconds - MENTOR.rescue) < 0.02, `in half the time (${Math.round(day0[0].seconds / 60)} min, then ${Math.round(day0[1].seconds / 60)} min for the next that day)`);
+  ok(kos.length > 0 && rescues.length === rescuedDays.size && rescues.length === new Set(kos.map((e) => Math.floor(e.at / 86400))).size, `the first knockout of each day is shortened by the mentor (${rescues.length} of ${kos.length} knockouts)`);
+  const twin = fresh(606, 'wizard', 'elf'); const th = twin.heroes[0]; th.level = 5; th.xp = xpForLevel(5);
+  twin.tavern.legends.push({ ...legend }); th.mentor = legend.id;
+  ok(mentorRescue(twin, th)?.id === legend.id && mentorRescue(twin, th) === null, 'and only the first');
+  ok(chooseMentor(ms, pupil, null) && pupil.mentor === null && chooseMentor(ms, other, legend.id), 'parting ways frees the legend for another hero');
+  const lost = JSON.parse(JSON.stringify(ms));
+  lost.tavern.legends = [];
+  ok(migrate(lost).heroes.every((h) => h.mentor === null), 'a mentor who is not in the Hall is dropped from the save');
+
+  // The Rifts' rules.
+  const rules = new Set();
+  let repeats = 0;
+  for (let d = 0; d < 60; d++) {
+    const a = riftRuleOn(new Date(2026, 0, 1 + d)).id;
+    rules.add(a);
+    if (d && a === riftRuleOn(new Date(2026, 0, d)).id) repeats += 1;
+  }
+  ok(rules.size === RIFT_RULES.length && repeats <= 6 && riftRuleOn(new Date(2026, 3, 4, 1)).id === riftRuleOn(new Date(2026, 3, 4, 23)).id, `the Rifts follow one of ${RIFT_RULES.length} rules each day, all seen in 60 days, seldom the same two days running (${repeats} times)`);
+  const dayOfRule = (id) => { for (let d = 0; d < 400; d++) { const t = new Date(2026, 0, 1 + d, 9); if (riftRuleOn(t).id === id) return t; } return null; };
+  const riftUnder = (id, seed, hours) => {
+    const s = placed(seed, 'fighter', 'human', 20, 'wyrmspire', 'rift');
+    const h = s.heroes[0];
+    for (const slot of SLOT_IDS) h.gear[slot] = { tier: 4, level: 20, name: 'Test' };
+    h.skillPoints = 27; h.abilityPoints = 10; grow(h, 'vanguard'); h.hp = maxHp(h); h.supplies.potions = 3;
+    s.lastSavedAt = dayOfRule(id).getTime();
+    const ev = advance(s, hours * HOUR);
+    return { s, h, ev };
+  };
+  const dry = riftUnder('dry', 607, 0.05);
+  ok(dry.h.rift?.rule === 'dry' && dry.h.rift.potions === 0 && dry.h.supplies.potions === 3, 'under the Dry Stair no potions go in, and the merchant\'s wait for another run');
+  const watch = riftUnder('watch', 608, 12);
+  ok(watch.ev.some((e) => e.warden === 5) && watch.h.riftBests.watch === watch.h.stats.riftBest, `under the Wardens' Watch a Warden waits on floor 5, and the best floor is kept for the rule (floor ${watch.h.riftBests.watch})`);
+  const steep = riftUnder('steep', 609, 12), still = riftUnder('still', 609, 12);
+  const dcAt = (r, floor) => r.ev.find((e) => e.type === 'task' && e.source === 'rift' && e.roll && e.text && r.ev.indexOf(e) >= 0 && e.roll.dc != null && e.floor === floor)?.roll.dc;
+  const floorsOf = (r) => r.ev.filter((e) => e.type === 'task' && e.source === 'rift').map((e) => e.roll.dc);
+  ok(Math.max(...floorsOf(steep)) - Math.min(...floorsOf(steep)) >= Math.max(...floorsOf(still)) - Math.min(...floorsOf(still)) - 1 && steep.h.riftBests.steep > 0, `the Steep Stair climbs faster (DC ${Math.min(...floorsOf(steep))} to ${Math.max(...floorsOf(steep))}, against ${Math.min(...floorsOf(still))} to ${Math.max(...floorsOf(still))} on a still day)`);
+  const midnight = placed(610, 'fighter', 'human', 20, 'wyrmspire', 'rift');
+  const mh = midnight.heroes[0];
+  for (const slot of SLOT_IDS) mh.gear[slot] = { tier: 4, level: 20, name: 'Test' };
+  mh.hp = maxHp(mh);
+  const eve = dayOfRule('teeming'); eve.setHours(23, 50);
+  midnight.lastSavedAt = eve.getTime();
+  advance(midnight, 5 * 60);
+  const ruleThen = mh.rift?.rule;
+  advance(midnight, 20 * 60);
+  ok(ruleThen === 'teeming' && (mh.rift === null || mh.rift.rule === 'teeming'), 'a run keeps the rule it began under past midnight');
+  ok(importSave(exportSave(watch.s)).heroes[0].riftBests.watch === watch.h.riftBests.watch, 'the best floor under each rule travels in the save string');
+
+  // Paragon keepsakes.
+  const ps = placed(611, 'rogue', 'human', 20, 'wyrmspire', 'roam');
+  const ph = ps.heroes[0];
+  ok(!chooseWisp(ps, ph, 'rose') && ph.wisp === null, 'the wisp keeps its class colour until the tavern has a Paragon 3');
+  ph.xp = xpForLevel(MAX_LEVEL) + paragonXpFor(3) - 10;
+  ph.hp = maxHp(ph);
+  const pe = advance(ps, HOUR);
+  const keeps = pe.filter((e) => e.type === 'tavern' && e.keepsake);
+  ok(ph.paragon === 3 && keeps.map((e) => e.keepsake).join() === '1,2,3' && tavernParagon(ps) === 3 && unlockedAt(ps, 3) && !unlockedAt(ps, 4), 'reaching a Paragon rank first unlocks its keepsakes, each with a Chronicle line');
+  const second = recruit(ps, 'fighter', 'dwarf', 'Second'); second.level = MAX_LEVEL; second.xp = xpForLevel(MAX_LEVEL) + paragonXpFor(1) - 10; second.hp = maxHp(second);
+  ps.heroes.push(second); ps.activeHeroId = second.id;
+  const se = advance(ps, HOUR);
+  ok(second.paragon >= 1 && !se.some((e) => e.keepsake), 'a second hero reaching a rank already reached unlocks nothing new');
+  ok(chooseWisp(ps, ph, 'rose') && portraitOf(ph).fx.wisp === WISP_CHOICES.find((w) => w.id === 'rose').color && chooseWisp(ps, ph, 'class') && ph.wisp === null, 'then a hero\'s wisp may take another colour, and go back');
+  ok(!signOpen(ps, SIGN.boards.find((b) => b.id === 'lacquer')) && signOpen(ps, SIGN.emblems.find((b) => b.id === 'medal')) && signOpen(ps, null, 9) && signOpen(ps, SIGN.boards[0]), 'the sign\'s Paragon choices open with their ranks');
 }
 
 console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll checks passed.');
