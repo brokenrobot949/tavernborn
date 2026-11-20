@@ -22,7 +22,7 @@ import { unlockOnTap, playEvents, sfx } from './audio.js';
 
 const AWAY_SECONDS = 600; // the summary card appears after more than ten minutes away
 const SAVE_EVERY = 10; // seconds between automatic saves
-const TABS = [['hero', 'Hero'], ['map', 'Map'], ['skills', 'Skills'], ['gear', 'Gear'], ['tavern', 'Tavern']];
+const TABS = [['hero', 'Hero'], ['map', 'Quests'], ['skills', 'Skills'], ['gear', 'Stats'], ['tavern', 'Tavern']];
 
 const root = document.getElementById('game');
 const wide = matchMedia('(min-width: 860px)');

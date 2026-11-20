@@ -456,6 +456,13 @@ Rob asked for two more classes. Neither is in the design doc, which still lists 
 - Spec departures to raise with Rob: both classes are outside the design doc. The Barbarian's negative ward and the
   Ranger's d8 (5e gives d10) are balance choices. The Fighter's creation line no longer says "the most hit points".
 
+## Tab names and the walking shield (waiting on Rob's phone test)
+- The Map tab is labelled Quests and the Gear tab Stats (`TABS` in `js/main.js`). Code, files, and section ids keep
+  the old names (`map`, `gear`); only the labels and the one line of text that named the Map tab changed.
+- Walking left or right, every shield is drawn behind the body (`side` in `prepare`, js/sprite.js), as LPC's heater
+  shield already is. The older shields (round, kite, spartan, crusader, plus, engrailed) drew their side walk views in
+  front, so walking right the shield sat over the sword arm. Attacks and the up and down walks are unchanged.
+
 ## Known gaps closed after Phase 7
 - All 26 LPC hair colours are baked (`HAIR_COLORS` in `data/races.js`, natural shades first). The art is now
   7.6 MB; the credits did not change, since no new artwork was added.

@@ -438,7 +438,7 @@ export function mountHero(root, app) {
       retirePanel.hidden = !canRetire(hero);
       if (canRetire(hero)) {
         const after = legacyFor(legends + 1);
-        retireNote.textContent = `${hero.name} can retire to the Hall of Legends: a portrait on the wall, a record of the career, and the hero slot freed. Every hero after them earns ${Math.round(after * 100)}% more XP (2% per legend, 10% at most${legends ? `; ${legends} in the Hall already` : ''}). Or keep going: the Planar Rifts are open on the Map tab, for Paragon ranks, which are titles only. Their gold goes with them, so spend it on tavern upgrades first. Retiring cannot be undone.`;
+        retireNote.textContent = `${hero.name} can retire to the Hall of Legends: a portrait on the wall, a record of the career, and the hero slot freed. Every hero after them earns ${Math.round(after * 100)}% more XP (2% per legend, 10% at most${legends ? `; ${legends} in the Hall already` : ''}). Or keep going: the Planar Rifts are open on the Quests tab, for Paragon ranks, which are titles only. Their gold goes with them, so spend it on tavern upgrades first. Retiring cannot be undone.`;
         retireRow.replaceChildren(confirmBtn('Retire to the Hall of Legends', 'Tap again: retire for good', () => app.retire(hero.id), 'btn primary grow'));
       }
     }

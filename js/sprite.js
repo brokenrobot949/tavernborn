@@ -70,7 +70,7 @@ function sublayers(look) {
     if (!subs) { console.warn('no baked layer for', layerKey(ref)); return; }
     for (const s of subs) {
       const set = s.f[s.b[look.body]];
-      if (set) out.push({ z: shieldFront(ref, s.z), order, custom: s.c ? CUSTOM_ANIMS[s.c] : null, files: set });
+      if (set) out.push({ z: shieldFront(ref, s.z), order, shield: ref.def.startsWith('shield_'), custom: s.c ? CUSTOM_ANIMS[s.c] : null, files: set });
     }
   });
   return out.sort((a, b) => a.z - b.z || a.order - b.order);
@@ -87,12 +87,19 @@ async function prepare(look, anim) {
     const c = oversize[0].custom;
     cycle = c.frames.map((f, i) => ({ body: f, col: i })).slice(c.skip ?? 0);
   }
-  const layers = await Promise.all(subs.map(async (s) => ({ img: await loadImage(s.files[anim]), cell: s.custom ? s.custom.size : FRAME, custom: !!s.custom })));
-  return { size, cycle, layers: layers.filter((l) => l.img), rows: ANIMS[anim].rows };
+  const layers = (await Promise.all(subs.map(async (s) => ({ img: await loadImage(s.files[anim]), z: s.z, shield: s.shield, cell: s.custom ? s.custom.size : FRAME, custom: !!s.custom })))).filter((l) => l.img);
+  // Walking left or right, the shield goes behind the body, as LPC's heater shield draws it (its
+  // side views are only in its back layer, z 2). The older shields draw them in front, so walking
+  // right the shield covered the sword arm and the hero seemed to carry both in one hand. Attacks
+  // keep the shield in front, as all the art does.
+  const side = anim === 'walk' && layers.some((l) => l.shield)
+    ? layers.map((l) => ({ ...l, z: l.shield ? 2 : l.z })).sort((a, b) => a.z - b.z) : null;
+  return { size, cycle, layers, side, rows: ANIMS[anim].rows };
 }
 
 function drawFrame(ctx, prep, step, row) {
-  const { size, cycle, layers } = prep;
+  const { size, cycle } = prep;
+  const layers = prep.side && (row === 1 || row === 3) ? prep.side : prep.layers;
   const f = cycle[step % cycle.length];
   for (const l of layers) {
     const col = l.custom ? f.col : f.body;
