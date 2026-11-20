@@ -746,7 +746,12 @@
 
 /* ----- After round five: the quest log (Quests tab) ----- */
 .view-subtitle { margin: 14px 0 6px; font-size: 1rem; }
-.quest-log h3 { display: flex; align-items: center; gap: 6px; }
+.quest-log > summary { display: flex; align-items: center; gap: 6px; min-height: var(--tap); cursor: pointer; list-style: none; font: 700 1.05rem var(--display); }
+.quest-log > summary::-webkit-details-marker { display: none; }
+.quest-log .log-head { flex: 1; }
+.log-count { font-size: 0.8rem; font-weight: 600; font-family: inherit; color: var(--ink-soft); }
+.log-fold { width: 9px; height: 9px; margin: 0 6px 4px 8px; border-right: 2px solid var(--ink-soft); border-bottom: 2px solid var(--ink-soft); transform: rotate(-45deg); transition: transform 0.2s; }
+.quest-log[open] .log-fold { transform: rotate(45deg); margin-bottom: 4px; }
 .quest-log .log { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
 .log-entry { --region: #8a6a3a; display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: start; width: 100%; min-height: var(--tap);
   padding: 8px 10px; border-radius: 6px; background: #fff; border: 1px solid var(--line); box-shadow: inset 4px 0 0 var(--region);

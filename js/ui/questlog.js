@@ -106,11 +106,27 @@ export function questLogKey(state, hero, now = new Date()) {
   return JSON.stringify(questEntries(state, hero, now).map((e) => [e.kind, e.title, e.have, e.need, e.done]));
 }
 
+// Whether the log is folded open, remembered on the device (not the save), open to begin with.
+const OPEN_KEY = 'tavernborn.questlog.open';
+function logOpen() {
+  try { return localStorage.getItem(OPEN_KEY) !== '0'; } catch { return true; }
+}
+
 export function questLog(state, hero, goTo) {
   const items = questEntries(state, hero);
-  return el('section', { className: 'panel quest-log' },
-    el('h3', {}, icon('scroll'), el('span', { textContent: 'Quest log' })),
+  const live = items.filter((e) => !e.done).length;
+  const box = el('details', { className: 'panel quest-log' },
+    el('summary', {},
+      icon('scroll'),
+      el('span', { className: 'log-head', textContent: 'Quest log' }),
+      el('span', { className: 'log-count', textContent: live ? `${live} on` : 'Quiet' }),
+      el('span', { className: 'log-fold', attrs: { 'aria-hidden': 'true' } })),
     items.length
       ? el('ul', { className: 'log' }, ...items.map((e) => entry(e, goTo)))
       : el('p', { className: 'hint', textContent: `Nothing in hand. ${REGION_BY_ID[hero.region].name} is quiet today.` }));
+  box.open = logOpen();
+  box.addEventListener('toggle', () => {
+    try { localStorage.setItem(OPEN_KEY, box.open ? '1' : '0'); } catch { /* not remembered, which is fine */ }
+  });
+  return box;
 }

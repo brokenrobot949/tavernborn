@@ -470,7 +470,7 @@ Rob asked for two more classes. Neither is in the design doc, which still lists 
 ## Round six: the quest log, career charts, the smith, mentors, the Rifts' rules (waiting on Rob's phone test)
 Rob picked five of six suggestions (not the rival adventurer). None of it is in the design doc. Saves stay version 6
 (`lateFields` in `js/state.js`: anything unreadable is dropped; an older hero starts with none of it).
-- The quest log (`js/ui/questlog.js`), at the top of the Quests tab: the story quest in hand, story quests ready or
+- The quest log (`js/ui/questlog.js`), at the top of the Quests tab, a fold-out with a count of what is on (open or folded is remembered on the device, `tavernborn.questlog.open`): the story quest in hand, story quests ready or
   waiting in every open region, today's errands, the bounty in hand, the regular here, the dungeon that opens the road
   on, lesser delves not yet cleared up to the hero's level, and at level 20 today's Rift rule. An entry with a place
   opens that region's card on the map below. It only gathers what other screens already said.
