@@ -239,13 +239,13 @@
       const s = summary;
       const l20 = s.levels[s.levels.length - 1];
       const days = l20.median == null ? null : l20.median / DAY;
-      const pass = days != null && days >= 28 && days <= 32;
+      const pass = days != null && days >= 19 && days <= 23;
       const judged = s.ran.mode === 'road' && s.ran.damageTimes === 1;
       const road = s.ran.mode !== 'vale';
       const cleared = s.clearedLast >= 0.9 * s.heroes;
       const verdict = days == null ? '<span class="verdict fail">✗ The median hero did not reach level 20 in 60 days</span>'
-        : pass ? `<span class="verdict pass">✓ Inside the 28 to 32 day target${judged ? '' : ' (not the standard run)'}</span>`
-        : `<span class="verdict fail">✗ Outside the 28 to 32 day target${judged ? '' : ' (not the standard run)'}</span>`;
+        : pass ? `<span class="verdict pass">✓ Inside the 19 to 23 day target${judged ? '' : ' (not the standard run)'}</span>`
+        : `<span class="verdict fail">✗ Outside the 19 to 23 day target${judged ? '' : ' (not the standard run)'}</span>`;
       $('tiles').innerHTML = `
         <div class="tile wide"><b>${days == null ? 'Not reached' : days.toFixed(1) + ' days'}</b><span>Median time to level ${MAX_LEVEL}${s.complete ? '' : ' (so far)'}. Middle 80% of heroes: ${formatTime(l20.p10)} to ${formatTime(l20.p90)}.</span><br>${verdict}</div>
         ${road ? `<div class="tile wide"><b>${s.clearedLast} of ${s.heroes}</b><span>heroes cleared the last dungeon, The Hoard of Vexaldrith${s.complete ? '' : ' (so far)'}</span><br><span class="verdict ${cleared ? 'pass' : 'fail'}">${cleared ? '✓' : '✗'} Phase 3 asks for a simulated hero to clear Wyrmspire; this run wants nine in ten</span></div>` : ''}

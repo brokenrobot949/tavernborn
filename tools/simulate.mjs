@@ -7,8 +7,8 @@
 //   smith  the standard road, with the player also buying enchantments and reforgings (js/smith.js)
 // After the standard run it also plays a second hero for the first 100: each starts in the tavern
 // the first one left (the upgrades they bought) with one legend in the Hall, so +2% XP.
-// Exits with an error if, on the standard run, the median hero does not reach level 20 in 28 to
-// 32 days or fewer than nine in ten heroes clear the last dungeon.
+// Exits with an error if, on the standard run, the median hero does not reach level 20 in 19 to
+// 23 days or fewer than nine in ten heroes clear the last dungeon.
 
 import { prepareWorld, heroPlan, runHero, summarize, formatTime, subclassLabel, tavernAfter, TIER_NAMES, DAY, MAX_LEVEL } from './simulate-core.js';
 
@@ -70,8 +70,8 @@ Second hero (${n} heroes, the first one's upgrades and +2% XP from one legend): 
 
 const l20 = s.levels[s.levels.length - 1];
 const days = l20.median == null ? null : l20.median / DAY;
-const paceOk = days != null && days >= 28 && days <= 32;
+const paceOk = days != null && days >= 19 && days <= 23;
 const clearOk = s.clearedLast >= 0.9 * heroes;
-console.log(`\nLevel ${MAX_LEVEL}: median ${days == null ? 'not reached' : days.toFixed(1) + ' days'}, ${s.finished} of ${heroes} heroes got there. Target 28 to 32 days: ${mode === 'vale' ? 'not judged in the Vale alone' : paceOk ? 'PASS' : 'FAIL'}`);
+console.log(`\nLevel ${MAX_LEVEL}: median ${days == null ? 'not reached' : days.toFixed(1) + ' days'}, ${s.finished} of ${heroes} heroes got there. Target 19 to 23 days: ${mode === 'vale' ? 'not judged in the Vale alone' : paceOk ? 'PASS' : 'FAIL'}`);
 if (road) console.log(`The Hoard of Vexaldrith: cleared by ${s.clearedLast} of ${heroes} heroes. At least nine in ten: ${clearOk ? 'PASS' : 'FAIL'}`);
 process.exit(mode === 'road' && !(paceOk && clearOk) ? 1 : 0);

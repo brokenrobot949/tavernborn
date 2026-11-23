@@ -19,7 +19,7 @@ import { paragonRank, cleanTavernName, signOf } from './tavern.js';
 import { TROPHIES, RIFT_RULES, WISP_CHOICES } from '../data/tavern.js';
 import { REGIONS } from '../data/regions.js';
 
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 const SAVE_KEY = 'tavernborn.save.v1';
 const EXPORT_PREFIX = 'TVB1.';
 
@@ -40,7 +40,8 @@ export function newSave(seed = (Date.now() ^ Math.floor(Math.random() * 0x100000
 function rescaleXp(h, old) {
   const level = Math.max(1, Math.min(MAX_LEVEL, Math.floor(h.level) || 1));
   h.level = level;
-  if (level >= MAX_LEVEL) { h.xp = Math.max(Number(h.xp) || 0, xpForLevel(MAX_LEVEL)); return; }
+  // At level 20 the XP past the old cap carries over whole, so Paragon ranks stay where they were.
+  if (level >= MAX_LEVEL) { h.xp = xpForLevel(MAX_LEVEL) + Math.max(0, (Number(h.xp) || 0) - old[MAX_LEVEL]); return; }
   const from = old[level], to = old[level + 1];
   const part = Math.max(0, Math.min(0.999, ((Number(h.xp) || 0) - from) / (to - from)));
   h.xp = Math.round(xpForLevel(level) + part * (xpForLevel(level + 1) - xpForLevel(level)));

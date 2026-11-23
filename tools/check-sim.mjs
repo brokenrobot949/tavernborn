@@ -872,12 +872,13 @@ ok(itemStats('weapon', { tier: 4, level: 20 }).roll === 4 && steps.every(([t, l]
   const v4 = placed(97, 'rogue', 'elf', 20, 'wyrmspire', 'delve');
   const fh = v4.heroes[0];
   advance(v4, 2 * HOUR);
-  fh.xp = xpForLevel(MAX_LEVEL) + paragonXpFor(2) + 10; fh.gold = 1234567; fh.skillPoints = MAX_LEVEL - 1 + fh.feats.length - fh.skills.length;
+  fh.xp = PAST_CURVES[4][MAX_LEVEL] + paragonXpFor(2) + 10; fh.gold = 1234567; fh.skillPoints = MAX_LEVEL - 1 + fh.feats.length - fh.skills.length;
   v4.version = 4;
   v4.tavern = { upgrades: {}, legends: [], legacyBonus: 0 }; // as Phase 5 saved it
   for (const key of ['rift', 'paragon', 'retireOffered']) delete fh[key];
   for (const key of ['riftRuns', 'riftFloors', 'riftBest']) delete fh.stats[key];
-  const keep5 = JSON.parse(JSON.stringify({ level: fh.level, xp: fh.xp, gold: fh.gold, gear: fh.gear, skills: fh.skills, skillPoints: fh.skillPoints, feats: fh.feats, abilities: fh.abilities, chronicle: fh.chronicle }));
+  // Version 4 XP was on the month-long curve; the XP past level 20 carries over whole.
+  const keep5 = JSON.parse(JSON.stringify({ level: fh.level, xp: xpForLevel(MAX_LEVEL) + paragonXpFor(2) + 10, gold: fh.gold, gear: fh.gear, skills: fh.skills, skillPoints: fh.skillPoints, feats: fh.feats, abilities: fh.abilities, chronicle: fh.chronicle }));
   const now5 = migrate(JSON.parse(JSON.stringify(v4)));
   const n5 = now5.heroes[0];
   ok(now5.version === SAVE_VERSION && SAVE_VERSION >= 5, 'a version 4 save becomes the current version');
@@ -991,7 +992,7 @@ console.log('\nRound four: the road, the merchant, festivals, deeds:');
   for (const k of ['choice', 'nextChoiceAt', 'lastChoice', 'boons', 'supplies', 'joined', 'deeds', 'title']) delete old.heroes[0][k];
   delete old.tavern.merchant;
   const up = migrate(old);
-  ok(up.version === SAVE_VERSION && SAVE_VERSION === 6 && Array.isArray(up.heroes[0].boons) && up.heroes[0].supplies.potions === 0 && up.heroes[0].choice === null && up.heroes[0].level === rh.level, 'a version 5 save becomes version 6, with nothing lost');
+  ok(up.version === SAVE_VERSION && SAVE_VERSION >= 6 && Array.isArray(up.heroes[0].boons) && up.heroes[0].supplies.potions === 0 && up.heroes[0].choice === null && up.heroes[0].level === rh.level, 'a version 5 save becomes the current version, with nothing lost');
 }
 
 // 16. Pacing across many seeds (tools/simulate.html charts all 20 levels).
@@ -1391,6 +1392,20 @@ console.log('\nAfter round five: career, smith, mentors, the Rifts\' rules, keep
   ok(second.paragon >= 1 && !se.some((e) => e.keepsake), 'a second hero reaching a rank already reached unlocks nothing new');
   ok(chooseWisp(ps, ph, 'rose') && portraitOf(ph).fx.wisp === WISP_CHOICES.find((w) => w.id === 'rose').color && chooseWisp(ps, ph, 'class') && ph.wisp === null, 'then a hero\'s wisp may take another colour, and go back');
   ok(!signOpen(ps, SIGN.boards.find((b) => b.id === 'lacquer')) && signOpen(ps, SIGN.emblems.find((b) => b.id === 'medal')) && signOpen(ps, null, 9) && signOpen(ps, SIGN.boards[0]), 'the sign\'s Paragon choices open with their ranks');
+
+  // The three-week curve (version 7): levels 12 to 20 cost less, and an older hero keeps their place.
+  ok(xpForLevel(11) === PAST_CURVES[6][11] && xpForLevel(12) < PAST_CURVES[6][12] && xpForLevel(MAX_LEVEL) < 0.75 * PAST_CURVES[6][MAX_LEVEL], `levels 1 to 11 cost what they did; level 20 now needs ${num(xpForLevel(MAX_LEVEL))} XP (was ${num(PAST_CURVES[6][MAX_LEVEL])})`);
+  const v6 = placed(707, 'ranger', 'elf', 15, 'wyrmspire', 'roam');
+  const sixHero = JSON.parse(JSON.stringify(v6.heroes[0]));
+  sixHero.level = 15; sixHero.xp = Math.round((PAST_CURVES[6][15] + PAST_CURVES[6][16]) / 2);
+  const top6 = JSON.parse(JSON.stringify(v6.heroes[0]));
+  top6.id = 'top6'; top6.level = MAX_LEVEL; top6.xp = PAST_CURVES[6][MAX_LEVEL] + paragonXpFor(3) + 5;
+  const six = { ...JSON.parse(JSON.stringify(v6)), version: 6, heroes: [sixHero, top6] };
+  const seven = migrate(six);
+  const [m15, m20] = seven.heroes;
+  const half = (m15.xp - xpForLevel(15)) / (xpForLevel(16) - xpForLevel(15));
+  ok(seven.version === 7 && m15.level === 15 && Math.abs(half - 0.5) < 0.01, `a version 6 hero halfway through level 15 is still halfway through it (${(100 * half).toFixed(1)}%)`);
+  ok(m20.level === MAX_LEVEL && m20.xp - xpForLevel(MAX_LEVEL) === paragonXpFor(3) + 5 && paragonRankFor(m20.xp - xpForLevel(MAX_LEVEL)) === 3, 'a level 20 hero keeps every point of XP past level 20, and their Paragon rank');
 }
 
 console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll checks passed.');

@@ -22,7 +22,7 @@ export const DEED_TEXT = {
 export const DEEDS = [
   { id: 'first_clear', name: 'Beneath the Cellar', about: 'Clear the cellar beneath the cellar.', title: 'of the Cellar', test: (h) => (h.dungeonClears.mugwick ?? 0) > 0 },
   { id: 'lucky', name: 'Rolled Well', about: 'Roll 100 natural 20s.', title: 'the Lucky', test: (h) => h.stats.natural20s >= 100 },
-  { id: 'luckier', name: 'Favoured of the Dice', about: 'Roll 2,500 natural 20s.', title: 'Favoured of the Dice', test: (h) => h.stats.natural20s >= 2500 },
+  { id: 'luckier', name: 'Favoured of the Dice', about: 'Roll 2,000 natural 20s.', title: 'Favoured of the Dice', test: (h) => h.stats.natural20s >= 2000 },
   { id: 'clumsy', name: 'Rolled Badly', about: 'Roll 1,000 natural 1s.', title: 'the Unfortunate', test: (h) => h.stats.natural1s >= 1000 },
   { id: 'goosed', name: 'Goosed', about: 'Be knocked out by the goose.', title: 'the Goose-Bitten', test: (h) => !!h.grudges.goose },
   { id: 'regular', name: 'A Regular', about: 'Be carried back to the tavern 10 times.', title: 'of the Good Bench', test: (h) => h.stats.knockouts >= 10 },

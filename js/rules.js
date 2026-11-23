@@ -38,7 +38,12 @@ export const proficiency = (level) => 2 + Math.floor((level - 1) / 4); // +2 at 
 // pacing"; levels the doc does not list are filled in between).
 // Levels 3 to 6 sit later than the doc's first table (40 min, 2 h, 5 h, 10 h): in Rob's play test
 // they came too fast to feel earned.
-export const LEVEL_TARGET_HOURS = [0, 0, 1 / 6, 1, 3, 6.5, 11, 18, 30, 48, 72, 105, 144, 192, 247, 312, 384, 468, 552, 636, 720];
+// Levels 12 to 20 were moved earlier after Rob's play test (version 7): the month-long curve spent
+// 27 of its 30 days on levels 11 to 20, up to three and a half days a level. Now level 20 lands at
+// 21 days and no level takes much more than two (levels 1 to 11 are unchanged).
+export const LEVEL_TARGET_HOURS = [0, 0, 1 / 6, 1, 3, 6.5, 11, 18, 30, 48, 72, 105, 141, 180, 222, 266, 312, 359, 407, 455, 504];
+// The month-long targets (save versions 4 to 6), for the XP curve older saves were made on.
+const MONTH_TARGET_HOURS = [0, 0, 1 / 6, 1, 3, 6.5, 11, 18, 30, 48, 72, 105, 144, 192, 247, 312, 384, 468, 552, 636, 720];
 
 // XP_RATE[level] is the XP per second a hero is expected to earn while working toward that level,
 // so the XP a level costs is its share of the target hours times that rate. A new hero fighting
@@ -51,19 +56,24 @@ export const LEVEL_TARGET_HOURS = [0, 0, 1 / 6, 1, 3, 6.5, 11, 18, 30, 48, 72, 1
 // Phase 5 raised every rate from level 6 by about 6%: gear adds to rolls, to XP, and to what a
 // critical pays, so a geared hero earns that much faster.
 export const XP_RATE = [0, 0, 0.5, 0.5, 0.5, 0.5, 0.51, 0.57, 0.595, 0.615, 0.635, 0.67, 0.69, 0.715, 0.715, 0.715, 0.715, 0.715, 0.715, 0.74, 0.74];
-export function curve(rates) {
+export function curve(rates, hours = LEVEL_TARGET_HOURS) {
   const total = [0, 0];
-  for (let level = 2; level <= MAX_LEVEL; level++) total[level] = total[level - 1] + 3600 * (LEVEL_TARGET_HOURS[level] - LEVEL_TARGET_HOURS[level - 1]) * rates[level];
+  for (let level = 2; level <= MAX_LEVEL; level++) total[level] = total[level - 1] + 3600 * (hours[level] - hours[level - 1]) * rates[level];
   return total.map(Math.round);
 }
 const XP_FOR_LEVEL = curve(XP_RATE);
 export const xpForLevel = (level) => XP_FOR_LEVEL[Math.min(level, MAX_LEVEL)];
 // Curves older saves were made on: [save version, XP rate per level]. Version 1 (Phases 1 and 2)
 // priced levels after 6 at 0.48 a second; version 2 (Phase 3) at 0.51.
-// Version 3 (Phase 4) is the rate list below.
+// Version 3 (Phase 4) is the rate list below. Versions 4 to 6 are today's rates on the month-long
+// targets. Every one of them was made on the month-long targets.
 const flat = (late) => XP_RATE.map((_, level) => (level < 2 ? 0 : level <= 6 ? 0.5 : late));
 const PHASE_4_RATE = [0, 0, 0.5, 0.5, 0.5, 0.5, 0.5, 0.54, 0.56, 0.58, 0.6, 0.63, 0.65, 0.675, 0.675, 0.675, 0.675, 0.675, 0.675, 0.7, 0.7];
-export const PAST_CURVES = { 1: curve(flat(0.48)), 2: curve(flat(0.51)), 3: curve(PHASE_4_RATE) };
+const monthCurve = curve(XP_RATE, MONTH_TARGET_HOURS);
+export const PAST_CURVES = {
+  1: curve(flat(0.48), MONTH_TARGET_HOURS), 2: curve(flat(0.51), MONTH_TARGET_HOURS), 3: curve(PHASE_4_RATE, MONTH_TARGET_HOURS),
+  4: monthCurve, 5: monthCurve, 6: monthCurve,
+};
 
 // One d20 check. `rerollOne` is the Goblin quirk: a natural 1 is rolled again, once.
 // `critFrom` is the lowest die that counts as a critical (skills lower it from 20).

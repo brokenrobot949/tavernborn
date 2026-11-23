@@ -2,7 +2,7 @@
 
 ## What this is
 An idle D&D-style fantasy game. One hero adventures on their own from a tavern, The Wobbly
-Griffin, and reaches level 20 in about a month of real time. The player guides growth.
+Griffin, and reaches level 20 in about three weeks of real time (a month until November 2026). The player guides growth.
 Spec: the "Tavernborn — Game Design Document" Claude Doc (tabs: Design, Sprite looks,
 Claude Code handoff). The spec wins over guesses.
 
@@ -99,7 +99,7 @@ Rob is the game designer and does not write code.
 | --- | --- | --- |
 | 0. Sprite proof | One hero composited from layers, animated, with gear swapping | Rob approves the look on his phone |
 | 1. Core loop | Creation, task bar, d20 rolls, XP, Chronicle, save and offline progress, Roam only, region 1 | A hero levels overnight with the tab closed |
-| 2. Simulator | `tools/simulate.html` runs 500 heroes and charts time to each level | Level 20 lands at 28 to 32 days |
+| 2. Simulator | `tools/simulate.html` runs 500 heroes and charts time to each level | Level 20 lands at 28 to 32 days (now 19 to 23: see "The three-week curve") |
 | 3. Activities and map | Quests, dungeons, knockouts with the paid skip, all eight regions, world map, story chapter cards | A simulated hero clears Wyrmspire |
 | 4. Growth | Skill trees for four classes (six since the Barbarian and Ranger), subclasses, ability increases, respec | Every skill has an effect and a Chronicle line |
 | 5. Gear and visuals | Loot, auto-equip, five looks per slot, milestones, backdrops | The sprite changes at each rarity tier |
@@ -108,7 +108,7 @@ Rob is the game designer and does not write code.
 
 ## Status
 - Current phase: 7 (Polish), built and waiting on Rob's phone test. This is the last phase in the plan. The newest
-  work is round six (the quest log, career charts, the smith, mentors, the Rifts' rules), described below; before that,
+  work is the three-week curve (levels 12 to 20 sooner, below); before that, round six (the quest log, career charts, the smith, mentors, the Rifts' rules), described below; before that,
   the two new classes, Barbarian and Ranger, and round five (rare monsters, lesser
   delves, the notice board, happenings).
   Phases 1 to 6 are also still in his phone test. Phase 0 is approved.
@@ -514,6 +514,31 @@ Rob picked five of six suggestions (not the rival adventurer). None of it is in 
   the simulated standard player does not use it, so the 28 to 32 day target is for a player who never does.
   The Rifts' rules follow the phone's calendar. Mentors need a retired legend, so the single-hero simulator never
   has one.
+
+## The three-week curve (waiting on Rob's phone test)
+Rob found levels after 10 too slow to stay interesting: the month-long curve spent 27 of 30 days on levels 11 to 20, and
+levels 17 to 20 took three and a half days each. He chose level 20 at three weeks. The design doc's Leveling and pacing
+table, vision lines, and the handoff's Phase 2 target were updated to match.
+- `LEVEL_TARGET_HOURS` (js/rules.js): levels 1 to 11 unchanged; then 141, 180, 222, 266, 312, 359, 407, 455, 504 hours
+  (level 12 at 5.9 days, 15 at 11.1, 18 at 17.0, 20 at 21.0). Each late level is 1.5 to 2 days. `XP_RATE` did not change,
+  so a level simply costs less XP: level 20 needs 1,266,858 XP in all (was 1,828,962).
+- Saves: version 7. `PAST_CURVES[4..6]` hold the month-long curve (`MONTH_TARGET_HOURS`), so `rescaleXp` keeps a hero's
+  place within their level. At level 20 the XP past the cap carries over whole, so Paragon ranks do not jump (they used to
+  be left as raw XP, which a smaller cap would have turned into extra ranks).
+- The simulator's pass band is now 19 to 23 days (`tools/simulate.mjs`, `tools/simulate.html`).
+- The deed "Favoured of the Dice" now asks for 2,000 natural 20s (was 2,500), set from a month-long career of about 3,000; a three-week career rolls roughly a third fewer (estimated from the task count, not measured).
+- Measured (`node tools/simulate.mjs 250`): median level 20 at 20.4 days (10th to 90th: 19.3 to 22.4), all 250 clear the
+  Hoard. Levels 5 to 20 within 3% of target (level 3 +17%, level 4 +12%, as before). By class: Fighter 20.9, Wizard
+  19.5, Rogue 20.6, Cleric 20.4, Barbarian 20.9, Ranger 19.7 days. Knockouts 2.4 a hero (2.7 before). Gear keeps pace,
+  since rarity follows level: average rarity 1.52 at level 10, 2.51 at 15, 3.46 at 20; at the end 44% Very Rare, 56%
+  Legendary (42 / 58 before). Gold is about the same: 957,000 gp on upgrades by level 20 and 475,000 in the purse.
+  Fewer things happen along the way: about 1,090 pieces found and 450 rare monsters beaten (1,560 and 680 before). A
+  second hero with one legend reaches level 20 in 20.1 days.
+- `node tools/check-sim.mjs` (316 checks) adds 3: levels 1 to 11 cost what they did, a version 6 hero halfway through a
+  level stays halfway, and a level 20 hero keeps their XP past the cap and Paragon rank. Two older save checks now read
+  the old curve.
+- Not retuned: monster mastery counts, the "1,000 natural 1s" deed, and Paragon XP (50,000 per rank); all still
+  reachable, mostly after level 20.
 
 ## Known gaps closed after Phase 7
 - All 26 LPC hair colours are baked (`HAIR_COLORS` in `data/races.js`, natural shades first). The art is now
