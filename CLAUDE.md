@@ -108,7 +108,7 @@ Rob is the game designer and does not write code.
 
 ## Status
 - Current phase: 7 (Polish), built and waiting on Rob's phone test. This is the last phase in the plan. The newest
-  work is the Skills tab's handbook look (below); before that, the three-week curve (levels 12 to 20 sooner); before that, round six (the quest log, career charts, the smith, mentors, the Rifts' rules), described below; before that,
+  work is the rewritten skill trees (ranks and forks, below); before that, the Skills tab's handbook look; before that, the three-week curve (levels 12 to 20 sooner); before that, round six (the quest log, career charts, the smith, mentors, the Rifts' rules), described below; before that,
   the two new classes, Barbarian and Ranger, and round five (rare monsters, lesser
   delves, the notice board, happenings).
   Phases 1 to 6 are also still in his phone test. Phase 0 is approved.
@@ -540,6 +540,49 @@ table, vision lines, and the handoff's Phase 2 target were updated to match.
 - Not retuned: monster mastery counts, the "1,000 natural 1s" deed, and Paragon XP (50,000 per rank); all still
   reachable, mostly after level 20.
 
+## The skill trees rewritten: ranks and forks (waiting on Rob's phone test)
+Rob approved a clickable draft of the Fighter and asked for all six classes in the same shape. Saves are version 8.
+- The shape (`js/skills.js`, `ROWS`, `ROW_GATE`): every branch is eight skills in five rows. Row 1: two passives with
+  ranks. Row 2: a fork of two signature moves, of which one may be learned. Row 3: one passive with ranks. Row 4: a
+  second fork. Row 5: the capstone (subclass only, as before). A row opens at 0, 2, 4, 6, 8 points in the branch.
+  Passives have 3 ranks, except the Might branches' roll bonus (+1 on rolls in fights a rank), which has 2. A branch
+  holds 12 points (11 for Might: `branchPoints`); a class 35 or so; a hero still earns 27. 144 skills (was 216), 90 moves.
+- `hero.skills` holds one entry per point, so a rank-3 skill is listed three times and `fx` (per rank) adds itself up;
+  `rankOf`, `pointsIn(hero, branch)`. `whyNot` says why: top rank, the other side of the fork taken ("X was chosen
+  instead. A respec at the tavern reopens the choice."), the row's gate, the capstone, no points. Raising a rank writes
+  `RANK_UP` (data/chronicle.js). `soundSkills` cleans a save's list (ranks to the top, one side of a fork, rows in
+  order, this class only).
+- The trees (`data/skills-<class>.js`, the layout explained at the top of the Fighter's file): most names, jokes, and
+  moves kept; narrow passives folded into ranked ones (gold, XP, hit points, damage, speed, criticals, travel, rests);
+  the per-place roll skills became one "+1 in fights" passive. New moves so every fork has two sides: Relentless
+  Assault, Stand Fast (as a move), Spoils of War (Fighter); Chain Lightning, Misty Step, Clairvoyance (as a move)
+  (Wizard); Feint, Smoke Bomb, Casing the Joint (as a move) (Rogue); Bless, Aegis (as a move), Providence (Cleric); Blood
+  Up, Unmoved (as a move), Lion's Share (as a move) (Barbarian); Volley, High Ground (as a move), Hidden Cache (Ranger).
+  All use the existing passive keys and move types, so `js/tasks.js` did not change. Dropped: per-place rolls, the
+  +2 hit points a level skills, potions per run, potion prices, quest speed (kept only in the Diviner's Third Eye),
+  and a few others.
+- Saves: version 8. A hero from an older save gets every skill point back (levels and Feats), keeps the subclass, and
+  the Chronicle says so once (`SKILLS_REWRITTEN`). Fire counts for moves that no longer exist are dropped.
+- The Skills tab draws the rows: pips under ranked seals, "or" between a fork's two diamonds (the side not taken fades),
+  "Opens at N points in <branch>" under a closed row, ribbons counting points of the branch's total. The card says
+  "Passive, rank 2 of 3" or "Signature move, one of a pair", and its button "Learn for 1 point" or "Raise to rank 3
+  for 1 point". The Learn button is bolder (gold edge, pressed shadow); Rob found it hard to see, which was the chat
+  mock-up's own button style, not the game's, but it is clearer now either way.
+- The simulated player (`grow` in `tools/simulate-core.js`) goes down its subclass's branch first, then the other two
+  by turns, taking one side of each fork or the other by the hero's id.
+- Tuned once: the Might speed passive is 4% a rank (5% at first), and each Guard branch's third passive pays a failed
+  roll 4% more of the reward a rank (it had shortened knockouts, which Guard heroes rarely suffer).
+- Measured (`node tools/simulate.mjs 250`): median level 20 at 20.5 days (19 to 23: pass), all 250 clear the Hoard.
+  Levels 5 to 20 within 4% of target (level 3 +17%, level 4 +10%, as before). By class: Fighter 21.1, Wizard 19.8, Rogue
+  20.7, Cleric 20.1, Barbarian 21.2, Ranger 20.7 days. By subclass, Might 18.5 to 20.3, Fortune 19.8 to 21.3, Guard 21.7
+  to 22.7 (the safe, slow choice, as before: 2.6 knockouts a hero overall). Gear as before (average rarity 3.39 at 20).
+- `node tools/check-sim.mjs` (322 checks): the tree checks were rewritten for the new shape (eight skills a branch,
+  rows, ranks with their lines, forks, the 27-point cap, `soundSkills`); the old-save check now expects skills to come
+  back as points; the Paragon check gives its Rifts hero a 40,000 XP head start, since a Shadow with no XP skills earns
+  about 42,000 a day at level 20, just short of the 50,000 for rank 1.
+- Spec departures to raise with Rob: the design doc's skill trees (twelve skills in four tiers) are now these. The doc
+  has not been updated.
+
 ## The Skills tab as a handbook (waiting on Rob's phone test)
 Rob chose this from a clickable mock-up, asking for an old player's-handbook feel on the game's own colours and a soft
 glow on learned skills. No rule changes; the trees themselves are untouched (a tree redesign was discussed, not done).
@@ -700,7 +743,7 @@ glow on learned skills. No rule changes; the trees themselves are untouched (a t
     2 to 5 cost what they did. `PAST_CURVES[3]` holds the Phase 4 curve.
   - Still true from Phase 4: Intelligence gives 1% XP per modifier point, the Wizard's 15% ward stays, and
     skills, wards, and armour together never turn aside more than 60% of a hit.
-- The trees (Phase 4): each class has a Might, a Guard, and a Fortune branch (the three subclasses), twelve
+- The trees (Phase 4, replaced by "The skill trees rewritten" above; kept as a record): each class has a Might, a Guard, and a Fortune branch (the three subclasses), twelve
   skills each in four tiers of three. A tier opens after two skills in the tier above. The twelfth skill of a
   branch is its capstone and needs that branch's subclass (chosen from level 3). At most 27 skills.
 - How a skill works: `fx` is passive numbers, summed across learned skills (`FX_KEYS` in `js/skills.js`);

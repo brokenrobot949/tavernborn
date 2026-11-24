@@ -3,9 +3,10 @@
 // between it and now is handed to `advance` as offline progress.
 
 import { RACES } from '../data/races.js';
+import { SKILLS_REWRITTEN } from '../data/chronicle.js';
 import { CLASSES } from '../data/classes.js';
 import { REGION_BY_ID, START_REGION } from '../data/regions.js';
-import { ADVENTURE_FIELDS, GROWTH_FIELDS, LEGACY_FIELDS, ROAD_FIELDS, EXPLORE_FIELDS, LATE_FIELDS, STATS, abilityPointsBy } from './hero.js';
+import { chronicle, ADVENTURE_FIELDS, GROWTH_FIELDS, LEGACY_FIELDS, ROAD_FIELDS, EXPLORE_FIELDS, LATE_FIELDS, STATS, abilityPointsBy } from './hero.js';
 import { SITE_BY_ID } from '../data/sites.js';
 import { BOUNTIES, HAPPENING_BY_ID } from '../data/board.js';
 import { CHOICE_BY_ID } from '../data/road.js';
@@ -13,13 +14,13 @@ import { DEED_BY_ID } from '../data/deeds.js';
 import { BOONS, REST, SMITH, ENCHANTS } from './rules.js';
 import { startingGear, startingCloak, SLOT_IDS, MAX_TIER } from './loot.js';
 import { LEGENDARIES } from '../data/loot.js';
-import { SKILL_BY_ID, BRANCH_BY_ID, MAX_SKILLS } from './skills.js';
+import { SKILL_BY_ID, BRANCH_BY_ID, soundSkills } from './skills.js';
 import { MAX_LEVEL, MAX_HEROES, PAST_CURVES, LOOT, TAVERN, xpForLevel, legacyFor } from './rules.js';
 import { paragonRank, cleanTavernName, signOf } from './tavern.js';
 import { TROPHIES, RIFT_RULES, WISP_CHOICES } from '../data/tavern.js';
 import { REGIONS } from '../data/regions.js';
 
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 const SAVE_KEY = 'tavernborn.save.v1';
 const EXPORT_PREFIX = 'TVB1.';
 
@@ -50,9 +51,15 @@ function rescaleXp(h, old) {
 // Phase 4 (version 3): skills, the subclass, and ability score increases. A hero from an older
 // save gets the ability points their level has already earned, and never fewer skill points than
 // their levels and Feats are worth.
+// Version 8 rewrote the skill trees (ranks and forks), so an older hero's skills are all handed back
+// as points to spend again; the subclass stays. `h.rewritten` notes it for the Chronicle line.
 function growthFields(h, version) {
-  h.skills = Array.isArray(h.skills) ? [...new Set(h.skills)].filter((id) => SKILL_BY_ID[id]?.cls === h.class).slice(0, MAX_SKILLS) : [];
   if (BRANCH_BY_ID[h.subclass]?.cls !== h.class) h.subclass = null;
+  if (version < 8) {
+    if (Array.isArray(h.skills) && h.skills.length) h.rewritten = true;
+    h.skills = [];
+  }
+  h.skills = soundSkills(h.class, h.skills, h.subclass);
   const fields = GROWTH_FIELDS();
   if (version < 3) h.abilityPoints = abilityPointsBy(h.level);
   for (const [key, value] of Object.entries(fields)) h[key] ??= value;
@@ -202,6 +209,7 @@ export function migrate(save) {
     h.bestiary ??= {};
     h.lines ??= h.chronicle.length;
     h.age ??= 0;
+    if (h.rewritten) { delete h.rewritten; chronicle(h, 'growth', SKILLS_REWRITTEN.replace('{points}', h.skillPoints)); }
     if (save.version < 5) h.paragon = paragonRank(h);
   }
   if (save.heroes.length > MAX_HEROES) throw new Error('That save has more heroes than the roster holds.');

@@ -19,8 +19,10 @@
 //
 // GROWTH. The same player spends what the hero earns, through the functions the Skills tab uses
 // (chooseSubclass, learnSkill, raiseAbility): `grow` picks the planned subclass at level 3, puts
-// ability points into the class's main ability and then Constitution, and buys skills down the
-// subclass's own branch first (capstone included), then the other two branches a tier at a time.
+// ability points into the class's main ability and then Constitution, and spends skill points down the
+// subclass's own branch first (capstone included), then the other two branches by turns, each in the
+// order the branch is written. At each fork it takes one side or the other by the hero's id, so both
+// sides of every fork are played by about half the heroes.
 // Each class's three subclasses take turns, so all eighteen get an equal share of heroes.
 // `growth: false` plays a player who never opens the Skills tab: every point stays banked.
 //
@@ -88,13 +90,15 @@ export function grow(hero, subclass) {
   const branches = TREES[hero.class].branches;
   const own = branches.find((b) => b.id === subclass);
   const others = branches.filter((b) => b !== own);
+  let side = 0;
+  for (const ch of String(hero.id)) side = (side + ch.charCodeAt(0)) % 2;
+  // A branch's skills in the order this player takes them: the fork side it prefers first.
+  const plan = (b) => [0, 1, 2 + side, 3 - side, 4, 5 + side, 6 - side, 7].map((i) => b.skills[i]);
   while (hero.skillPoints > 0) {
-    let next = own.skills.find((s) => canLearn(hero, s.id));
-    // Outside the subclass's branch: the lowest open tier first, taking turns between the two branches.
-    for (let i = 0; !next && i < 12; i++) {
-      const pair = [others[0].skills[i], others[1].skills[i]];
-      if (hero.skills.length % 2) pair.reverse();
-      next = pair.find((s) => canLearn(hero, s.id));
+    let next = plan(own).find((s) => canLearn(hero, s.id));
+    if (!next) {
+      const pair = hero.skills.length % 2 ? [others[1], others[0]] : others;
+      for (const b of pair) next ??= plan(b).find((s) => canLearn(hero, s.id));
     }
     if (!next || !learnSkill(hero, next.id)) break;
   }

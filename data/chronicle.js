@@ -90,4 +90,11 @@ export const ABILITY_RAISED = {
   wis: 'The hero thinks better of something, and is right to.',
   cha: 'A stranger laughs at the joke. It was not a good joke.',
 };
+// A skill raised past its first rank (`more`), or to its last (`top`).
+export const RANK_UP = {
+  more: '{skill}, rank {rank} of {ranks}. The same again, done with more conviction.',
+  top: '{skill}, rank {ranks} of {ranks}. Any further improvement would be showing off.',
+};
+// Once, for every hero in a save from before the skill trees were rewritten (save version 8).
+export const SKILLS_REWRITTEN = 'The skill books at The Wobbly Griffin have been rewritten, and shorter. {points} skill points are back in hand, free of charge, to be spent again.';
 export const RESPEC_DONE = 'Paid {cost} gp to forget everything at The Wobbly Griffin. The barkeep calls it a respec and pours it from an unlabelled bottle. {points} skill points are back in hand.';

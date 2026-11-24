@@ -1,8 +1,9 @@
 // Skills tab, in the manner of an old player's handbook. A header with the hero and the points to spend; three
-// ribbon bookmarks, one per branch (Might red, Guard blue, Fortune gold); the branch drawn as four rows of three
-// medallions, a round seal for a passive, a diamond for a signature move, a great star for the capstone. Learned
-// seals are pressed in the branch's colour and keep a low glow. Tapping a seal opens its card under the tree,
-// set like a handbook's sidebar, with the rule, its Chronicle line, and the Learn button.
+// ribbon bookmarks, one per branch (Might red, Guard blue, Fortune gold); the branch drawn as its five rows of
+// seals (js/skills.js, `ROWS`): a round seal for a passive, with pips for its ranks; a diamond for a signature move,
+// the two of a fork joined by "or"; a great star for the capstone. Learned seals are pressed in the branch's colour
+// and keep a low glow. Tapping a seal opens its card under the tree, set like a handbook's sidebar, with the rule,
+// its Chronicle line, and the Learn (or Raise) button.
 // "What they do" adds every learned skill up into a stat block, with how often each move has fired
 // (`hero.fired`). Subclass and Abilities show only while they wait.
 // Everything here is banked until the player spends it; nothing on this tab ever blocks the hero.
@@ -14,8 +15,8 @@ import { RACES } from '../../data/races.js';
 import { ABILITIES, ABILITY_NAMES, ABILITY_MAX, ABILITY_LEVELS, MAX_LEVEL, mod, proficiency } from '../rules.js';
 import { raiseAbility } from '../hero.js';
 import {
-  treeFor, whyNot, learnSkill, canChooseSubclass, chooseSubclass, pointsIn, pending, subclassName, skillMods,
-  MAX_SKILLS, TIER_SIZE, TIER_GATE, SUBCLASS_LEVEL, BRANCH_KINDS,
+  treeFor, whyNot, learnSkill, canChooseSubclass, chooseSubclass, pointsIn, rankOf, pending, subclassName, skillMods,
+  MAX_SKILLS, ROWS, ROW_GATE, branchPoints, SUBCLASS_LEVEL, BRANCH_KINDS,
 } from '../skills.js';
 import { el, pressBtn, confirmBtn, signed } from './dom.js';
 import { icon } from './icons.js';
@@ -92,7 +93,7 @@ export function mountSkills(root, app) {
     const head = el('section', { className: 'hb-head' },
       el('div', { className: 'hb-who' },
         el('strong', { className: 'hb-name', textContent: hero.name }),
-        el('span', { className: 'hb-line', textContent: `${RACES[hero.race].name} ${CLASSES[hero.class].name}, level ${hero.level}.${sub ? ` ${sub}.` : ''} ${spent} of ${MAX_SKILLS} skills learned.` })),
+        el('span', { className: 'hb-line', textContent: `${RACES[hero.race].name} ${CLASSES[hero.class].name}, level ${hero.level}.${sub ? ` ${sub}.` : ''} ${spent} of ${MAX_SKILLS} points spent.` })),
       el('div', { className: 'hb-coin' + (hero.skillPoints ? ' has' : ''), attrs: { 'aria-label': `${plural(hero.skillPoints, 'skill point')} to spend` } },
         el('strong', { textContent: String(hero.skillPoints) }),
         el('span', { textContent: hero.skillPoints === 1 ? 'point' : 'points' })));
@@ -138,50 +139,61 @@ export function mountSkills(root, app) {
     const branch = tree.branches.find((b) => b.id === shown) ?? tree.branches[0];
     if (!branch.skills.some((s) => s.id === sel)) sel = firstSel(hero, branch);
     const ribbons = el('div', { className: 'hb-ribbons' }, ...tree.branches.map((b) => {
-      const n = hero.skills.filter((id) => b.skills.some((s) => s.id === id)).length;
+      const n = pointsIn(hero, b.id);
       const r = pressBtn('', b.id === branch.id, () => { shown = b.id; sel = null; update.force(); }, 'hb-ribbon k-' + b.kind);
       r.append(
         el('span', { className: 'hb-ribbon-name' }, icon(KIND_ICON[b.kind]), el('strong', { textContent: b.name })),
-        el('span', { className: 'hb-ribbon-meta' }, `${n} of ${b.skills.length}`, hero.subclass === b.id ? icon('crown') : null));
-      r.setAttribute('aria-label', `${b.name}, ${BRANCH_KINDS[b.kind]}, ${n} of ${b.skills.length} learned${hero.subclass === b.id ? ', your subclass' : ''}`);
+        el('span', { className: 'hb-ribbon-meta' }, `${n} of ${branchPoints(b)}`, hero.subclass === b.id ? icon('crown') : null));
+      r.setAttribute('aria-label', `${b.name}, ${BRANCH_KINDS[b.kind]}, ${n} of ${branchPoints(b)} points${hero.subclass === b.id ? ', your subclass' : ''}`);
       return r;
     }));
 
     const rows = [];
-    for (let tier = 1; tier <= branch.skills.length / TIER_SIZE; tier++) {
-      const open = tier === 1 || pointsIn(hero, branch.id, tier - 1) >= TIER_GATE;
-      if (tier > 1) rows.push(el('div', { className: 'hb-link' + (open ? ' on' : '') }));
-      rows.push(el('div', { className: 'hb-row' }, ...branch.skills.slice((tier - 1) * TIER_SIZE, tier * TIER_SIZE).map((s) => {
-        const learned = hero.skills.includes(s.id);
-        const can = !learned && whyNot(hero, s.id) === null;
-        const capstone = s === branch.skills.at(-1);
+    const spentHere = pointsIn(hero, branch.id);
+    ROWS.forEach((row, r) => {
+      const open = spentHere >= ROW_GATE[r];
+      if (r > 0) rows.push(el('div', { className: 'hb-link' + (open ? ' on' : '') }));
+      if (!open) rows.push(el('p', { className: 'hb-gate', textContent: `Opens at ${ROW_GATE[r]} points in ${branch.name}` }));
+      const fork = row.length === 2 && r % 2 === 1;
+      const taken = fork && row.some((j) => hero.skills.includes(branch.skills[j].id));
+      const cells = [];
+      row.forEach((i, k) => {
+        const s = branch.skills[i];
+        const ranks = s.ranks ?? 1;
+        const rank = rankOf(hero, s.id);
+        const why = whyNot(hero, s.id);
+        const capstone = i === branch.skills.length - 1;
         const shape = capstone ? 'cap' : s.sig ? 'sig' : 'pas';
-        const state = learned ? ' on' : can ? ' can' : open ? '' : ' lock';
+        const state = rank ? ' on' + (why === null ? ' can' : '') : why === null ? ' can' : taken ? ' gone' : open ? '' : ' lock';
         const b = pressBtn('', s.id === sel, () => { sel = s.id; update.force(); }, `hb-seal ${shape}${state}`);
         b.append(icon(capstone ? 'star' : skillIcon(s)));
-        b.setAttribute('aria-label', `${s.name}: ${learned ? 'learned' : can ? 'can be learned' : 'not yet'}`);
-        return b;
-      })));
-    }
+        b.setAttribute('aria-label', `${s.name}: ${rank >= ranks ? 'learned' : rank ? `rank ${rank} of ${ranks}` : why === null ? 'can be learned' : 'not yet'}`);
+        if (fork && k === 1) cells.push(el('span', { className: 'hb-or', textContent: 'or' }));
+        cells.push(el('div', { className: 'hb-cell' }, b,
+          ranks > 1 ? el('span', { className: 'hb-pips' }, ...Array.from({ length: ranks }, (_, j) => el('i', { className: j < rank ? 'on' : '' }))) : null));
+      });
+      rows.push(el('div', { className: 'hb-row' + (fork ? ' fork' : '') }, ...cells));
+    });
 
     // The card for the chosen seal.
-    const s = branch.skills.find((k) => k.id === sel);
-    const sIdx = branch.skills.indexOf(s);
+    const sIdx = branch.skills.findIndex((k) => k.id === sel);
+    const s = branch.skills[sIdx];
     const capstone = sIdx === branch.skills.length - 1;
-    const learned = hero.skills.includes(s.id);
-    const why = learned ? null : whyNot(hero, s.id);
-    const kind = capstone ? 'Capstone' : s.sig ? 'Signature move' : 'Passive';
+    const ranks = s.ranks ?? 1;
+    const rank = rankOf(hero, s.id);
+    const why = whyNot(hero, s.id);
+    const row = ROWS.findIndex((rw) => rw.includes(sIdx));
+    const kind = capstone ? 'Capstone' : s.sig ? (row % 2 === 1 ? 'Signature move, one of a pair' : 'Signature move') : ranks > 1 ? `Passive, rank ${rank} of ${ranks}` : 'Passive';
     const quote = String(s.learn ?? '').replace(/^Learned [^.]*\.\s*/, '').replaceAll('{name}', hero.name);
-    const action = learned
-      ? el('p', { className: 'hb-state learned' }, icon('check'), el('span', { textContent: 'Learned.' }), s.sig ? count(s.id) : null)
-      : why === null
-        ? confirmBtn('Learn for 1 point', 'Tap again to learn', act(() => learnSkill(hero, s.id)), 'btn primary hb-learn')
+    const action = why === null
+      ? confirmBtn(rank ? `Raise to rank ${rank + 1} for 1 point` : 'Learn for 1 point', rank ? 'Tap again to raise it' : 'Tap again to learn', act(() => learnSkill(hero, s.id)), 'btn primary hb-learn')
+      : rank >= ranks
+        ? el('p', { className: 'hb-state learned' }, icon('check'), el('span', { textContent: ranks > 1 ? 'Learned in full.' : 'Learned.' }), s.sig ? count(s.id) : null)
         : el('p', { className: 'hb-state' }, icon('lock'), el('span', { textContent: why }));
     const card = el('div', { className: 'hb-card' },
       el('strong', { className: 'hb-card-name', textContent: s.name }),
-      el('span', { className: 'hb-card-kind', textContent: `${kind}, tier ${Math.floor(sIdx / TIER_SIZE) + 1}` }),
+      el('span', { className: 'hb-card-kind', textContent: kind }),
       el('p', { className: 'hb-card-text', textContent: s.text }),
-      s.later ? el('p', { className: 'hint later', textContent: `Not built yet: ${s.later}` }) : null,
       quote ? el('p', { className: 'hb-card-quote', textContent: `"${quote}"` }) : null,
       action);
 
@@ -190,7 +202,7 @@ export function mountSkills(root, app) {
       el('p', { className: 'hb-blurb', textContent: branch.blurb }),
       el('div', { className: 'hb-seals' }, ...rows),
       card,
-      el('p', { className: 'hb-key', textContent: 'A round seal is a passive, a diamond a signature move, the great star the capstone. Learned seals are pressed in the branch\'s colour.' }));
+      el('p', { className: 'hb-key', textContent: 'A round seal is a passive, and its pips are its ranks. A diamond is a signature move; of two joined by "or", only one may be learned. The great star is the capstone.' }));
 
     // ----- what they do -----
     const n = skillMods(hero).n;
@@ -199,13 +211,13 @@ export function mountSkills(root, app) {
       const words = said.join(', ');
       return said.length ? el('p', { className: 'hb-stat' }, el('strong', { textContent: `${label}.` }), ` ${words[0].toUpperCase()}${words.slice(1)}.`) : null;
     }).filter(Boolean);
-    const moves = hero.skills.map((id) => tree.branches.flatMap((b) => b.skills).find((k) => k.id === id)).filter((k) => k?.sig);
+    const moves = [...new Set(hero.skills)].map((id) => tree.branches.flatMap((b) => b.skills).find((k) => k.id === id)).filter((k) => k?.sig);
     const doPage = el('section', { className: 'handbook' },
       el('h3', { className: 'hb-h', textContent: 'What your skills do' }),
       el('p', { className: 'hb-sub', textContent: 'Everything learned, set down in one place.' }),
       el('div', { className: 'hb-rule' }),
       el('p', { className: 'hb-stat' }, el('strong', { textContent: 'Proficiency.' }), ` +${proficiency(hero.level)} on every roll, from the hero's level.`),
-      el('p', { className: 'hb-stat' }, el('strong', { textContent: 'Skills learned.' }), ` ${spent} of ${MAX_SKILLS}.`),
+      el('p', { className: 'hb-stat' }, el('strong', { textContent: 'Points spent.' }), ` ${spent} of ${MAX_SKILLS}.`),
       el('p', { className: 'hb-stat' }, el('strong', { textContent: 'Feats.' }), ` ${hero.feats.length} of 8, each worth a skill point.`),
       ...(lines.length ? lines : [el('p', { className: 'hb-stat', textContent: 'Nothing else yet. Learn a skill on the tree and it is written here.' })]),
       el('div', { className: 'hb-rule right' }),
@@ -228,7 +240,8 @@ export function mountSkills(root, app) {
       head, nav, ...pages.filter(([id]) => id === view).map(([, , , node]) => node),
       el('details', { className: 'panel how' }, el('summary', { textContent: 'How skills work' }),
         el('p', { className: 'hint', textContent: `One point per level from 2 to ${MAX_LEVEL}, and one per Feat (all six story quests in a region). Points wait here as long as you like; the hero carries on regardless.` }),
-        el('p', { className: 'hint', textContent: `A tier opens after ${TIER_GATE} skills in the tier above. Each branch's last skill, the capstone, needs that branch as the subclass (chosen from level ${SUBCLASS_LEVEL}).` }),
+        el('p', { className: 'hint', textContent: `Each point learns a skill or raises a passive one rank. The rows of a branch open as points go into it (at ${ROW_GATE.slice(1).join(', ')}). A branch holds 11 or 12 points and a hero has ${MAX_SKILLS} to spend in all, so no hero has everything.` }),
+        el('p', { className: 'hint', textContent: `Moves joined by "or" are a choice: learning one closes the other until a respec. The capstone needs that branch as the subclass (chosen from level ${SUBCLASS_LEVEL}).` }),
         el('p', { className: 'hint', textContent: 'Passives change numbers. Signature moves fire on their own during tasks and write their own lines in the Chronicle. To take every point back, see the barkeep on the Tavern tab.' }),
         el('p', { className: 'hint', textContent: `The proficiency bonus is +${proficiency(hero.level)} on every d20 roll. It rises at levels 5, 9, 13, and 17.` })),
     ].filter(Boolean));

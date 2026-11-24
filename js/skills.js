@@ -1,12 +1,18 @@
 // Skill trees: what can be learned, spending points, the subclass, and respec. Pure logic.
 //
-// A class has one tree of three branches (Might, Guard, Fortune), twelve skills each, in four
-// tiers of three. A tier opens after two points are spent in the tier above it. Choosing a
-// subclass at level 3 marks one branch as primary; only that branch's last skill, the capstone,
-// can be learned. A hero earns at most 27 points (19 levels and 8 Feats) for 36 skills.
+// A class has one tree of three branches (Might, Guard, Fortune), eight skills each, in five rows:
+//   row 1  two passives with ranks (usually 3; roll bonuses 2)
+//   row 2  a fork: two signature moves, of which a hero may learn one
+//   row 3  one passive with ranks
+//   row 4  a second fork of two moves
+//   row 5  the capstone, which only that branch's subclass (chosen at level 3) can learn
+// Each point learns a skill or raises it a rank. A row opens once enough points are in the branch
+// (`ROW_GATE`: 0, 2, 4, 6, 8). A branch holds 11 or 12 points (`branchPoints`); a hero earns at most 27
+// (19 levels and 8 Feats). `hero.skills` lists one entry per point, so a skill at rank 3 is there
+// three times, and `fx` (per rank) adds up by itself.
 //
 // A skill does its work in one of two ways, and tasks.js and hero.js read both through `skillMods`:
-//   fx   passive numbers, added up across every learned skill (FX_KEYS below)
+//   fx   passive numbers, added up across every learned rank (FX_KEYS below)
 //   sig  a signature move: tasks.js looks moves up by type and fires them (SIG_TYPES below)
 //
 // The functions the player uses (`learnSkill`, `chooseSubclass`, `respec`) only change the save and
@@ -18,13 +24,13 @@ import { ROGUE } from '../data/skills-rogue.js';
 import { CLERIC } from '../data/skills-cleric.js';
 import { BARBARIAN } from '../data/skills-barbarian.js';
 import { RANGER } from '../data/skills-ranger.js';
-import { RESPEC_DONE } from '../data/chronicle.js';
+import { RESPEC_DONE, RANK_UP } from '../data/chronicle.js';
 import { chronicle, maxHp } from './hero.js';
 import { respecPrice } from './rules.js';
 
-export const MAX_SKILLS = 27;
-export const TIER_SIZE = 3;
-export const TIER_GATE = 2; // points in the tier above before a tier opens
+export const MAX_SKILLS = 27; // points a hero can spend in all
+export const ROWS = [[0, 1], [2, 3], [4], [5, 6], [7]]; // a branch's skills, by row
+export const ROW_GATE = [0, 2, 4, 6, 8]; // points in the branch before each row opens
 export const SUBCLASS_LEVEL = 3;
 export const BRANCH_KINDS = { might: 'Might', guard: 'Guard', fortune: 'Fortune' };
 
@@ -72,15 +78,18 @@ export const SIG_TYPES = {
 
 export const TREES = { fighter: FIGHTER, wizard: WIZARD, rogue: ROGUE, cleric: CLERIC, barbarian: BARBARIAN, ranger: RANGER };
 
-// Every skill by id, with where it sits: { ...skill, cls, branch, kind, tier (1 to 4), capstone }.
+// Every skill by id, with where it sits: { ...skill, cls, branch, kind, row (1 to 5), ranks, fork (the other
+// skill of its fork, or null), capstone }.
 export const SKILL_BY_ID = {};
 export const BRANCH_BY_ID = {};
 for (const tree of Object.values(TREES)) {
   for (const branch of tree.branches) {
     BRANCH_BY_ID[branch.id] = { ...branch, cls: tree.class };
-    branch.skills.forEach((skill, i) => {
-      SKILL_BY_ID[skill.id] = { ...skill, cls: tree.class, branch: branch.id, kind: branch.kind, tier: Math.floor(i / TIER_SIZE) + 1, capstone: i === branch.skills.length - 1 };
-    });
+    ROWS.forEach((row, r) => row.forEach((i) => {
+      const skill = branch.skills[i];
+      const other = row.length === 2 && r % 2 === 1 ? branch.skills[row[0] === i ? row[1] : row[0]].id : null;
+      SKILL_BY_ID[skill.id] = { ...skill, cls: tree.class, branch: branch.id, kind: branch.kind, row: r + 1, ranks: skill.ranks ?? 1, fork: other, capstone: i === 7 };
+    }));
   }
 }
 export const ALL_SKILLS = Object.values(SKILL_BY_ID);
@@ -88,14 +97,15 @@ export const ALL_SKILLS = Object.values(SKILL_BY_ID);
 export const treeFor = (hero) => TREES[hero.class];
 export const subclassName = (hero) => (hero.subclass ? BRANCH_BY_ID[hero.subclass]?.name ?? null : null);
 export const hasSkill = (hero, id) => hero.skills.includes(id);
+export const rankOf = (hero, id) => hero.skills.reduce((n, k) => n + (k === id), 0);
 
-// Points the hero has spent in one tier of one branch.
-export function pointsIn(hero, branchId, tier) {
+// What one branch can hold: every rank, counting one side of each fork.
+export const branchPoints = (branch) => branch.skills.reduce((n, k) => n + (k.ranks ?? 1), 0) - 2;
+
+// Points the hero has spent in one branch, every rank counted.
+export function pointsIn(hero, branchId) {
   let n = 0;
-  for (const id of hero.skills) {
-    const s = SKILL_BY_ID[id];
-    if (s && s.branch === branchId && s.tier === tier) n += 1;
-  }
+  for (const id of hero.skills) if (SKILL_BY_ID[id]?.branch === branchId) n += 1;
   return n;
 }
 
@@ -103,9 +113,11 @@ export function pointsIn(hero, branchId, tier) {
 export function whyNot(hero, id) {
   const s = SKILL_BY_ID[id];
   if (!s || s.cls !== hero.class) return 'Not a skill of this class.';
-  if (hero.skills.includes(id)) return 'Learned.';
-  if (hero.skills.length >= MAX_SKILLS) return `A hero learns at most ${MAX_SKILLS} skills.`;
-  if (s.tier > 1 && pointsIn(hero, s.branch, s.tier - 1) < TIER_GATE) return `Opens after ${TIER_GATE} skills in tier ${s.tier - 1} of this branch.`;
+  if (rankOf(hero, id) >= s.ranks) return 'Learned.';
+  if (hero.skills.length >= MAX_SKILLS) return `A hero spends at most ${MAX_SKILLS} points.`;
+  if (s.fork && hero.skills.includes(s.fork)) return `${SKILL_BY_ID[s.fork].name} was chosen instead. A respec at the tavern reopens the choice.`;
+  const gate = ROW_GATE[s.row - 1];
+  if (pointsIn(hero, s.branch) < gate) return `Opens at ${gate} points in ${BRANCH_BY_ID[s.branch].name}.`;
   if (s.capstone && hero.subclass !== s.branch) {
     return hero.subclass ? `Capstone. Only a ${BRANCH_BY_ID[s.branch].name} can learn it.` : `Capstone. Needs the ${BRANCH_BY_ID[s.branch].name} subclass.`;
   }
@@ -116,7 +128,7 @@ export const canLearn = (hero, id) => whyNot(hero, id) === null;
 
 const fill = (text, hero) => text.replace(/\{name\}/g, hero.name);
 
-// Spend one point on a skill. Returns true if it was learned.
+// Spend one point on a skill: learn it, or raise it a rank. Returns true if it was spent.
 export function learnSkill(hero, id) {
   if (!canLearn(hero, id)) return false;
   const before = maxHp(hero);
@@ -124,8 +136,20 @@ export function learnSkill(hero, id) {
   hero.skillPoints -= 1;
   const gained = maxHp(hero) - before; // a skill that adds hit points adds them now
   if (gained > 0 && hero.knockedOutUntil == null) hero.hp += gained;
-  chronicle(hero, 'learned', fill(SKILL_BY_ID[id].learn, hero), { skill: id });
+  const s = SKILL_BY_ID[id];
+  const rank = rankOf(hero, id);
+  const text = rank === 1 ? fill(s.learn, hero) : RANK_UP[rank === s.ranks ? 'top' : 'more'].replaceAll('{skill}', s.name).replaceAll('{rank}', rank).replaceAll('{ranks}', s.ranks);
+  chronicle(hero, 'learned', text, { skill: id, rank });
   return true;
+}
+
+// A save's list of skills, made sound: this class's only, no rank past the top, one side of each fork,
+// rows in order, and no more than a hero can spend. Anything that fails is dropped (its point comes back).
+export function soundSkills(cls, list, subclass) {
+  const out = [];
+  const probe = { class: cls, skills: out, subclass, skillPoints: 1 };
+  for (const id of Array.isArray(list) ? list : []) if (typeof id === 'string' && whyNot(probe, id) === null) out.push(id);
+  return out;
 }
 
 export const canChooseSubclass = (hero) => hero.level >= SUBCLASS_LEVEL && !hero.subclass;

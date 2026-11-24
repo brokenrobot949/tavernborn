@@ -25,6 +25,7 @@ import { newSave, exportSave, importSave, migrate, SAVE_VERSION } from '../js/st
 import { createHero, assignScores, defaultAppearance, maxHp, regionOpen, raiseAbility, abilityPointsBy, STANDARD_ARRAY, chronicle, isHighlight, KEPT_MAX } from '../js/hero.js';
 import {
   TREES, ALL_SKILLS, FX_KEYS, SIG_TYPES, MAX_SKILLS, canLearn, whyNot, learnSkill, chooseSubclass, respec, respecCost, pending,
+  SKILL_BY_ID, rankOf, pointsIn, branchPoints, soundSkills,
 } from '../js/skills.js';
 import { setFocus, orderTravel, payCleric, clericFee, orderDelve, delveTarget, storyReady, storyOpensAt, foeName } from '../js/tasks.js';
 import { RARES, RARE_LIST } from '../data/rares.js';
@@ -265,11 +266,14 @@ ok(full.level === MAX_LEVEL, 'and reaches level 20');
 // ---------- Phase 4: growth ----------
 console.log('\nPhase 4 growth:');
 
-// 17. The shape of the trees: six classes, three branches of twelve, one capstone each.
+// 17. The shape of the trees: six classes, three branches of eight (passives with ranks, two forks of moves,
+// a capstone), 11 or 12 points a branch, one capstone each.
 const branches = Object.values(TREES).flatMap((t) => t.branches);
-ok(Object.keys(TREES).length === 6 && branches.length === 18 && branches.every((b) => b.skills.length === 12) && ALL_SKILLS.length === 216, 'six trees, three branches of twelve skills each: 216 skills, every id unique');
+const shaped = (b) => b.skills.length === 8 && [0, 1, 4].every((i) => !b.skills[i].sig && b.skills[i].ranks >= 2 && b.skills[i].ranks <= 3)
+  && [2, 3, 5, 6].every((i) => b.skills[i].sig && !b.skills[i].ranks) && !b.skills[7].ranks && [11, 12].includes(branchPoints(b));
+ok(Object.keys(TREES).length === 6 && branches.length === 18 && branches.every(shaped) && ALL_SKILLS.length === 144, 'six trees, three branches of eight skills each (three ranked passives, two forks of moves, a capstone): 144 skills, every id unique');
 ok(Object.values(TREES).every((t) => ['might', 'guard', 'fortune'].every((k) => t.branches.filter((b) => b.kind === k).length === 1)), 'every class has one Might, one Guard, and one Fortune branch');
-ok(ALL_SKILLS.filter((x) => x.capstone).length === 18 && ALL_SKILLS.filter((x) => x.capstone).every((x) => x.tier === 4), 'eighteen capstones, each the last skill of its branch');
+ok(ALL_SKILLS.filter((x) => x.capstone).length === 18 && ALL_SKILLS.filter((x) => x.capstone).every((x) => x.row === 5), 'eighteen capstones, each the last skill of its branch');
 const badShape = ALL_SKILLS.filter((x) => {
   const fx = Object.entries(x.fx ?? {});
   const fxOk = fx.every(([k, v]) => k in FX_KEYS && typeof v === 'number' && v > 0);
@@ -320,7 +324,7 @@ for (const skill of ALL_SKILLS) {
   if (!changed) noEffect.push(skill.id);
   if (!line) noLine.push(skill.id);
 }
-ok(noEffect.length === 0, `each of the 216 skills changes what happens to the hero${noEffect.length ? ' (no effect: ' + noEffect.join(', ') + ')' : ''}`);
+ok(noEffect.length === 0, `each of the ${ALL_SKILLS.length} skills changes what happens to the hero${noEffect.length ? ' (no effect: ' + noEffect.join(', ') + ')' : ''}`);
 ok(noLine.length === 0, `each of the ${moves.length} signature moves fires and writes its own Chronicle line (${firedTotal} firings seen)${noLine.length ? ' (never fired: ' + noLine.join(', ') + ')' : ''}`);
 
 // The Skills tab's fire counts: each firing is counted on the hero, kept in the save, and junk is dropped.
@@ -342,53 +346,70 @@ function student(cls, level, points) {
   h.skillPoints = points;
   return h;
 }
-// Learning writes the skill's own line, for all 216.
-let learnedLines = 0;
+// Learning writes the skill's own line, for all 144, and raising a rank writes the rank line.
+// `upTo` spends points down a branch (one side of each fork) until the skill can be learned.
+function upTo(h, skill) {
+  const b = TREES[skill.cls].branches.find((x) => x.id === skill.branch);
+  const partner = SKILL_BY_ID[skill.id].fork;
+  for (let guard = 0; guard < 20 && !canLearn(h, skill.id); guard++) {
+    const next = b.skills.find((x) => x.id !== skill.id && x.id !== partner && canLearn(h, x.id));
+    if (!next) break;
+    learnSkill(h, next.id);
+  }
+}
+let learnedLines = 0, rankLines = 0;
 for (const skill of ALL_SKILLS) {
   const h = student(skill.cls, 10, 40);
   chooseSubclass(h, skill.branch);
-  for (const other of TREES[skill.cls].branches.find((b) => b.id === skill.branch).skills) {
-    if (other.id === skill.id) break;
-    learnSkill(h, other.id);
-  }
+  upTo(h, skill);
   const before = h.skillPoints;
   if (learnSkill(h, skill.id) && h.skillPoints === before - 1 && h.chronicle.at(-1).text === skill.learn.replace('{name}', h.name) && h.chronicle.at(-1).k === 'learned') learnedLines += 1;
+  if ((skill.ranks ?? 1) > 1) {
+    for (let r = 2; r <= skill.ranks; r++) learnSkill(h, skill.id);
+    if (rankOf(h, skill.id) === skill.ranks && h.chronicle.at(-1).text.startsWith(`${skill.name}, rank ${skill.ranks} of ${skill.ranks}.`) && !canLearn(h, skill.id)) rankLines += 1;
+  }
 }
-ok(learnedLines === 216, `learning a skill costs one point and writes that skill's Chronicle line (${learnedLines} of 216)`);
+const ranked = ALL_SKILLS.filter((x) => (x.ranks ?? 1) > 1).length;
+ok(learnedLines === ALL_SKILLS.length, `learning a skill costs one point and writes that skill's Chronicle line (${learnedLines} of ${ALL_SKILLS.length})`);
+ok(rankLines === ranked, `each of the ${ranked} passives with ranks can be raised to its top rank, one point a rank, with a line for each, and no further`);
 
-// 19. Tiers: a tier opens after two points in the tier above it.
+// 19. Rows: each opens once enough points are in the branch (2, 4, 6, 8). Forks: one side only.
 const g = student('fighter', 10, 10);
 const van = TREES.fighter.branches[0].skills.map((x) => x.id);
-ok(!canLearn(g, van[3]) && whyNot(g, van[3]).includes('tier 1'), 'a tier 2 skill is closed to a hero with nothing in tier 1');
+ok(!canLearn(g, van[2]) && whyNot(g, van[2]).includes('Opens at 2 points'), 'a move in row 2 is closed to a hero with nothing in the branch');
 learnSkill(g, van[0]);
-ok(!canLearn(g, van[3]), 'one point in tier 1 is not enough');
-learnSkill(g, van[1]);
-ok(canLearn(g, van[3]) && !canLearn(g, van[6]), 'two points in tier 1 open tier 2, and not tier 3');
-ok(!learnSkill(g, van[0]) && !learnSkill(g, 'w_fireball') && g.skills.length === 2, 'a skill cannot be learned twice, and a Fighter cannot learn Fireball');
+ok(!canLearn(g, van[2]) && rankOf(g, van[0]) === 1, 'one point is not enough');
+learnSkill(g, van[0]);
+ok(canLearn(g, van[2]) && !canLearn(g, van[4]) && !canLearn(g, van[0]) && rankOf(g, van[0]) === 2, 'two points open row 2, and not row 3; Weapon Focus stops at its second rank');
+ok(learnSkill(g, van[2]) && !canLearn(g, van[3]) && whyNot(g, van[3]).startsWith('Cleave was chosen instead'), 'learning Cleave closes the other side of its fork, Opening Charge');
+ok(!learnSkill(g, van[2]) && !learnSkill(g, 'w_fireball') && g.skills.length === 3, 'a move cannot be learned twice, and a Fighter cannot learn Fireball');
 const poor = student('rogue', 5, 0);
 ok(!learnSkill(poor, 'r_quick_draw') && poor.skills.length === 0, 'no points, no skill');
+const sound = soundSkills('fighter', [van[0], van[0], van[0], van[2], van[3], van[4], 'w_fireball', van[1]], null);
+ok(sound.join() === [van[0], van[0], van[2], van[1]].join(), 'a save\'s skill list keeps only what could have been learned: ranks to the top, one side of a fork, rows in order, this class only');
 
 // 20. Subclass and capstone: chosen from level 3, once; only its own capstone opens.
 const cub = student('cleric', 2, 1);
 ok(!chooseSubclass(cub, 'pilgrim') && cub.subclass === null && pending(cub).subclass === 0, 'no subclass before level 3');
 const c1 = student('cleric', 12, 30);
 ok(pending(c1).subclass === 1 && !chooseSubclass(c1, 'evoker') && chooseSubclass(c1, 'pilgrim') && !chooseSubclass(c1, 'warpriest') && c1.subclass === 'pilgrim', 'a Cleric picks one Cleric subclass, once');
-for (const b of TREES.cleric.branches) for (const x of b.skills.slice(0, 11)) learnSkill(c1, x.id);
-ok(c1.skills.length === MAX_SKILLS, `a hero stops at ${MAX_SKILLS} skills with points still in hand (${c1.skillPoints} left over)`);
+for (let pass = 0; pass < 3; pass++) for (const b of TREES.cleric.branches) for (const x of b.skills) learnSkill(c1, x.id);
+ok(c1.skills.length === MAX_SKILLS, `a hero stops at ${MAX_SKILLS} points spent with points still in hand (${c1.skillPoints} left over)`);
 const c2 = student('cleric', 12, 30);
 chooseSubclass(c2, 'pilgrim');
-for (const b of TREES.cleric.branches) for (const x of b.skills.slice(0, 8)) learnSkill(c2, x.id);
-ok(!canLearn(c2, 'c_intervention') && !canLearn(c2, 'c_beacon') && whyNot(c2, 'c_beacon').startsWith('Capstone') && learnSkill(c2, 'c_miracle'), 'only the capstone of the chosen subclass can be learned');
+for (const b of TREES.cleric.branches.filter((x) => x.id !== 'lifebinder')) for (let pass = 0; pass < 3; pass++) for (const x of b.skills.slice(0, 7)) learnSkill(c2, x.id);
+ok(!canLearn(c2, 'c_intervention') && whyNot(c2, 'c_intervention').startsWith('Capstone') && learnSkill(c2, 'c_miracle'), 'only the capstone of the chosen subclass can be learned');
 const c3 = student('cleric', 12, 30);
-for (const x of TREES.cleric.branches[2].skills.slice(0, 8)) learnSkill(c3, x.id);
-ok(!canLearn(c3, 'c_miracle'), 'no capstone without a subclass');
+for (let pass = 0; pass < 3; pass++) for (const x of TREES.cleric.branches[2].skills.slice(0, 7)) learnSkill(c3, x.id);
+ok(!canLearn(c3, 'c_miracle') && pointsIn(c3, 'pilgrim') >= 8, 'no capstone without a subclass');
 
-// 21. The 27-point cap: 19 levels and 8 Feats, and never more than 27 skills however many points.
+// 21. The 27-point cap: 19 levels and 8 Feats, and never more than 27 points spent however many there are.
 const greedy = student('wizard', 20, 99);
 chooseSubclass(greedy, 'diviner');
 for (let pass = 0; pass < 4; pass++) for (const x of ALL_SKILLS) learnSkill(greedy, x.id);
-ok(greedy.skills.length === MAX_SKILLS && MAX_SKILLS === 27 && pending(greedy).points === 0, 'a hero with 99 points still learns 27 skills of 36');
-ok(full.skills + full.banked === 19 + full.feats && full.skills + full.banked <= MAX_SKILLS, `the simulated hero earned ${full.skills + full.banked} points in all (19 levels, ${full.feats} Feats) and learned ${full.skills} skills`);
+const room = TREES.wizard.branches.reduce((n, b) => n + branchPoints(b), 0);
+ok(greedy.skills.length === MAX_SKILLS && MAX_SKILLS === 27 && pending(greedy).points === 0 && room > MAX_SKILLS, `a hero with 99 points still spends 27 of the ${room} a Wizard's tree holds`);
+ok(full.skills + full.banked === 19 + full.feats && full.skills + full.banked <= MAX_SKILLS, `the simulated hero earned ${full.skills + full.banked} points in all (19 levels, ${full.feats} Feats) and spent ${full.skills}`);
 
 // 22. Ability score increases: two points at levels 4, 8, 12, 16, and 19, banked until spent.
 const ab = fresh(61, 'fighter', 'dwarf');
@@ -409,7 +430,7 @@ ok(full.abilityPoints === 0, 'the simulated player spent all ten');
 const r1 = student('rogue', 8, 7);
 ok(respecCost(r1) === null && respec(r1) === null, 'nothing to respec before anything is chosen');
 chooseSubclass(r1, 'shadow');
-for (const id of ['r_light_step', 'r_nimble', 'r_slip_away', 'r_uncanny', 'r_quick_draw']) learnSkill(r1, id);
+for (const id of ['r_nimble', 'r_nimble', 'r_uncanny', 'r_evasion', 'r_quick_draw']) learnSkill(r1, id);
 const price = respecCost(r1);
 const dexBefore = r1.abilities.dex;
 r1.gold = price - 1;
@@ -641,12 +662,14 @@ v3.version = 3;
 wh.gear = { weapon: { tier: 0 }, offhand: { tier: 0 }, head: { tier: 0 }, body: { tier: 0 }, hands: { tier: 0 }, feet: { tier: 0 }, cloak: null, trinket: null }; // as Phase 4 saved it
 for (const key of ['itemsFound', 'upgrades', 'soldFor']) delete wh.stats[key];
 wh.chronicle = wh.chronicle.filter((l) => l.k !== 'upgrade' && l.k !== 'sold');
-const keep = JSON.parse(JSON.stringify({ skills: wh.skills, subclass: wh.subclass, feats: wh.feats, abilities: wh.abilities, bestiary: wh.bestiary, questProgress: wh.questProgress }));
+const keep = JSON.parse(JSON.stringify({ subclass: wh.subclass, feats: wh.feats, abilities: wh.abilities, bestiary: wh.bestiary, questProgress: wh.questProgress }));
+const hadSkills = wh.skills.length;
 const now4 = migrate(JSON.parse(JSON.stringify(v3)));
 const nh = now4.heroes[0];
 const quarter = (nh.xp - xpForLevel(12)) / (xpForLevel(13) - xpForLevel(12));
-ok(now4.version === SAVE_VERSION && nh.level === 12 && nh.gold === 54321 && nh.skillPoints === 3 && nh.abilityPoints === 2, 'a Phase 4 save keeps its level (12), its gold (54,321 gp), and its banked points');
-ok(JSON.stringify(keep) === JSON.stringify({ skills: nh.skills, subclass: nh.subclass, feats: nh.feats, abilities: nh.abilities, bestiary: nh.bestiary, questProgress: nh.questProgress }) && nh.skills.length > 10, `and every skill (${nh.skills.length}), its subclass, Feats, ability scores, Bestiary, and quests`);
+ok(now4.version === SAVE_VERSION && nh.level === 12 && nh.gold === 54321 && nh.abilityPoints === 2, 'a Phase 4 save keeps its level (12), its gold (54,321 gp), and its banked ability points');
+ok(JSON.stringify(keep) === JSON.stringify({ subclass: nh.subclass, feats: nh.feats, abilities: nh.abilities, bestiary: nh.bestiary, questProgress: nh.questProgress }) && hadSkills > 10, 'and its subclass, Feats, ability scores, Bestiary, and quests');
+ok(nh.skills.length === 0 && nh.skillPoints === 11 + nh.feats.length && nh.chronicle.at(-1).text.includes(`${nh.skillPoints} skill points are back in hand`), `its ${hadSkills} skills from the old trees come back as points to spend again (${nh.skillPoints}: 11 levels and ${nh.feats.length} Feats), and the Chronicle says so`);
 ok(Math.abs(quarter - 0.25) < 0.01, `and its place within the level on the new curve (${Math.round(quarter * 100)}% of the way to 13)`);
 const named = startingGear('cleric');
 ok(['weapon', 'offhand', 'head', 'body', 'hands', 'feet'].every((id) => nh.gear[id].name === named[id].name && nh.gear[id].tier === 0 && nh.gear[id].level === 1) && nh.gear.trinket === null, 'its bare gear becomes the named starting kit');
@@ -841,7 +864,7 @@ ok(itemStats('weapon', { tier: 4, level: 20 }).roll === 4 && steps.every(([t, l]
   const rfh = rift.heroes[0];
   for (const id of SLOT_IDS) rfh.gear[id] = { tier: 3, level: 18, name: 'Test Kit' };
   rfh.skillPoints = 27; rfh.abilityPoints = 10; grow(rfh, 'shadow');
-  rfh.hp = maxHp(rfh); rfh.gold = 100000;
+  rfh.hp = maxHp(rfh); rfh.gold = 100000; rfh.xp += 40000; // most of the way to Paragon 1, so a day crosses it whatever the build earns
   ok(setFocus(rfh, 'rift'), 'at level 20 the Rifts are a standing order');
   const riftEvents = advance(rift, 24 * HOUR);
   const floorDc = riftEvents.filter((e) => e.type === 'task' && e.source === 'rift').map((e) => e.roll.dc);
@@ -1416,7 +1439,7 @@ console.log('\nAfter round five: career, smith, mentors, the Rifts\' rules, keep
   const seven = migrate(six);
   const [m15, m20] = seven.heroes;
   const half = (m15.xp - xpForLevel(15)) / (xpForLevel(16) - xpForLevel(15));
-  ok(seven.version === 7 && m15.level === 15 && Math.abs(half - 0.5) < 0.01, `a version 6 hero halfway through level 15 is still halfway through it (${(100 * half).toFixed(1)}%)`);
+  ok(seven.version === SAVE_VERSION && m15.level === 15 && Math.abs(half - 0.5) < 0.01, `a version 6 hero halfway through level 15 is still halfway through it (${(100 * half).toFixed(1)}%)`);
   ok(m20.level === MAX_LEVEL && m20.xp - xpForLevel(MAX_LEVEL) === paragonXpFor(3) + 5 && paragonRankFor(m20.xp - xpForLevel(MAX_LEVEL)) === 3, 'a level 20 hero keeps every point of XP past level 20, and their Paragon rank');
 }
 

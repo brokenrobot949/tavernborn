@@ -387,6 +387,16 @@
 /* The seals: four rows of three, joined by lines that take the branch's colour once a tier opens. */
 .hb-seals { clear: both; padding: 14px 0 4px; }
 .hb-row { display: flex; justify-content: space-around; align-items: center; padding: 0 12px; }
+.hb-row.fork { gap: 4px; justify-content: center; }
+.hb-row.fork .hb-cell { flex: 0 0 96px; }
+.hb-cell { display: grid; justify-items: center; gap: 5px; min-width: 64px; }
+.hb-or { font: italic 0.95rem var(--display); color: var(--accent); }
+.hb-pips { display: flex; gap: 4px; }
+.hb-pips i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--k); }
+.hb-pips i.on { background: var(--k); }
+.hb-gate { margin: -2px 0 4px; text-align: center; font: italic 0.78rem var(--display); color: var(--ink-soft); }
+.hb-seal.on.can { border-color: #c9962c; }
+.hb-seal.gone { opacity: 0.3; border-style: dotted; }
 .hb-link { width: 3px; height: 20px; margin: 5px auto; background: var(--line); }
 .hb-link.on { background: var(--k); box-shadow: 0 0 6px rgba(240, 190, 80, 0.7); }
 .hb-seal { width: 54px; height: 54px; padding: 0; display: grid; place-items: center; border: 2px solid var(--line); background: var(--panel); color: #8a7a66; font-size: 24px; cursor: pointer; transition: transform 0.15s; }
@@ -412,7 +422,9 @@
 .hb-state { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 0; font: italic 0.88rem var(--display); color: var(--ink-soft); }
 .hb-state.learned { color: #35603a; font-style: normal; }
 .hb-state .fired { color: var(--ink-soft); font-style: italic; }
-.hb-learn { width: 100%; min-height: var(--tap); font-family: var(--display); font-size: 1rem; }
+.hb-card .hb-learn { width: 100%; min-height: var(--tap); margin-top: 4px; font-family: var(--display); font-size: 1.02rem; background: var(--accent); color: #fff; border: 2px solid #c9962c; box-shadow: 0 3px 0 #5e1c14; }
+.hb-card .hb-learn:active { transform: translateY(2px); box-shadow: 0 1px 0 #5e1c14; }
+.hb-card .hb-learn.danger { background: #5e1c14; }
 .hb-key { margin: 6px 2px 0; font: italic 0.8rem/1.4 var(--display); color: var(--ink-soft); }
 
 /* What they do: a stat block. */
