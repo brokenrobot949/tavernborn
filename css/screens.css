@@ -817,3 +817,29 @@ button.log-entry:active { background: #f6efdc; }
 .smith-card .row .btn { min-height: var(--tap); }
 .mentor-row { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); }
 .mentor-row .hint { margin: 0 0 4px; }
+
+/* ----- Moves and capstones in the scene ----- */
+/* A signature move fired, seen live: a ribbon over the hero in its branch's colour. */
+.move-pop { position: absolute; left: 50%; bottom: 76%; display: inline-flex; align-items: center; gap: 5px; padding: 3px 12px 4px 8px; border-radius: 4px;
+  transform: translateX(-50%); white-space: nowrap; background: var(--k); color: #fbf5e6; border: 2px solid #f6dc8c; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  font: 700 0.9rem var(--display); opacity: 0; animation: move-rise 2.2s ease-out forwards; }
+.move-pop .icon { font-size: 1rem; color: #f6dc8c; }
+@keyframes move-rise { 0% { opacity: 0; transform: translate(-50%, 12px) scale(0.7); } 14% { opacity: 1; transform: translate(-50%, 0) scale(1.08); } 24% { transform: translate(-50%, 0) scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -34px); } }
+.scene.vs-boss .move-pop { left: 39%; }
+
+/* A capstone learned: a ring of light at the hero's feet, breathing slowly, flaring on each swing. */
+.cap-aura { display: none; position: absolute; left: 50%; bottom: 7%; width: 96px; height: 26px; margin-left: -48px; z-index: 0; pointer-events: none; }
+.scene[data-cap] .cap-aura { display: block; }
+.scene[data-cap=''] .cap-aura { display: none; }
+.scene[data-cap='might'] { --cap: 255, 120, 80; }
+.scene[data-cap='guard'] { --cap: 110, 185, 255; }
+.scene[data-cap='fortune'] { --cap: 255, 214, 90; }
+.cap-aura i { position: absolute; inset: 0; border-radius: 50%; }
+.cap-aura i:first-child { background: radial-gradient(rgba(var(--cap), 0.75), rgba(var(--cap), 0.3) 55%, transparent 72%); animation: cap-breathe 3.2s ease-in-out infinite; }
+.cap-aura i:last-child { border: 2px solid rgba(var(--cap), 0.95); box-shadow: 0 0 12px rgba(var(--cap), 0.9), inset 0 0 8px rgba(var(--cap), 0.6); opacity: 0.85; }
+.scene.attacking .cap-aura i:last-child { animation: cap-flare 1.1s ease-out infinite; }
+.scene.vs-boss .cap-aura { left: 39%; }
+.scene.tavern .cap-aura { display: none; }
+@keyframes cap-breathe { 0%, 100% { opacity: 0.6; transform: scale(0.92); } 50% { opacity: 1; transform: scale(1.04); } }
+@keyframes cap-flare { 0% { opacity: 0.9; transform: scale(0.8); } 100% { opacity: 0; transform: scale(1.6); } }
+@media (prefers-reduced-motion: reduce) { .cap-aura i, .scene.attacking .cap-aura i:last-child { animation: none; } .move-pop { animation-duration: 0.01s; animation-fill-mode: none; opacity: 1; } }

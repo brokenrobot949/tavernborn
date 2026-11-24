@@ -108,7 +108,7 @@ Rob is the game designer and does not write code.
 
 ## Status
 - Current phase: 7 (Polish), built and waiting on Rob's phone test. This is the last phase in the plan. The newest
-  work is the rewritten skill trees (ranks and forks, below); before that, the Skills tab's handbook look; before that, the three-week curve (levels 12 to 20 sooner); before that, round six (the quest log, career charts, the smith, mentors, the Rifts' rules), described below; before that,
+  work is skills you can see (move pop-ups, capstone auras, counts in words, below); before that, the rewritten skill trees (ranks and forks); before that, the Skills tab's handbook look; before that, the three-week curve (levels 12 to 20 sooner); before that, round six (the quest log, career charts, the smith, mentors, the Rifts' rules), described below; before that,
   the two new classes, Barbarian and Ranger, and round five (rare monsters, lesser
   delves, the notice board, happenings).
   Phases 1 to 6 are also still in his phone test. Phase 0 is approved.
@@ -539,6 +539,19 @@ table, vision lines, and the handoff's Phase 2 target were updated to match.
   the old curve.
 - Not retuned: monster mastery counts, the "1,000 natural 1s" deed, and Paragon XP (50,000 per rank); all still
   reachable, mostly after level 20.
+
+## Skills you can see (waiting on Rob's phone test)
+Rob picked three ideas from the Skills discussion: capstones you can see, skills that report back, moves shown live.
+No rule or save change.
+- Moves live (`movePop` in `js/ui/scene-fx.js`, called from `show` in `js/ui/hero.js`): when a signature move fires
+  while the Hero tab is watched, its name rises over the hero on a small ribbon in its branch's colour, after the dice,
+  two at most per tick, none after a long gap (`POPS_UP_TO`).
+- Capstones (`.cap-aura`, `data-cap` on the scene): a hero who has learned their subclass's capstone has a ring of light
+  at their feet in the branch's colour (Might orange-red, Guard blue, Fortune gold), breathing slowly and flaring
+  outward on every swing. Not in the tavern; still for phones set to reduce motion.
+- Counts in words (`DONE` in `js/ui/skills.js`): each move's count is said in terms of what it does, on the skill card
+  and in "What they do": "Saved the hero 4 times", "Turned 1,051 failures into successes", "Gave 2,182 second tries",
+  "Paid out on 517 criticals". The counts were already kept (`hero.fired`).
 
 ## The skill trees rewritten: ranks and forks (waiting on Rob's phone test)
 Rob approved a clickable draft of the Fighter and asked for all six classes in the same shape. Saves are version 8.

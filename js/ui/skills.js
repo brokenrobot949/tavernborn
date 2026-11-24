@@ -15,7 +15,7 @@ import { RACES } from '../../data/races.js';
 import { ABILITIES, ABILITY_NAMES, ABILITY_MAX, ABILITY_LEVELS, MAX_LEVEL, mod, proficiency } from '../rules.js';
 import { raiseAbility } from '../hero.js';
 import {
-  treeFor, whyNot, learnSkill, canChooseSubclass, chooseSubclass, pointsIn, rankOf, pending, subclassName, skillMods,
+  SKILL_BY_ID, treeFor, whyNot, learnSkill, canChooseSubclass, chooseSubclass, pointsIn, rankOf, pending, subclassName, skillMods,
   MAX_SKILLS, ROWS, ROW_GATE, branchPoints, SUBCLASS_LEVEL, BRANCH_KINDS,
 } from '../skills.js';
 import { el, pressBtn, confirmBtn, signed } from './dom.js';
@@ -63,7 +63,22 @@ const SUMMARY = [
   ['Speed', [['speedRoam', (v) => `monster tasks ${pct(v)} quicker`], ['speedQuest', (v) => `quest steps ${pct(v)} quicker`], ['speedDelve', (v) => `dungeon rooms ${pct(v)} quicker`], ['travel', (v) => `travel ${pct(v)} quicker`], ['recovery', (v) => `knockouts ${pct(v)} shorter`], ['rooms', (v) => `${plural(v, 'room')} fewer each dungeon run`]]],
   ['Finds', [['quality', (v) => `${+v.toFixed(1)} of a rarity step better`]]],
 ];
-const firedText = (n) => (n ? `Fired ${n.toLocaleString('en-GB')} time${n === 1 ? '' : 's'}.` : 'Not fired yet.');
+// What a move has done so far, in words that fit the move: [the words before the number, one, many].
+const DONE = {
+  autoWin: ['Settled', 'fight outright', 'fights outright'], reroll: ['Gave', 'second try', 'second tries'],
+  turn: ['Turned', 'failure into a success', 'failures into successes'], advantage: ['Gave advantage', 'time', 'times'],
+  clearRoom: ['Cleared', 'room', 'rooms'], skipRoom: ['Slipped past', 'room', 'rooms'], shortcut: ['Cut short', 'dungeon run', 'dungeon runs'],
+  hiddenRoom: ['Found', 'hidden room', 'hidden rooms'], negate: ['Turned aside', 'blow', 'blows'], cheatDeath: ['Saved the hero', 'time', 'times'],
+  secondWind: ['Healed the hero', 'time', 'times'], roomHeal: ['Healed the hero', 'time', 'times'], shortRest: ['Healed the hero', 'time', 'times'],
+  freeBossHit: ['Opened', 'boss fight', 'boss fights'], smite: ['Struck', 'triple blow', 'triple blows'], bossShield: ['Shielded', 'boss fight', 'boss fights'],
+  bossPurse: ['Paid out at', 'boss', 'bosses'], windfall: ['Doubled the pay', 'time', 'times'], bonusLoot: ['Found', 'extra piece', 'extra pieces'],
+  onCrit: ['Paid out on', 'critical', 'criticals'],
+};
+function firedText(n, type) {
+  if (!n) return 'Not fired yet.';
+  const [said, one, many] = DONE[type] ?? ['Fired', 'time', 'times'];
+  return `${said} ${n.toLocaleString('en-GB')} ${n === 1 ? one : many}.`;
+}
 
 // `app.changed()` saves and redraws after a choice.
 export function mountSkills(root, app) {
@@ -87,7 +102,7 @@ export function mountSkills(root, app) {
     const sub = subclassName(hero);
     const act = (fn) => () => { if (fn()) app.changed(); };
     counters = [];
-    const count = (id) => { const s = el('span', { className: 'fired', textContent: firedText(hero.fired?.[id] ?? 0) }); counters.push([s, id]); return s; };
+    const count = (id) => { const s = el('span', { className: 'fired', textContent: firedText(hero.fired?.[id] ?? 0, SKILL_BY_ID[id]?.sig?.type) }); counters.push([s, id]); return s; };
 
     // ----- the hero and the points -----
     const head = el('section', { className: 'hb-head' },
@@ -256,7 +271,7 @@ export function mountSkills(root, app) {
     update.hero = hero;
     if (next !== key || force) { key = next; draw(hero); return; }
     for (const [span, id] of counters) {
-      const t = firedText(hero.fired?.[id] ?? 0);
+      const t = firedText(hero.fired?.[id] ?? 0, SKILL_BY_ID[id]?.sig?.type);
       if (span.textContent !== t) span.textContent = t;
     }
   }

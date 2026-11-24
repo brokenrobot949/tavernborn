@@ -15,10 +15,10 @@ import { portraitOf, paragonRank, paragonTitle, paragonXp, canRetire, trophyWall
 import { currentQuest, clericFee, payCleric, placeOf, delveTarget } from '../tasks.js';
 import { timeOfDay, happeningIn } from '../world.js';
 export { timeOfDay };
-import { subclassName } from '../skills.js';
+import { subclassName, SKILL_BY_ID, BRANCH_BY_ID } from '../skills.js';
 import { el, num, heroClock, confirmBtn, named } from './dom.js';
 import { icon } from './icons.js';
-import { shapeFor, pickBy, popRoll, burst, arrival, weatherFor, lootDrop, bossEntrance, healGlow, defeatGhost, rareBanner } from './scene-fx.js';
+import { shapeFor, pickBy, popRoll, burst, arrival, weatherFor, lootDrop, bossEntrance, healGlow, defeatGhost, rareBanner, movePop } from './scene-fx.js';
 import { foeCanvas } from './foes.js';
 import { MONSTER_BY_ID } from '../../data/monsters.js';
 import { sfx } from '../audio.js';
@@ -156,8 +156,10 @@ export function mountHero(root, app) {
     el('div', { className: 'fb hero-fb' }, el('div', { className: 'fb-track' }, heroBar)),
     el('div', { className: 'fb foe-fb' }, foeName, el('div', { className: 'fb-track' }, foeBar)));
   const classFx = el('div', { className: 'class-fx', attrs: { 'aria-hidden': 'true' } }, el('i'), el('i'), el('i'));
+  // A capstone learned: a ring of light at the hero's feet in its branch's colour, flaring on every swing.
+  const capAura = el('div', { className: 'cap-aura', attrs: { 'aria-hidden': 'true' } }, el('i'), el('i'));
   const festive = el('div', { className: 'festive', attrs: { 'aria-hidden': 'true' } });
-  const scene = el('div', { className: 'scene' }, ...backdropTracks(), el('div', { className: 'sky-tint' }), el('div', { className: 'stars' }), el('div', { className: 'tavern-window' }), festive, wall, fxBack, foe, canvas, still, classFx, weather, bars, place, fx);
+  const scene = el('div', { className: 'scene' }, ...backdropTracks(), el('div', { className: 'sky-tint' }), el('div', { className: 'stars' }), el('div', { className: 'tavern-window' }), festive, wall, fxBack, capAura, foe, canvas, still, classFx, weather, bars, place, fx);
   const view = new SpriteView(canvas, { stageW: 80, stageH: STAGE_H, ground: 8, shadow: true });
   new ResizeObserver(() => {
     const w = Math.max(64, Math.min(130, Math.floor(scene.clientWidth / 4)));
@@ -322,6 +324,8 @@ export function mountHero(root, app) {
       // While swinging, the class's own effect plays at the foe: a sword arc, a fireball, quick
       // dagger cuts, or a burst of holy light.
       setData(scene, 'cls', hero.class);
+      const own = BRANCH_BY_ID[hero.subclass];
+      setData(scene, 'cap', own && hero.skills.includes(own.skills.at(-1).id) ? own.kind : '');
       scene.classList.toggle('attacking', !!f && actionFor(t) === 'attack');
       scene.classList.toggle('vs-boss', f?.[2] === 'boss'); // the hero gives a boss a little more room
       // A festival dresses the tavern only (seen here while recovering there), not the road or the dungeons.
@@ -478,6 +482,11 @@ export function mountHero(root, app) {
         if (landed && e.monster) defeatGhost(scene, foe, foeBar);
         if (e.damage > 0) { canvas.classList.remove('hurt-flash'); void canvas.offsetWidth; canvas.classList.add('hurt-flash'); }
       }
+    }
+    // Signature moves: the name over the hero, two at most, after the dice.
+    if (gap <= POPS_UP_TO) {
+      events.filter((e) => e.type === 'skill' && SKILL_BY_ID[e.skill]).slice(0, 2)
+        .forEach((e, i) => movePop(fx, SKILL_BY_ID[e.skill].name, SKILL_BY_ID[e.skill].kind, 200 + i * 700));
     }
     // A boss beaten: it goes down whatever the roll text says.
     const boss = events.find((e) => e.type === 'task' && e.source === 'boss' && e.won);

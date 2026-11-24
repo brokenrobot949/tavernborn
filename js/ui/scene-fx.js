@@ -38,6 +38,15 @@ export function popRoll(layer, e, delay = 0) {
   setTimeout(() => pop.remove(), 2200 + delay);
 }
 
+// A signature move fired, seen live: its name on a small ribbon over the hero, in its branch's colour
+// (`kind`: might, guard, fortune), rising and fading like the dice.
+export function movePop(layer, name, kind, delay = 0) {
+  const pop = el('div', { className: `move-pop k-${kind}` }, icon('spark'), el('strong', { textContent: name }));
+  pop.style.animationDelay = `${delay}ms`;
+  layer.append(pop);
+  setTimeout(() => pop.remove(), 2400 + delay);
+}
+
 // The level-up burst: gold rays on `back` (a layer behind the hero) and a banner on `layer`.
 export function burst(layer, back, title, sub) {
   layer.querySelector('.burst')?.remove();
