@@ -580,8 +580,8 @@ Rob approved a clickable draft of the Fighter and asked for all six classes in t
   rows, ranks with their lines, forks, the 27-point cap, `soundSkills`); the old-save check now expects skills to come
   back as points; the Paragon check gives its Rifts hero a 40,000 XP head start, since a Shadow with no XP skills earns
   about 42,000 a day at level 20, just short of the 50,000 for rank 1.
-- Spec departures to raise with Rob: the design doc's skill trees (twelve skills in four tiers) are now these. The doc
-  has not been updated.
+- The design doc's Skill trees section (Design tab) was rewritten to match on 24 November 2026: the shape, ranks, forks,
+  an example table of the four original classes, and the Defaults table's skill point line.
 
 ## The Skills tab as a handbook (waiting on Rob's phone test)
 Rob chose this from a clickable mock-up, asking for an old player's-handbook feel on the game's own colours and a soft
