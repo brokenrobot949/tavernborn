@@ -424,7 +424,7 @@ regional happenings. None of it is in the design doc.
   safer and richer, never quicker.
 
 ## Barbarian and Ranger (waiting on Rob's phone test)
-Rob asked for two more classes. Neither is in the design doc, which still lists four.
+Rob asked for two more classes. Added to the design doc on 24 November 2026: the Classes table and a note on each (Design tab), the skill example table, and a Barbarian and a Ranger section of layers (Sprite looks tab).
 - A class is data: `data/classes.js`, a tree in `data/skills-<class>.js` (registered in `TREES`, js/skills.js), looks in
   `GEAR`, `EMBLEM`, and `WISP_COLOR` (data/items.js), names in `NOUNS`, `STARTING_NAMES`, and `TITLES` (data/loot.js),
   a line in `CLASS_NOTES` (js/ui/create.js), an attack effect in css/screens.css (`.scene[data-cls=...]`), and the
@@ -457,7 +457,7 @@ Rob asked for two more classes. Neither is in the design doc, which still lists 
   subclass: Berserker 29.1 / 0.9, Ironhide 31.9 / 0.3, Plunderer 30.0 / 1.9, Hunter 27.7 / 3.7, Wayfinder 30.6 / 1.4,
   Trapper 27.7 / 4.6. So the Barbarian is the sturdiest class and among the slowest, the Ranger as quick as the Wizard
   and nearly as fragile as the Cleric; both sit inside the range the first four already covered. Nothing was tuned.
-- Spec departures to raise with Rob: both classes are outside the design doc. The Barbarian's negative ward and the
+- Spec departures to raise with Rob: the Barbarian's negative ward and the
   Ranger's d8 (5e gives d10) are balance choices. The Fighter's creation line no longer says "the most hit points".
 
 ## Tab names and the walking shield (waiting on Rob's phone test)
