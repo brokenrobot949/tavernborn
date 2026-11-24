@@ -108,7 +108,7 @@ Rob is the game designer and does not write code.
 
 ## Status
 - Current phase: 7 (Polish), built and waiting on Rob's phone test. This is the last phase in the plan. The newest
-  work is the three-week curve (levels 12 to 20 sooner, below); before that, round six (the quest log, career charts, the smith, mentors, the Rifts' rules), described below; before that,
+  work is the Skills tab's handbook look (below); before that, the three-week curve (levels 12 to 20 sooner); before that, round six (the quest log, career charts, the smith, mentors, the Rifts' rules), described below; before that,
   the two new classes, Barbarian and Ranger, and round five (rare monsters, lesser
   delves, the notice board, happenings).
   Phases 1 to 6 are also still in his phone test. Phase 0 is approved.
@@ -539,6 +539,32 @@ table, vision lines, and the handoff's Phase 2 target were updated to match.
   the old curve.
 - Not retuned: monster mastery counts, the "1,000 natural 1s" deed, and Paragon XP (50,000 per rank); all still
   reachable, mostly after level 20.
+
+## The Skills tab as a handbook (waiting on Rob's phone test)
+Rob chose this from a clickable mock-up, asking for an old player's-handbook feel on the game's own colours and a soft
+glow on learned skills. No rule changes; the trees themselves are untouched (a tree redesign was discussed, not done).
+- `js/ui/skills.js`: a header with the hero's name in red, an italic line (race, class, level, subclass, skills learned),
+  and a gold coin with the points to spend. Section pills: Skill tree and What they do always; Subclass and Abilities
+  only while they wait (unchanged inside).
+- The tree: three ribbon bookmarks (the branch on show in full colour, the others in their pale tint), the branch's
+  blurb with a drop capital, then four rows of three seals joined by lines that take the branch colour once a tier
+  opens. A round seal is a passive, a diamond a signature move, the great star the capstone. Learned seals are filled in
+  the branch colour with a slow gold glow (still on phones set to reduce motion); learnable ones have a gold ring; closed
+  tiers are dashed and faded. A seal's picture comes from what it does (`SIG_ICON`, `FX_ICON`), so no data file changed;
+  four icons were added to `js/ui/icons.js` (target, hourglass, bolt, repeat).
+- Tapping a seal opens its card under the tree, set like a handbook sidebar (panel colour, heavy bars top and bottom):
+  name, kind and tier, the rule, the joke from its Learn line, and "Learn for 1 point" (second tap to confirm).
+  The card opens on the first learnable skill of the branch.
+- What they do: a stat block of everything learned added up in plain words (`SUMMARY`: rolls, criticals, failed rolls,
+  XP, gold, damage, dodging, hit points, healing, speed, finds), with proficiency, skills learned, and Feats; then each
+  signature move learned with how many times it has fired.
+- Fire counts: `hero.fired` (skill id to count), added by `fire()` in `js/tasks.js` and kept through a respec. Saves stay
+  version 7 (`lateFields` keeps only real signature moves, in whole numbers; an older hero starts at none). The counts
+  on screen update in place, so taps are not lost.
+- Styles: the handbook block in `css/screens.css` (`.hb-*`); the old points tiles, branch tabs, and tier path are gone.
+- `node tools/check-sim.mjs` (318 checks) adds 2: firings counted and saved, and unreadable counts dropped.
+- Tested at 375 x 812 with a level 12 Fighter. The live tick of a fire count was not watched (the code path is the
+  in-place update; the counts themselves are proved by the checks).
 
 ## Known gaps closed after Phase 7
 - All 26 LPC hair colours are baked (`HAIR_COLORS` in `data/races.js`, natural shades first). The art is now

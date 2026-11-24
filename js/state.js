@@ -172,6 +172,9 @@ function lateFields(h) {
   h.riftBests = bests;
   if (h.rift && !RIFT_RULES.some((r) => r.id === h.rift.rule)) h.rift.rule = 'still';
   if (!WISP_CHOICES.some((w) => w.id === h.wisp && w.color)) h.wisp = null;
+  const fired = {};
+  for (const [id, n] of Object.entries(h.fired && typeof h.fired === 'object' ? h.fired : {})) if (SKILL_BY_ID[id]?.sig && n > 0) fired[id] = Math.floor(n);
+  h.fired = fired;
 }
 
 // Bring an older or partial save up to the current shape, or throw if it is not a save at all.

@@ -1,15 +1,20 @@
-// Skills tab: unspent points, the pending subclass and ability score choices, and the class tree.
-// The three branches have their own colour and icon (Might red, Guard blue, Fortune gold); the tree
-// is drawn as a path of tiers, each skill a card with a badge for passive, signature, or capstone.
+// Skills tab, in the manner of an old player's handbook. A header with the hero and the points to spend; three
+// ribbon bookmarks, one per branch (Might red, Guard blue, Fortune gold); the branch drawn as four rows of three
+// medallions, a round seal for a passive, a diamond for a signature move, a great star for the capstone. Learned
+// seals are pressed in the branch's colour and keep a low glow. Tapping a seal opens its card under the tree,
+// set like a handbook's sidebar, with the rule, its Chronicle line, and the Learn button.
+// "What they do" adds every learned skill up into a stat block, with how often each move has fired
+// (`hero.fired`). Subclass and Abilities show only while they wait.
 // Everything here is banked until the player spends it; nothing on this tab ever blocks the hero.
 // The tab only calls learnSkill, chooseSubclass (skills.js) and raiseAbility (hero.js), the same
 // functions the simulator's stand-in player uses.
 
 import { CLASSES } from '../../data/classes.js';
+import { RACES } from '../../data/races.js';
 import { ABILITIES, ABILITY_NAMES, ABILITY_MAX, ABILITY_LEVELS, MAX_LEVEL, mod, proficiency } from '../rules.js';
 import { raiseAbility } from '../hero.js';
 import {
-  treeFor, whyNot, learnSkill, canChooseSubclass, chooseSubclass, pointsIn, pending, subclassName,
+  treeFor, whyNot, learnSkill, canChooseSubclass, chooseSubclass, pointsIn, pending, subclassName, skillMods,
   MAX_SKILLS, TIER_SIZE, TIER_GATE, SUBCLASS_LEVEL, BRANCH_KINDS,
 } from '../skills.js';
 import { el, pressBtn, confirmBtn, signed } from './dom.js';
@@ -23,13 +28,56 @@ const KIND_NOTE = { might: 'hits harder', guard: 'survives longer', fortune: 'ea
 const KIND_ICON = { might: 'swords', guard: 'offhand', fortune: 'coin' };
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
+// A medallion's picture, from what the skill does: its signature move's type, or else its first number.
+const SIG_ICON = {
+  autoWin: 'swords', reroll: 'repeat', turn: 'vortex', advantage: 'd20', clearRoom: 'door', skipRoom: 'door',
+  shortcut: 'compass', hiddenRoom: 'lantern', negate: 'offhand', cheatDeath: 'heart', secondWind: 'heart',
+  roomHeal: 'heart', shortRest: 'bed', freeBossHit: 'horse', smite: 'bolt', bossShield: 'offhand',
+  bossPurse: 'coin', windfall: 'coin', bonusLoot: 'trinket', onCrit: 'star',
+};
+const FX_ICON = [
+  [/^roll/, 'target'], [/^crit/, 'bolt'], [/^missReward$/, 'repeat'], [/^xp/, 'book'], [/^gold|^potionPrice$/, 'coin'],
+  [/^dr/, 'offhand'], [/^dodge$/, 'cloak'], [/^hp/, 'heart'], [/^rest$|^recovery$/, 'bed'], [/^potion/, 'potion'],
+  [/^speed/, 'hourglass'], [/^quality$/, 'eye'], [/^travel$/, 'boots'], [/^rooms$/, 'compass'],
+];
+function skillIcon(s) {
+  if (s.sig) return SIG_ICON[s.sig.type] ?? 'spark';
+  const key = Object.keys(s.fx ?? {})[0] ?? '';
+  return FX_ICON.find(([re]) => re.test(key))?.[1] ?? 'spark';
+}
+
+// "What they do": every number the learned skills add up to, in plain words. Each line is [key, words].
+const pct = (v) => `${Math.round(v * 100)}%`;
+const times = (x) => (x === 2 ? 'double' : x === 3 ? 'three times' : `${+x.toFixed(2)} times`);
+const SUMMARY = [
+  ['Rolls', [['roll', (v) => `+${v} on every roll`], ['rollRoam', (v) => `+${v} against roaming monsters`], ['rollQuest', (v) => `+${v} on quests`], ['rollDelve', (v) => `+${v} in dungeon rooms`], ['rollBoss', (v) => `+${v} against bosses`]]],
+  ['Critical hits', [['crit', (v) => `on a ${20 - v} or better`], ['critReward', (v) => `pay ${times(1.5 + v)} the reward`]]],
+  ['Failed rolls', [['missReward', (v) => `pay ${pct(0.5 + v)} of the reward`]]],
+  ['Experience', [['xp', (v) => `${pct(v)} more from everything`], ['xpRoam', (v) => `${pct(v)} more from roaming`], ['xpQuest', (v) => `${pct(v)} more from quests`], ['xpDelve', (v) => `${pct(v)} more from dungeon rooms`], ['xpBoss', (v) => `${pct(v)} more from bosses`]]],
+  ['Gold', [['gold', (v) => `${pct(v)} more from everything`], ['goldRoam', (v) => `${pct(v)} more from roaming`], ['goldQuest', (v) => `${pct(v)} more from quests`], ['goldDelve', (v) => `${pct(v)} more from dungeon rooms`], ['goldBoss', (v) => `${pct(v)} more from bosses`], ['potionPrice', (v) => `potions ${pct(v)} cheaper`]]],
+  ['Damage taken', [['dr', (v) => `${pct(v)} less everywhere`], ['drRoam', (v) => `${pct(v)} less while roaming`], ['drQuest', (v) => `${pct(v)} less on quests`], ['drDelve', (v) => `${pct(v)} less in dungeon rooms`], ['drBoss', (v) => `${pct(v)} less from bosses`], ['drTrap', (v) => `${pct(v)} less from traps`]]],
+  ['Dodging', [['dodge', (v) => `a ${pct(v)} chance to halve a hit`]]],
+  ['Hit points', [['hp', (v) => `${pct(v)} more`], ['hpLevel', (v) => `+${v} a level`]]],
+  ['Healing', [['rest', (v) => `rests heal ${pct(v)} more`], ['potion', (v) => `potions heal ${pct(v)} more`], ['potions', (v) => `${plural(v, 'more potion')} each dungeon run`]]],
+  ['Speed', [['speedRoam', (v) => `monster tasks ${pct(v)} quicker`], ['speedQuest', (v) => `quest steps ${pct(v)} quicker`], ['speedDelve', (v) => `dungeon rooms ${pct(v)} quicker`], ['travel', (v) => `travel ${pct(v)} quicker`], ['recovery', (v) => `knockouts ${pct(v)} shorter`], ['rooms', (v) => `${plural(v, 'room')} fewer each dungeon run`]]],
+  ['Finds', [['quality', (v) => `${+v.toFixed(1)} of a rarity step better`]]],
+];
+const firedText = (n) => (n ? `Fired ${n.toLocaleString('en-GB')} time${n === 1 ? '' : 's'}.` : 'Not fired yet.');
+
 // `app.changed()` saves and redraws after a choice.
 export function mountSkills(root, app) {
   let shown = null; // branch id on display
+  let sel = null; // skill id whose card is open
   let picked = null; // subclass tapped but not yet confirmed
-  let view = 'tree'; // which section shows: the tree, or a waiting choice (subclass, abilities)
+  let view = 'tree'; // which section shows: the tree, what they do, or a waiting choice (subclass, abilities)
   let key = '';
   let heroId = null;
+  let counters = []; // [span, skill id]: fire counts, kept current without a redraw
+
+  // The card that opens first: the first seal that can be learned, else the first not learned, else the capstone.
+  function firstSel(hero, branch) {
+    return (branch.skills.find((s) => whyNot(hero, s.id) === null) ?? branch.skills.find((s) => !hero.skills.includes(s.id)) ?? branch.skills.at(-1)).id;
+  }
 
   function draw(hero) {
     const tree = treeFor(hero);
@@ -37,25 +85,23 @@ export function mountSkills(root, app) {
     const spent = hero.skills.length;
     const sub = subclassName(hero);
     const act = (fn) => () => { if (fn()) app.changed(); };
+    counters = [];
+    const count = (id) => { const s = el('span', { className: 'fired', textContent: firedText(hero.fired?.[id] ?? 0) }); counters.push([s, id]); return s; };
 
-    // ----- points -----
-    const learnedFill = el('i');
-    learnedFill.style.width = `${(100 * spent) / MAX_SKILLS}%`;
-    const summary = el('section', { className: 'skill-summary' },
-      el('div', { className: 'points-coin' + (hero.skillPoints ? ' has' : '') },
+    // ----- the hero and the points -----
+    const head = el('section', { className: 'hb-head' },
+      el('div', { className: 'hb-who' },
+        el('strong', { className: 'hb-name', textContent: hero.name }),
+        el('span', { className: 'hb-line', textContent: `${RACES[hero.race].name} ${CLASSES[hero.class].name}, level ${hero.level}.${sub ? ` ${sub}.` : ''} ${spent} of ${MAX_SKILLS} skills learned.` })),
+      el('div', { className: 'hb-coin' + (hero.skillPoints ? ' has' : ''), attrs: { 'aria-label': `${plural(hero.skillPoints, 'skill point')} to spend` } },
         el('strong', { textContent: String(hero.skillPoints) }),
-        el('span', { textContent: `skill point${hero.skillPoints === 1 ? '' : 's'} to spend` })),
-      el('div', { className: 'sum-tiles' },
-        el('div', { className: 'sum-tile' }, el('span', { className: 'sum-label' }, icon('book'), 'Learned'), el('strong', { textContent: `${spent} of ${MAX_SKILLS}` }), el('div', { className: 'bar thin' }, learnedFill)),
-        el('div', { className: 'sum-tile' }, el('span', { className: 'sum-label' }, icon('crown'), 'Subclass'), el('strong', { textContent: sub ?? (hero.level >= SUBCLASS_LEVEL ? 'Not chosen' : `At level ${SUBCLASS_LEVEL}`) })),
-        el('div', { className: 'sum-tile' }, el('span', { className: 'sum-label' }, icon('flag'), 'Feats'), el('strong', { textContent: `${hero.feats.length} of 8` })),
-        el('div', { className: 'sum-tile' }, el('span', { className: 'sum-label' }, icon('d20'), 'Proficiency'), el('strong', { textContent: `+${proficiency(hero.level)} on rolls` }))));
+        el('span', { textContent: hero.skillPoints === 1 ? 'point' : 'points' })));
 
     // ----- subclass choice -----
     let subclass = null;
     if (canChooseSubclass(hero)) {
       const cards = tree.branches.map((b) => {
-        const card = el('button', { className: 'choice k-' + b.kind, type: 'button', onclick: () => { picked = b.id; shown = b.id; update.force(); } },
+        const card = el('button', { className: 'choice k-' + b.kind, type: 'button', onclick: () => { picked = b.id; shown = b.id; sel = null; update.force(); } },
           el('span', { className: 'choice-head' }, el('span', { className: 'kind-badge' }, icon(KIND_ICON[b.kind])), el('strong', { textContent: b.name }), el('span', { className: 'tag', textContent: `${BRANCH_KINDS[b.kind]}: ${KIND_NOTE[b.kind]}` })),
           el('span', { className: 'choice-text', textContent: b.blurb }));
         card.setAttribute('aria-pressed', String(picked === b.id));
@@ -90,85 +136,116 @@ export function mountSkills(root, app) {
 
     // ----- the tree -----
     const branch = tree.branches.find((b) => b.id === shown) ?? tree.branches[0];
-    const tabs = el('div', { className: 'branch-tabs' }, ...tree.branches.map((b) => {
+    if (!branch.skills.some((s) => s.id === sel)) sel = firstSel(hero, branch);
+    const ribbons = el('div', { className: 'hb-ribbons' }, ...tree.branches.map((b) => {
       const n = hero.skills.filter((id) => b.skills.some((s) => s.id === id)).length;
-      const t = pressBtn('', b.id === branch.id, () => { shown = b.id; update.force(); }, 'branch-tab k-' + b.kind);
-      const fill = el('i');
-      fill.style.width = `${(100 * n) / b.skills.length}%`;
-      t.append(
-        el('span', { className: 'kind-badge' }, icon(KIND_ICON[b.kind])),
-        el('strong', { textContent: b.name }),
-        el('span', { className: 'branch-meta', textContent: `${BRANCH_KINDS[b.kind]} · ${n}/${b.skills.length}` }),
-        el('span', { className: 'branch-bar' }, fill),
-        ...(hero.subclass === b.id ? [el('span', { className: 'yours' }, icon('crown'))] : []));
-      return t;
+      const r = pressBtn('', b.id === branch.id, () => { shown = b.id; sel = null; update.force(); }, 'hb-ribbon k-' + b.kind);
+      r.append(
+        el('span', { className: 'hb-ribbon-name' }, icon(KIND_ICON[b.kind]), el('strong', { textContent: b.name })),
+        el('span', { className: 'hb-ribbon-meta' }, `${n} of ${b.skills.length}`, hero.subclass === b.id ? icon('crown') : null));
+      r.setAttribute('aria-label', `${b.name}, ${BRANCH_KINDS[b.kind]}, ${n} of ${b.skills.length} learned${hero.subclass === b.id ? ', your subclass' : ''}`);
+      return r;
     }));
-    const tiers = [];
+
+    const rows = [];
     for (let tier = 1; tier <= branch.skills.length / TIER_SIZE; tier++) {
       const open = tier === 1 || pointsIn(hero, branch.id, tier - 1) >= TIER_GATE;
-      const have = pointsIn(hero, branch.id, tier);
-      const cards = [];
-      for (const s of branch.skills.slice((tier - 1) * TIER_SIZE, tier * TIER_SIZE)) {
+      if (tier > 1) rows.push(el('div', { className: 'hb-link' + (open ? ' on' : '') }));
+      rows.push(el('div', { className: 'hb-row' }, ...branch.skills.slice((tier - 1) * TIER_SIZE, tier * TIER_SIZE).map((s) => {
         const learned = hero.skills.includes(s.id);
-        const why = learned ? null : whyNot(hero, s.id);
+        const can = !learned && whyNot(hero, s.id) === null;
         const capstone = s === branch.skills.at(-1);
-        const tag = capstone ? 'Capstone' : s.sig ? 'Signature move' : 'Passive';
-        const glyph = capstone ? 'star' : s.sig ? 'spark' : 'up';
-        const action = learned ? el('span', { className: 'skill-state learned' }, icon('check'), el('span', { textContent: 'Learned' }))
-          : why === null ? confirmBtn('Learn', 'Tap again to learn', act(() => learnSkill(hero, s.id)), 'btn primary skill-learn')
-          : el('span', { className: 'skill-state' }, icon('lock'), el('span', { textContent: why }));
-        cards.push(el('div', { className: 'skill' + (learned ? ' learned' : why === null ? ' open' : ' closed') + (capstone ? ' capstone' : '') },
-          el('span', { className: 'skill-badge' }, icon(glyph)),
-          el('div', { className: 'skill-body' },
-            el('div', { className: 'skill-head' }, el('strong', { textContent: s.name }), el('span', { className: 'tag' + (s.sig ? ' move' : '') + (capstone ? ' cap' : ''), textContent: tag })),
-            el('p', { className: 'skill-text', textContent: s.text }),
-            s.later ? el('p', { className: 'hint later', textContent: `Not built yet: ${s.later}` }) : null,
-            action)));
-      }
-      tiers.push(el('div', { className: 'tier-step' + (open ? '' : ' closed') + (have === TIER_SIZE ? ' full' : '') },
-        el('div', { className: 'tier-head' },
-          el('span', { className: 'tier-num', textContent: String(tier) }),
-          el('span', { className: 'tier-name', textContent: `Tier ${tier}` }),
-          open
-            ? el('span', { className: 'pips', attrs: { 'aria-label': `${have} of ${TIER_SIZE} learned` } }, ...Array.from({ length: TIER_SIZE }, (_, k) => el('i', { className: k < have ? 'on' : '' })))
-            : el('span', { className: 'tier-lock' }, icon('lock'), el('span', { textContent: `After ${TIER_GATE} in tier ${tier - 1}` }))),
-        ...cards));
+        const shape = capstone ? 'cap' : s.sig ? 'sig' : 'pas';
+        const state = learned ? ' on' : can ? ' can' : open ? '' : ' lock';
+        const b = pressBtn('', s.id === sel, () => { sel = s.id; update.force(); }, `hb-seal ${shape}${state}`);
+        b.append(icon(capstone ? 'star' : skillIcon(s)));
+        b.setAttribute('aria-label', `${s.name}: ${learned ? 'learned' : can ? 'can be learned' : 'not yet'}`);
+        return b;
+      })));
     }
-    const treePanel = el('section', { className: 'panel tree k-' + branch.kind },
-      el('h3', { textContent: `${CLASSES[hero.class].name} skills` }),
-      tabs,
-      el('p', { className: 'branch-blurb', textContent: branch.blurb }),
-      el('div', { className: 'tier-path' }, ...tiers));
 
-    // Section pills: the tree always, and each choice only while it waits, with a count.
-    const pages = [['tree', 'Skill tree', 'book', treePanel, 0], ['subclass', 'Subclass', 'crown', subclass, 1], ['abilities', 'Abilities', 'up', abilities, p.abilities]]
+    // The card for the chosen seal.
+    const s = branch.skills.find((k) => k.id === sel);
+    const sIdx = branch.skills.indexOf(s);
+    const capstone = sIdx === branch.skills.length - 1;
+    const learned = hero.skills.includes(s.id);
+    const why = learned ? null : whyNot(hero, s.id);
+    const kind = capstone ? 'Capstone' : s.sig ? 'Signature move' : 'Passive';
+    const quote = String(s.learn ?? '').replace(/^Learned [^.]*\.\s*/, '').replaceAll('{name}', hero.name);
+    const action = learned
+      ? el('p', { className: 'hb-state learned' }, icon('check'), el('span', { textContent: 'Learned.' }), s.sig ? count(s.id) : null)
+      : why === null
+        ? confirmBtn('Learn for 1 point', 'Tap again to learn', act(() => learnSkill(hero, s.id)), 'btn primary hb-learn')
+        : el('p', { className: 'hb-state' }, icon('lock'), el('span', { textContent: why }));
+    const card = el('div', { className: 'hb-card' },
+      el('strong', { className: 'hb-card-name', textContent: s.name }),
+      el('span', { className: 'hb-card-kind', textContent: `${kind}, tier ${Math.floor(sIdx / TIER_SIZE) + 1}` }),
+      el('p', { className: 'hb-card-text', textContent: s.text }),
+      s.later ? el('p', { className: 'hint later', textContent: `Not built yet: ${s.later}` }) : null,
+      quote ? el('p', { className: 'hb-card-quote', textContent: `"${quote}"` }) : null,
+      action);
+
+    const treePage = el('section', { className: 'handbook tree k-' + branch.kind },
+      ribbons,
+      el('p', { className: 'hb-blurb', textContent: branch.blurb }),
+      el('div', { className: 'hb-seals' }, ...rows),
+      card,
+      el('p', { className: 'hb-key', textContent: 'A round seal is a passive, a diamond a signature move, the great star the capstone. Learned seals are pressed in the branch\'s colour.' }));
+
+    // ----- what they do -----
+    const n = skillMods(hero).n;
+    const lines = SUMMARY.map(([label, parts]) => {
+      const said = parts.filter(([k]) => n[k]).map(([k, say]) => say(Math.round(n[k] * 1000) / 1000));
+      const words = said.join(', ');
+      return said.length ? el('p', { className: 'hb-stat' }, el('strong', { textContent: `${label}.` }), ` ${words[0].toUpperCase()}${words.slice(1)}.`) : null;
+    }).filter(Boolean);
+    const moves = hero.skills.map((id) => tree.branches.flatMap((b) => b.skills).find((k) => k.id === id)).filter((k) => k?.sig);
+    const doPage = el('section', { className: 'handbook' },
+      el('h3', { className: 'hb-h', textContent: 'What your skills do' }),
+      el('p', { className: 'hb-sub', textContent: 'Everything learned, set down in one place.' }),
+      el('div', { className: 'hb-rule' }),
+      el('p', { className: 'hb-stat' }, el('strong', { textContent: 'Proficiency.' }), ` +${proficiency(hero.level)} on every roll, from the hero's level.`),
+      el('p', { className: 'hb-stat' }, el('strong', { textContent: 'Skills learned.' }), ` ${spent} of ${MAX_SKILLS}.`),
+      el('p', { className: 'hb-stat' }, el('strong', { textContent: 'Feats.' }), ` ${hero.feats.length} of 8, each worth a skill point.`),
+      ...(lines.length ? lines : [el('p', { className: 'hb-stat', textContent: 'Nothing else yet. Learn a skill on the tree and it is written here.' })]),
+      el('div', { className: 'hb-rule right' }),
+      el('h3', { className: 'hb-h small', textContent: 'Moves that fire on their own' }),
+      ...(moves.length
+        ? moves.map((k) => el('p', { className: 'hb-move' }, el('strong', { textContent: `${k.name}.` }), ` ${k.text} `, count(k.id)))
+        : [el('p', { className: 'hb-stat', textContent: 'None learned yet. The diamond seals on the tree are moves.' })]));
+
+    // Section pills: the tree and what they do always, and each choice only while it waits, with a count.
+    const pages = [['tree', 'Skill tree', 'book', treePage, 0], ['does', 'What they do', 'scroll', doPage, 0], ['subclass', 'Subclass', 'crown', subclass, 1], ['abilities', 'Abilities', 'up', abilities, p.abilities]]
       .filter(([, , , node]) => node);
     if (!pages.some(([id]) => id === view)) view = 'tree';
-    const nav = pages.length > 1 ? el('nav', { className: 'subnav', attrs: { role: 'tablist', 'aria-label': 'Sections' } }, ...pages.map(([id, label, glyph, , count]) => {
+    const nav = el('nav', { className: 'subnav', attrs: { role: 'tablist', 'aria-label': 'Sections' } }, ...pages.map(([id, label, glyph, , cnt]) => {
       const b = el('button', { type: 'button', attrs: { role: 'tab', 'aria-selected': String(id === view) }, onclick: () => { view = id; update.force(); if (nav.getBoundingClientRect().top < 0) nav.scrollIntoView(); } }, icon(glyph), el('span', { textContent: label }));
-      b.dataset.badge = count ? String(count) : '';
+      b.dataset.badge = cnt ? String(cnt) : '';
       return b;
-    })) : null;
+    }));
     root.replaceChildren(...[
       el('h2', { className: 'view-title', textContent: 'Skills' }),
-      summary, nav, ...pages.filter(([id]) => id === view).map(([, , , node]) => node),
+      head, nav, ...pages.filter(([id]) => id === view).map(([, , , node]) => node),
       el('details', { className: 'panel how' }, el('summary', { textContent: 'How skills work' }),
         el('p', { className: 'hint', textContent: `One point per level from 2 to ${MAX_LEVEL}, and one per Feat (all six story quests in a region). Points wait here as long as you like; the hero carries on regardless.` }),
-        el('p', { className: 'hint', textContent: `A tier opens after ${TIER_GATE} skills in the tier above. Each branch's last skill, the capstone, needs that branch as the subclass.` }),
+        el('p', { className: 'hint', textContent: `A tier opens after ${TIER_GATE} skills in the tier above. Each branch's last skill, the capstone, needs that branch as the subclass (chosen from level ${SUBCLASS_LEVEL}).` }),
         el('p', { className: 'hint', textContent: 'Passives change numbers. Signature moves fire on their own during tasks and write their own lines in the Chronicle. To take every point back, see the barkeep on the Tavern tab.' }),
         el('p', { className: 'hint', textContent: `The proficiency bonus is +${proficiency(hero.level)} on every d20 roll. It rises at levels 5, 9, 13, and 17.` })),
     ].filter(Boolean));
   }
 
   // Redraw only when something on the tab has changed: a rebuild every second would swallow taps.
+  // Fire counts change often, so they are updated in place instead.
   function update(state, hero, force = false) {
-    if (hero.id !== heroId) { heroId = hero.id; shown = hero.subclass; picked = null; }
+    if (hero.id !== heroId) { heroId = hero.id; shown = hero.subclass; picked = null; sel = null; }
     if (!shown) shown = hero.subclass ?? treeFor(hero).branches[0].id;
-    const next = [hero.id, hero.level, hero.skillPoints, hero.skills.join(), hero.subclass, hero.abilityPoints, ABILITIES.map((a) => hero.abilities[a]).join(), hero.feats.length, shown, picked, view].join('|');
-    if (next === key && !force) return;
-    key = next;
+    const next = [hero.id, hero.name, hero.level, hero.skillPoints, hero.skills.join(), hero.subclass, hero.abilityPoints, ABILITIES.map((a) => hero.abilities[a]).join(), hero.feats.length, shown, sel, picked, view].join('|');
     update.hero = hero;
-    draw(hero);
+    if (next !== key || force) { key = next; draw(hero); return; }
+    for (const [span, id] of counters) {
+      const t = firedText(hero.fired?.[id] ?? 0);
+      if (span.textContent !== t) span.textContent = t;
+    }
   }
   update.force = () => update(null, update.hero, true);
   return { update };

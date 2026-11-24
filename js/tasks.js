@@ -200,8 +200,11 @@ function spend(hero, s, ctx) {
     default:
   }
 }
-// A signature move fired: its own Chronicle line, and an event the summary can count.
+// A signature move fired: its own Chronicle line, an event the summary can count, and one more in the
+// hero's count of that move (`hero.fired`, shown on the Skills tab).
 function fire(hero, events, s, data = {}, gain) {
+  const fired = (hero.fired ??= {});
+  fired[s.id] = (fired[s.id] ?? 0) + 1;
   emit(hero, events, 'skill', fill(s.fire, { name: hero.name }), { skill: s.id, ...data }, gain ? { gain } : {});
 }
 const failed = (r) => r.outcome === 'miss' || r.outcome === 'fumble';

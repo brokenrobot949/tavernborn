@@ -132,7 +132,8 @@ export const EXPLORE_FIELDS = () => ({ site: null, siteClears: {}, bounty: null,
 //                 the last word from them, `mentorRescue` the hero's day of the last knockout they shortened
 //   riftBests     the deepest floor of the Planar Rifts under each of the Rifts' rules
 //   wisp          the colour chosen for the level 15 wisp (an id from WISP_CHOICES), or null for the class's own
-export const LATE_FIELDS = () => ({ career: { days: [], levelAt: { 1: 0 }, ko: {} }, enchants: {}, mentor: null, mentorDay: null, mentorRescue: null, riftBests: {}, wisp: null });
+//   fired         how many times each signature move has fired, by skill id (kept through a respec)
+export const LATE_FIELDS = () => ({ career: { days: [], levelAt: { 1: 0 }, ko: {} }, enchants: {}, mentor: null, mentorDay: null, mentorRescue: null, riftBests: {}, wisp: null, fired: {} });
 
 // The career, for the Stats tab's charts. `noteCareer` is called by `advance` after every task, so each day
 // keeps how it ended; `noteLevel` when a level is reached.

@@ -323,6 +323,18 @@ for (const skill of ALL_SKILLS) {
 ok(noEffect.length === 0, `each of the 216 skills changes what happens to the hero${noEffect.length ? ' (no effect: ' + noEffect.join(', ') + ')' : ''}`);
 ok(noLine.length === 0, `each of the ${moves.length} signature moves fires and writes its own Chronicle line (${firedTotal} firings seen)${noLine.length ? ' (never fired: ' + noLine.join(', ') + ')' : ''}`);
 
+// The Skills tab's fire counts: each firing is counted on the hero, kept in the save, and junk is dropped.
+{
+  const cleave = ALL_SKILLS.find((k) => k.id === 'f_cleave');
+  let t = null;
+  for (let seed = 9001; seed <= 9008 && !t?.fired.some((e) => e.skill === cleave.id); seed++) t = trial(seed, cleave);
+  const seen = t.fired.filter((e) => e.skill === cleave.id).length;
+  const kept = migrate(JSON.parse(t.text));
+  ok(seen > 0 && kept.heroes[0].fired.f_cleave === seen, `every firing of a move is counted on the hero and kept in the save (Cleave, ${seen})`);
+  kept.heroes[0].fired = { f_cleave: 3.7, f_footwork: 2, nonsense: 5, f_brace: -1 };
+  ok(JSON.stringify(migrate(kept).heroes[0].fired) === '{"f_cleave":3}', "a save's fire counts keep only real signature moves, in whole numbers");
+}
+
 // A hero with points to spend, for the rules of the tree.
 function student(cls, level, points) {
   const save = placed(51, cls, 'human', level, 'mugwick', 'roam');
